@@ -1,0 +1,14 @@
+[package]
+name = "braid-capability"
+version = "0.1.0"
+edition = "2021"
+description = "Vendored kernel capability contract — the closed Capability permission token Braid binds to (ADR-088 D3 boundary)"
+
+[lib]
+name = "braid_capability"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }

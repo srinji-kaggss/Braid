@@ -1,0 +1,15 @@
+[package]
+name = "braid-ir"
+version = "0.1.0"
+edition = "2021"
+description = "Braid machine-first framework — typed term-graph IR, canonical encoding, content addressing (ADR-088, spec/braid/, U1 #558)"
+
+[dependencies]
+# Declared kernel contracts ONLY (ADR-088 D3 boundary; pinned by
+# tests/boundary_conformance.rs — do not add deps without updating the spec).
+blake3 = { workspace = true }
+braid-capability = { workspace = true }
+
+[dev-dependencies]
+hex = { workspace = true }
+proptest = { workspace = true }

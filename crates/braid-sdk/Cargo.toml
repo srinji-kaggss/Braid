@@ -1,0 +1,13 @@
+[package]
+name = "braid-sdk"
+version = "0.1.0"
+edition = "2021"
+description = "Braid authoring SDK — typed capsule builder over braid-ir (ADR-088 D5 'rust day 1', U10 #557)"
+
+[dependencies]
+braid-ir = { workspace = true }
+braid-capability = { workspace = true }
+
+[dev-dependencies]
+braid-verify = { workspace = true }
+braid-render = { workspace = true }

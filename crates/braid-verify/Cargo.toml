@@ -1,0 +1,13 @@
+[package]
+name = "braid-verify"
+version = "0.1.0"
+edition = "2021"
+description = "Braid deterministic admission verifier — independent decoder + fail-closed stage pipeline (ADR-088 D3/D9, U3-U5 #560)"
+
+[dependencies]
+blake3 = { workspace = true }
+braid-ir = { workspace = true }
+braid-capability = { workspace = true }
+
+[dev-dependencies]
+hex = { workspace = true }
