@@ -120,6 +120,20 @@ the kernel path (T14).
 success metrics measured.
 **Verification**: end-to-end test + evidence bundle; independent re-run.
 
+**Status (2026-06-14, branch `u8-demo-port-reference`)** — the
+**author→admit→render slice landed**. Three demo-port actions (modeled on the
+kernel `blueprints/afternow-port/` surface): `edit-home-hero`,
+`publish-services`, `render-work-listing` — authored via the JSON-of-IR→SDK
+path, admitted, and rendered; `crates/braid-cli/tests/demo_port.rs` pins CIDs
+and asserts verdicts, and `scripts/demo-port.sh` regenerates the committed
+evidence bundle at `spec/braid/vectors/demo-port/`. Scenario #1 (admit, no egress/irreversible)
+and the author-time fail-closed refusal of the no-confirm publish are covered;
+scenario #2's verify-stage effect reject stays covered by
+`braid-verify/tests/acceptance.rs`; #11 by the U6 widening gate. **Deferred to
+U7** (kernel WASM runtime): the execution leg — on-tape fact journaling, real
+execution, and scenario #3's *runtime* confirmation-hash-mismatch reject. Seam:
+capsule CID → kernel runtime load → manifest re-derivation (T4) + fact journal.
+
 ## U9 — Adversarial hacker pass *(blocking gate for "v0 done")*
 **Scope**: independent adversarial review of U1–U8 against `threat-model.md` —
 encoding malleability, parse differentials, laundering compositions, manifest

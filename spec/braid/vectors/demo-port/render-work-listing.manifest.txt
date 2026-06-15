@@ -1,0 +1,13 @@
+capsule: 3e9816f1fa77e75ada2b25bcbba82bc0c31248edf8198d89944dc7e882f15f4a
+intent: demo-port: read the work case-study listing — projection read, no writes
+ir_version: 0
+vocab_version: 1
+registry: f5a15299db728c83bc810eb08453d086121d89e747f196fcf0633b444dde61bb
+capabilities: tape.read
+effects: pure, read
+irreversible_strands: 0
+egress_strands: 0
+strands: 2
+cost: 6 / budget 10
+confirm: none
+evidence: fact.cid

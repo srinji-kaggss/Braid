@@ -60,8 +60,17 @@ surface; Braid adds zero authority.
   the SDK so the CLI path reproduces the pinned reference CIDs; scenario #12
   runs in CI (`scripts/cli-loop.sh`); the T12 widening gate fires on a seeded
   widening (mutation-proven). U10 SDK polish also landed.
-- Not yet built: U7 WASM codegen (kernel-runtime-blocked), U8 full CMS
-  reference execution, U9 adversarial pass.
+- U8 **author→admit→render slice landed** (demo-port, D16; modeled on the
+  kernel `blueprints/afternow-port/` surface): three CMS reference actions
+  (`edit-home-hero`, `publish-services`, `render-work-listing`) authored via the
+  SDK/JSON-of-IR path, admitted, and rendered, with a regenerable evidence
+  bundle in `spec/braid/vectors/demo-port/` and pinned-CID tests
+  (`crates/braid-cli/tests/demo_port.rs`). The no-confirm publish is the
+  fail-closed escalation probe. The **execution leg** (run on kernel WASM +
+  on-tape fact journal) is deferred behind the U7 seam — see the bundle README
+  and the U7 follow-up issue (#6).
+- Not yet built: U7 WASM codegen + U8 execution leg (kernel-runtime-blocked),
+  U9 adversarial pass.
 - Work tracker: GitHub Issues (authoritative). No issue, no work.
 - This workstream is parallel to — never ahead of — the A-series
   trust-boundary queue (`docs/logic-os-build-state.md`).
