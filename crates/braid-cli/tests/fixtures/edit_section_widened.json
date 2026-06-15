@@ -1,0 +1,14 @@
+{
+  "intent": "Edit landing section and render preview (reversible)",
+  "budget": 25,
+  "confirm": "none",
+  "evidence": ["fact.cid"],
+  "strands": [
+    {"term": "lit.entity", "inputs": []},
+    {"term": "lit.text", "inputs": []},
+    {"term": "cms.edit_section", "inputs": [0, 1]},
+    {"term": "view.section", "inputs": [1]},
+    {"term": "proj.listing", "inputs": [0]}
+  ],
+  "outputs": [2, 3, 4]
+}

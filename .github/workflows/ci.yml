@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: build · test · lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      # //why scoped to braid-cli, not --all: the pre-extraction crates were
+      # committed without a rustfmt pass, so a workspace fmt gate would fail on
+      # code U6 didn't touch. Formatting the whole workspace is its own
+      # deliberate PR (tracked follow-up), not smuggled into U6.
+      - name: format (braid-cli)
+        run: cargo fmt -p braid-cli -- --check
+      - name: clippy (warnings are errors)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: test
+        run: cargo test --workspace
+
+  cli-loop:
+    name: scenario #12 + T12 widening gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: build braid binary
+        run: cargo build --release -p braid-cli
+      # The human-reconstructable loop, driven through the real binary, with
+      # every exit code asserted — including the manifest-widening gate firing
+      # on a seeded widening (T12) and a laundering capsule rejected at taint.
+      - name: CLI-only loop
+        run: ./scripts/cli-loop.sh target/release/braid

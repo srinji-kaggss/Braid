@@ -1,0 +1,27 @@
+[package]
+name = "braid-cli"
+version = "0.1.0"
+edition = "2021"
+description = "Braid CLI — the human-reconstructable encode/decode/verify/render/diff loop (ADR-088 G6/L7, U6 #2)"
+
+[[bin]]
+name = "braid"
+path = "src/main.rs"
+
+# //why braid-cli sits OUTSIDE the boundary-conformance allowlist (which scans
+# only braid-ir/-verify/-render — the verified core): like braid-sdk, the CLI is
+# an authoring/operator convenience, not part of the trust base. It may use a
+# third-party JSON parser (D19 JSON-of-IR transport) because it never decides
+# admission — it routes author input through the SDK Builder and the canonical
+# encoder, then hands bytes to the same braid-verify the SDK path uses.
+[dependencies]
+braid-ir = { workspace = true }
+braid-verify = { workspace = true }
+braid-render = { workspace = true }
+braid-sdk = { path = "../braid-sdk" }
+braid-capability = { workspace = true }
+serde = { workspace = true }
+serde_json = "1.0.140"
+
+[dev-dependencies]
+hex = { workspace = true }

@@ -55,8 +55,13 @@ surface; Braid adds zero authority.
   (U2 #559 — CID-bound manifest, widening diff, DOT export). All acceptance
   scenarios implemented as tests; mutation evidence on the issues. Pending:
   Director review of D5/D16 interpretations, U9 hacker pass, merge.
-- Not yet built: U6 CLI + CI gate, U7 WASM codegen (kernel-runtime-blocked),
-  U8 full CMS reference execution, U10 SDK polish.
+- U6 `braid-cli` + CI widening gate **landed** (#2, 2026-06-14):
+  `encode|decode|verify|render|diff`; `encode` reads JSON-of-IR (D19) through
+  the SDK so the CLI path reproduces the pinned reference CIDs; scenario #12
+  runs in CI (`scripts/cli-loop.sh`); the T12 widening gate fires on a seeded
+  widening (mutation-proven). U10 SDK polish also landed.
+- Not yet built: U7 WASM codegen (kernel-runtime-blocked), U8 full CMS
+  reference execution, U9 adversarial pass.
 - Work tracker: GitHub Issues (authoritative). No issue, no work.
 - This workstream is parallel to — never ahead of — the A-series
   trust-boundary queue (`docs/logic-os-build-state.md`).

@@ -24,16 +24,18 @@ for exactly what changed in the move.
 | `crates/braid-verify` | Independent strict decoder + fail-closed admission pipeline; zero shared serialization code with `braid-ir` (D9 anti-trusting-trust) (U3–U5 #560). |
 | `crates/braid-render` | CID-bound manifest, deterministic text rendering, widening/narrowing diff, DOT graph export (U2 #559). |
 | `crates/braid-sdk` | Typed authoring builder over `braid-ir`; reproduces reference CIDs byte-for-byte (U10). |
+| `crates/braid-cli` | The `braid` binary: `encode`/`decode`/`verify`/`render`/`diff` — the human-reconstructable loop (no AI, no Rust). `encode` reads JSON-of-IR (D19) through the SDK (U6 #2). |
 | `crates/braid-capability` | **Vendored** kernel capability contract — a verbatim mirror of `canvas-protocol::Capability` on the kernel `origin/main` (the single type that crosses the ADR-088 D3 boundary). |
 | `spec/braid/` | PRD, decision register (`DECISIONS.md`), threat model, unit plan, KAT vectors. **Start here: `spec/braid/README.md`.** |
-| `docs/` | ADR-088 (ratified doctrine + locked invariants). |
+| `docs/` | ADR-088 (ratified doctrine + locked invariants); `authoring-cli.md` (hand-author a capsule). |
 
 ## Build & test
 
 ```bash
 cargo check --workspace
-cargo test --workspace      # 68 tests
+cargo test --workspace      # 79 tests
 cargo clippy --workspace --all-targets
+./scripts/cli-loop.sh       # scenario #12 end-to-end (also a CI job)
 ```
 
 ## Boundary
