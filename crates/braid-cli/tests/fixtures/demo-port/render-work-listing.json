@@ -1,0 +1,11 @@
+{
+  "intent": "demo-port: read the work case-study listing — projection read, no writes",
+  "budget": 10,
+  "confirm": "none",
+  "evidence": ["fact.cid"],
+  "strands": [
+    {"term": "lit.entity", "inputs": []},
+    {"term": "proj.listing", "inputs": [0]}
+  ],
+  "outputs": [1]
+}

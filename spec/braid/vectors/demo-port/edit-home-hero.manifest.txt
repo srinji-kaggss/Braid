@@ -1,0 +1,13 @@
+capsule: e160ad02e081e856f18815957246ff224af333bd3dcc44411609dd8ad1227ac2
+intent: demo-port: edit the home hero section and render a preview — reversible, local
+ir_version: 0
+vocab_version: 1
+registry: f5a15299db728c83bc810eb08453d086121d89e747f196fcf0633b444dde61bb
+capabilities: signal.emit
+effects: pure, reversible-write
+irreversible_strands: 0
+egress_strands: 0
+strands: 4
+cost: 12 / budget 20
+confirm: none
+evidence: fact.cid

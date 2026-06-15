@@ -1,0 +1,13 @@
+{
+  "intent": "demo-port: publish the services page WITHOUT a confirm policy — must be refused at author time (fail-closed escalation probe)",
+  "budget": 30,
+  "confirm": "none",
+  "evidence": ["fact.cid"],
+  "strands": [
+    {"term": "lit.entity", "inputs": []},
+    {"term": "lit.text", "inputs": []},
+    {"term": "cms.edit_section", "inputs": [0, 1]},
+    {"term": "cms.publish", "inputs": [2]}
+  ],
+  "outputs": [3]
+}

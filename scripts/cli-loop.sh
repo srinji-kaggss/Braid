@@ -59,4 +59,15 @@ expect_exit 1 "diff  base->widened (gate fires)"  -- "$BRAID" diff "$WORK/edit.b
 expect_exit 0 "diff  widened->base (narrowing ok)" -- "$BRAID" diff "$WORK/wide.braid" "$WORK/edit.braid"
 expect_exit 0 "diff  identical (no change)"   -- "$BRAID" diff "$WORK/edit.braid" "$WORK/edit.braid"
 
+# 5. U8 — the Day-0 CMS reference actions (demo-port, D16). The real
+#    landing-surface verbs admit/refuse correctly on the no-Rust CLI path.
+DP="$ROOT/crates/braid-cli/tests/fixtures/demo-port"
+expect_exit 0 "encode dp:edit-home-hero"        -- "$BRAID" encode "$DP/edit-home-hero.json"      -o "$WORK/dp_edit.braid"
+expect_exit 0 "verify dp:edit-home-hero (ADMIT)" -- "$BRAID" verify "$WORK/dp_edit.braid"
+expect_exit 0 "encode dp:publish-services"       -- "$BRAID" encode "$DP/publish-services.json"    -o "$WORK/dp_pub.braid"
+expect_exit 0 "verify dp:publish-services (ADMIT)" -- "$BRAID" verify "$WORK/dp_pub.braid"
+expect_exit 0 "encode dp:render-work-listing"    -- "$BRAID" encode "$DP/render-work-listing.json" -o "$WORK/dp_list.braid"
+expect_exit 0 "verify dp:render-work-listing (ADMIT)" -- "$BRAID" verify "$WORK/dp_list.braid"
+expect_exit 2 "encode dp:publish-noconfirm (author-refused)" -- "$BRAID" encode "$DP/publish-services-noconfirm.json" -o "$WORK/dp_nc.braid"
+
 echo "all CLI-loop assertions passed"

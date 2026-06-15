@@ -1,0 +1,13 @@
+capsule: 5bb1c3b90f78ad832c628617bfe4d0079b395458400feaf1ec430e0abb65fbf3
+intent: demo-port: edit the services page then publish it — irreversible, human-confirmed
+ir_version: 0
+vocab_version: 1
+registry: f5a15299db728c83bc810eb08453d086121d89e747f196fcf0633b444dde61bb
+capabilities: intent.emit, signal.emit
+effects: irreversible, pure, reversible-write
+irreversible_strands: 1
+egress_strands: 0
+strands: 4
+cost: 23 / budget 30
+confirm: human-confirm
+evidence: fact.cid, confirmation.token
