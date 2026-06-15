@@ -43,6 +43,70 @@ Everything below this addendum is the original ratified ADR text, unchanged.
 
 ---
 
+## Doctrine addendum (2026-06-15) — Reddit critique, Lean, DiD/anti-malware, the judgment problems
+
+Director session 2026-06-15, working from the r/ClaudeAI "AI-only language" thread +
+its 166-comment expert review (incl. Lucian Wischik, C# async/await), Lean 4 as a
+reference architecture, and Director directives on defense-in-depth, real-world
+grounding, and "soulless code". Full provenance + lock status in
+`spec/braid/DECISIONS.md` D20–D27. The headline shifts (INTERPRETED — veto on review;
+none unlock D6 grammar work):
+
+- **"Machine-first" is reframed (D20).** The expert consensus is that there is no special
+  machine representation of code and that stripping human-affordances makes the model
+  *dumber* — the genre's founding move is wrong. The surviving half is compiler-enforced
+  correctness. Braid's true thesis: **predictable-surface + confinement + amortized human
+  judgment.** The canonical IR is a *verification + anchor* form; the authoring surface
+  must be *familiar, redundant, shallow per-unit, and constrained to the closed
+  vocabulary*. **Humans and AI share an anchor (the verified core), never a
+  representation** — generalizing D17.
+- **Lean is the reference architecture, not a fork (D21/D22).** Trusted-core +
+  extensible-elaboration is Lean's proven shape and is Braid's. Custom syntax helps *only*
+  at the elaboration layer; design the **elaboration seam** (surface → core IR →
+  independent re-check) as a basement interface now. Do **not** fork Lean (wrong runtime,
+  wrong TCB, D9 violation, LLM-hostile surface); use Lean *unforked* as an off-line proof
+  oracle to prove the verifier RULES sound once (seL4/CompCert verified-checker pattern).
+- **Anti-malware = confinement, not detection (D23).** Detection is undecidable
+  (Rice/Cohen) and the binary erases the distinguishing information; a closed typed
+  vocabulary makes dangerous capability *unrepresentable*, turning classes of malice into
+  confinement theorems in a six-layer DiD stack (capability / non-interference /
+  effect-typing / totality-bounds / confirm / manifest-recheck). The irreducible residue
+  (true intent) escalates to the human — never claimed as decided.
+- **Grounding & anti-happy-path (D24).** Error-edge completeness is a fail-closed admission
+  obligation (happy-path-only becomes unrepresentable); the registry is real-world ground
+  truth with metadata *extracted from the system graph, not idealized*; bounds compose to
+  force resource-reality. The verifier reminds the model; the reject→re-author loop is the
+  grounding mechanism.
+- **Anti-soulless / Sr-SWE judgment (D25).** Intent becomes a first-class typed term;
+  admission scores intent-coherence, grain-conformance, and restraint. Senior judgment is
+  compiled once into the vocabulary/ontology/coherence-rules and amortized to every
+  junior/AI author (silent for seniors when satisfied); residue → human.
+- **Research directions (D26/D27, not locked):** a multi-layer ("3D") co-registered
+  projection IR over a shared content-addressed anchor (reusing lgwks JEPA multi-view); and
+  a "good-code" judgment benchmark (intent-coherence, edit-locality, round-trippability,
+  grain, restraint) as a third rung beyond correctness/safety in PRD §8.
+- **Human-as-system-designer forcing function (D28).** Architecture is a first-class typed
+  node (an ADR-as-runtime-artifact) that is **AI-un-mintable** (AI proposes, only a human
+  ratifies), a **required anchor** for every capsule, and **decision-complete** as a
+  fail-closed admission obligation (sibling of D24: "un-decided architecture is
+  unrepresentable" — the AI must surface a fork, never default it). The chart is coarse and
+  amortized, so it stays high-leverage, not human-in-the-loop-constantly.
+- **The up→down / down→up sandwich (D29).** The AI authors the middle band, forced to align
+  UP to the human-ratified architecture and DOWN to the verifier floor, owning neither end.
+  Reference for the top-down half: **Power Apps vibe** (Plan-first; plan/data/app
+  co-registered layers ≈ D26; aligns the AI to a systems-design framework) — Braid goes
+  further by forcing alignment to a *human-authored* per-system architecture, not a vendor's.
+- **Adversarial-loop deflation (D30, finding).** "Autonomous good code" survives only
+  deflated: Braid autonomously raises the **floor** (structural correctness + safety), not
+  the ceiling. v0 only binary-gates structure+safety; altitude/scope/grain are advisory or
+  research, not blocking. Intent-**coherence** ≠ intent-**correctness**. Judgment splits 3
+  ways (structural-blocking / advisory-audit-only / irreducible-human). Decisive open test: a
+  live A/B on a real port — does gate-admission predict blind senior-approval? — stratified
+  by domain. Doc debt: state the advisory-vs-blocking line; correct "intent-grounded" →
+  "intent-coherent".
+
+---
+
 ## Context
 
 The kernel has, without naming it, already built the semantic core of a

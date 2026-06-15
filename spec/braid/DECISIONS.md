@@ -239,3 +239,210 @@ ever wanted, that remains a separate, D6-gated decision.
 no AI, **CLI only**: author" unmet (it would need Rust); "example emitter" is a
 demo that can't author the new/edited capsules the T12 widening gate must
 exercise. (Enriches D17; does not unlock grammar work.)
+
+---
+
+## Amendments — 2026-06-15 (Director session: Reddit "AI-only language" critique, Lean, DiD/anti-malware, the soul/judgment problems)
+
+**Provenance**: live Director session 2026-06-15, working from (a) the r/ClaudeAI
+"I told Claude to build a programming language for use only by AI" thread and its
+166-comment expert review (incl. Lucian Wischik, C# async/await), (b) Lean 4 as a
+reference proof-system architecture, and (c) Director directives on defense-in-depth,
+real-world grounding, and "soulless code". Synthesis by Claude; INTERPRETED entries
+are veto-on-review per the lock legend. These ENRICH the foundations; none unlock
+grammar work (D6 still gates surface syntax).
+
+### D20 — "Machine-first" is RENAMED in intent to "predictable-surface + confinement + amortized judgment" — **INTERPRETED** (supersedes the marketing reading of D1/README, not its mechanics)
+The Reddit expert consensus (multi-commenter, corroborated): there is **no special
+"machine representation" of code** — the model tokenizes Braid-bytes, Python, and prose
+as the same kind of sequence; stripping human-affordances (names, redundancy, density)
+removes the *contextual signal the model uses to stay coherent*, making it **dumber**.
+The genre's founding move ("strip the human") is therefore wrong. What survives review is
+the OTHER half: **compiler/grammar-enforced correctness**, because LLMs are weak at
+correctness.
+**Adopted reframe**: Braid leverages token-prediction by making the AI authoring surface
+maximally *predictable* — familiar shape (TS/Ruby/JSON-like), shallow per-unit structural
+depth (Wischik: "LLMs are poor at syntactic depth below a handful of levels"), and
+*constrained to the closed vocabulary the model cannot predict outside of* — and by
+closing the loop with the deterministic verifier as machine-readable feedback. The
+canonical IR (CBOR/CID) is a **verification + anchor** form, NOT the authoring surface;
+the authoring surface must be familiar and redundant. **Humans and AI never share a
+representation; they share an *anchor* — the verified content-addressed core — and meet
+through axis-specific projections** (generalizes D17). The README sentence "the form a
+model manipulates reliably" is to be corrected to this anchor framing.
+
+### D21 — Lean 4 is the REFERENCE ARCHITECTURE (trusted-core + extensible elaboration); design the elaboration seam now — **INTERPRETED**
+Lean is the industrial existence-proof of Braid's thesis: a tiny trusted kernel that
+re-checks every term, under an arbitrarily rich, user-extensible surface (parser /
+elaborator / macros / notation) that *elaborates down* to the core (Mathlib ≈ 1.5M lines
+→ one small kernel). Mapping: Lean kernel ↔ `braid-verify` (D9 independent re-check);
+Lean core terms ↔ Braid IR; Lean elaboration/macros ↔ Braid's deferred surface (D6);
+pretty-printer ↔ manifest (D12); code generator ↔ WASM codegen (P3).
+**Decision**: custom syntax helps **only at the elaboration layer, never the trusted
+core**. The *grammar* stays D6-gated, but the **elaboration SEAM** — the locked contract
+"any surface → core IR → independent re-check" — is a **basement interface to design now**
+(build-the-basement discipline). This resolves the Java-scale-vs-closed-vocabulary tension
+(D-non-goals): ecosystem lives in the open notation/elaboration layer, trust lives in the
+small closed core — exactly how Lean gets million-line reach from a few-thousand-line TCB.
+
+### D22 — Do NOT fork Lean; use Lean (unforked) as an OFF-LINE PROOF ORACLE for verifier-rule soundness — **INTERPRETED**
+Forking Lean to *be* Braid is rejected: (1) tool mismatch — Lean is a theorem prover for
+human-guided interactive proof; Braid's checks are *decidable* (types, attenuation, taint
+fold, bounds), needing a fast total verifier, not tactic search; (2) runtime mismatch —
+Lean→C+GC vs Braid→WASM-over-three-syscalls (D14, "does not build a second runtime");
+(3) **D9 violation** — building on Lean's kernel makes Lean's math-tuned TCB (kernel +
+elaborator + `native_decide`/`axiom`/`sorry`/unsafe escapes) *our security TCB*, an
+adjacent-not-identical threat model; (4) Lean surface is LLM-hostile (sparse corpus,
+hidden tactic state = the LSP/hidden-context problem in extremis) — poisons "easy for AI";
+(5) canonical-bytes/D8 friction; (6) re-imports the coupling extraction just removed.
+**Adopted**: use Lean *unforked* as a design-time oracle to **prove Braid's verifier RULES
+sound once** — taint-fold ⟹ non-interference, attenuation-lattice soundness,
+effect-composition monotonicity, bounds ⟹ termination — then the independent Rust verifier
+*implements* the proven-sound rules on the hot path. This is the seL4/CompCert
+"verified checker" pattern (proof assistant proves the checker; the fast version ships).
+
+### D23 — Anti-malware doctrine: CONFINEMENT, not detection — **INTERPRETED** (sharpens D10 + threat model)
+Malware is binary-identical to benign code (ransomware ≡ backup: same syscalls); malice is
+a relation between operation, data, and *authorization* — not an intrinsic code property,
+and the distinguishing information is *erased* by the binary level. Detecting "is this
+malware?" on arbitrary code is **undecidable** (Rice 1953; Cohen 1987). Defense therefore
+**cannot live at the binary** and cannot be "detect the bad."
+**The flip**: a closed, typed capability/effect/flow vocabulary turns "what can this do?"
+from an undecidable *inference* into a decidable *read-off-the-type*. Whole *classes* of
+malice become **confinement theorems** that hold regardless of intent, layered
+defense-in-depth (no layer trusted to be complete):
+(0) capability security — no ambient authority; an ungranted capability is *unrepresentable*
+(D10); (1) information-flow / **non-interference** (Volpano-Smith-Irvine) — path-level taint
+fold (the #361 lesson); (2) effect typing — actual effects ⊆ declared; (3) totality /
+resource bounds — non-termination/DoS unrepresentable (scenario #9); (4) confirm policy —
+the irreducible *value-judgment* residue, payload-hash-bound (T10); (5) manifest re-check at
+load — provenance/swap (D12/T4). The residue proof cannot reach — true intent,
+authorized-but-adversarial — **escalates to the human**; it is never claimed as decided
+("safe-by-construction ≠ correct-by-construction"). Enforce where the distinguishing
+information still exists (typed capability level), never at the binary.
+
+### D24 — Grounding & anti-happy-path: confront-at-admission, not remember-at-authoring — **INTERPRETED**
+LLM failure modes "forgets the real-world framework" and "only writes the happy path" are
+converted from virtues-the-model-lacks into invariants-the-substrate-enforces:
+(a) **Error-edge completeness is a fail-closed admission obligation** — a braid with an
+undischarged typed-error edge does NOT admit; happy-path-only is *structurally
+unrepresentable* (exhaustive case analysis, à la Rust/Lean).
+(b) **The registry is the real-world ground truth**, and each term's `effect_class`,
+`cost_bound`, and failure modes MUST be **extracted from the real system graph** (lgwks
+ingestion graph / impact / complexity), never idealized — else grounding is fake. Unknown
+term ⇒ deny (scenario #14) is the no-hallucinated-API guarantee.
+(c) **Bounds compose** to force resource-reality (the 5M-row table surfaces as a budget
+overflow ⇒ typed reject ⇒ re-author). The verifier *reminds* the model with
+machine-readable reasons; the reject→re-author loop IS the grounding mechanism.
+
+### D25 — Anti-soulless / Sr-SWE-judgment: intent as a typed term + amortized compiled judgment — **INTERPRETED** (goal), mechanism **REVISABLE**
+"Soulless code" (technically correct, no why/fit/restraint) is a *judgment* failure
+orthogonal to correctness, so tests never catch it. You cannot put taste IN the IR; you
+make the IR carry **the dimensions taste operates on**, so judgment is checkable/visible:
+- **Intent is a first-class TYPED term** (structured ontology, not freetext); admission
+  *scores coherence* between declared intent and realized braid (lgwks `cohere` /
+  `comprehend`). No coherent non-trivial intent ⇒ flagged low-coherence = soulless.
+- **Grain-conformance**: similarity to the braid's graph-neighbors ("the senior knows the
+  codebase," made mechanical); alien structure ⇒ innovation-or-slop ⇒ human.
+- **Restraint/minimality**: effect-set == intent, no widening (the T12 gate; over-reach =
+  soulless-by-excess).
+**Amortized judgment + graduated friction**: the senior authors the vocabulary / intent
+ontology / certified strands / coherence rules ONCE — taste *compiled into the substrate* —
+and every junior / vibe-coder / AI author gets senior-level review for free,
+deterministically; for the senior the checks are silent when satisfied. The IR does not
+*think* like a senior — it *replays compiled senior judgment* to everyone downstream
+(the "amortized intelligence" pattern). Irreducible taste escalates to the human via the
+manifest.
+
+### D26 — Multi-layer ("3D") co-registered projection IR — **RESEARCH DIRECTION** (not locked; gated like D6)
+Candidate distinctive contribution. A program is normally crushed to 1-D (token stream) /
+2-D (AST). Reframe: a single **content-addressed node-set ("shared anchor")** with
+orthogonal first-class layers — dataflow / effect-control / intent / authority-taint /
+abstraction-depth ("neuron layers") — every node carrying a coordinate on every axis.
+Humans, LLMs, and the verifier each **project onto the layer(s) they need** (manifest is
+already a 2-layer projection); optional literal 3-D visualization for human comprehension
+(navigate a hard program by moving one axis at a time = how seniors hold a system).
+Reuses the lgwks **JEPA multi-view** primitive ("shared anchors, machine packet, human
+projection"). **Token-prediction rationale**: the LLM only ever authors/reads a *shallow,
+single-axis linearization* — dodging "LLMs are poor at structural depth" by construction.
+Generalizes D17 from one IR to a layered projection space. STATUS: research; any surface
+realization remains D6-gated.
+
+### D27 — A "good-code" (judgment) benchmark — **OPEN / PRD-§8 metric candidate**
+PRD §8 success metrics currently measure only the gate (correctness/safety). Add a third
+rung — *good* — measured by checkable PROXIES, not an absolute aesthetic score:
+intent-coherence; **edit-locality / intent-stability** (small intent change ⇒ small local
+diff — the Reddit [109] "preserve intent through small edits" test); **round-trippability**
+(meaning survives re-representation — [109]); grain-conformance; restraint/minimality;
+catch-rate-without-human. Braid is uniquely positioned (it has the intent binding + the
+graph to measure against, which generic code benchmarks lack); feeds the
+frontier-coherence-engine + human-AI-binning research. Honest caveat: proxies are gameable
+and incomplete — the irreducible residue stays human.
+
+---
+
+## Amendments — 2026-06-15, round 2 (forcing the human as system designer; the up→down sandwich; adversarial-loop deflation)
+
+### D28 — Human-as-system-designer FORCING FUNCTION: architecture is an AI-un-mintable, human-ratified anchor — **INTERPRETED**
+The cardinal AI failure to engineer out: the AI silently collapses an open architectural
+fork into ONE default — which is (a) too simplistic AND (b) not the AI's decision to make.
+Fix it structurally, not by hope. **System architecture is a first-class typed node**
+(options-considered + chosen + rationale — i.e., an **ADR as a runtime artifact**;
+self-similar to this very register). Three properties make the human the system designer by
+construction:
+1. **AI-un-mintable**: the AI may *propose* an architecture node (does the legwork); **only a
+   human can ratify/mint it.**
+2. **Required anchor**: every capsule binds to a ratified architecture node; an unbound
+   capsule does not author ("no ratified system-design anchor").
+3. **Architectural-decision-completeness is a fail-closed admission obligation** — the
+   sibling of D24's error-edge completeness. A capsule depending on an *un-ratified*
+   decision blocks authoring and emits "decision required" to the human; **"un-decided
+   architecture is unrepresentable."** The AI must SURFACE the fork, never default it.
+This generalizes D25/GAP-B *up* from intent to architecture, and makes the central axis
+(D17) literal: **human meets the system at architecture + intent (the chart); AI meets it at
+composition (the flights); the verifier is the floor.** Stays high-leverage, not
+human-in-the-loop-constantly (GAP E): the chart is **coarse and amortized** — one ratified
+architecture serves many capsules; the forcing function fires at *architectural* forks only.
+
+### D29 — The up→down / down→up SANDWICH; Power Apps "vibe" as reference for the top-down half — **INTERPRETED**
+Two complementary directions, the AI sandwiched in the middle owning neither end:
+- **down→up** (Braid's built strength): the verifier floor — autonomous correctness + safety.
+- **up→down** (this addition): human-ratified architecture the AI must *align to*, from the top (D28).
+The AI authors the MIDDLE band, **forced to align UP** (to the ratified architecture) **and
+DOWN** (to the verifier floor). Reference for the top-down half: **Power Apps vibe**
+(`learn.microsoft.com/power-apps/vibe/overview`, read 2026-06-15) — *Plan mode* makes the
+plan a first-class human-reviewed artifact *before* code (Braid analog: architecture anchor +
+manifest ratified before any capsule admits); *plan/data/app co-registered layers* is
+**literally D26** (multi-layer projection — plan=intent, data=schema, app=UI, one shared
+model); it *forces the AI to align to a systems-design framework* and serves citizen-devs AND
+pro-devs (the juniors-AND-seniors target). **Where Braid goes further**: Power Apps aligns the
+AI to *Microsoft's fixed* framework; Braid forces alignment to a **human-AUTHORED, per-system
+architecture** — the human is the designer, not a picker of a vendor's bins (the difference is
+the AI-un-mintable, ratification-required, decision-complete anchor of D28).
+
+### D30 — Adversarial-loop deflation of "autonomous good code" (3-round Haiku red-team, defended in-thread) — **FINDING / REVISABLE**
+Stress-tested the claim "the generate→verify→re-author loop autonomously produces GOOD code."
+It survives only **deflated**, and the deflation is the honest thesis:
+- **Braid autonomously raises the FLOOR, not the ceiling.** It guarantees structural-
+  compositional correctness + confinement-safety (types, exhaustive error paths, capability
+  attenuation, taint non-interference, resource bounds) for every author class. It does NOT
+  autonomously produce taste-excellent or novel-domain code.
+- **Code-grounded correction** (read `braid-verify/src/lib.rs`): v0 only *binary-gates*
+  structure + safety. **Altitude / scope-creep / grain are ADVISORY (D25 "scores coherence")
+  or research (D26/D27) — NOT blocking.** State the **advisory-vs-blocking** line explicitly.
+- **Intent-COHERENCE ≠ intent-CORRECTNESS.** The verifier checks internal consistency with the
+  declared intent, never whether the goal is right → a confidently-wrong declared intent yields
+  admitted competently-wrong code (the exact junior/vibe-coder/AI failure mode). Correct the
+  wording "intent-grounded" → "intent-coherent" wherever it appears.
+- **Judgment splits 3 ways** (must be named in the design): (i) structural = blocking in-loop
+  gate, Goodhart-safe because binary; (ii) advisory scalar = audit-only, **never the author's
+  reward** (RLAIF on a coherence score = guaranteed Goodhart); (iii) irreducible taste = human.
+- **Explore-next agenda (the gaps):** A) advisory→blocking frontier (restraint binarizes via
+  the widening gate; right-altitude likely cannot); B) intent-correctness via a human-ratified
+  `work_object`/architecture anchor (D28); C) "amortized judgment" rests on two unproven human
+  acts — ontology-quality + humans-actually-read-the-manifest; D) no online feedback (static
+  v0): registry-governance + runtime→registry correction loop; E) fast live chart-extension
+  protocol for novel intent; F) **the decisive experiment** — a live A/B on a REAL port (not the
+  CMS toy): does gate-admission predict *blind* senior-approval? + false-positive-rate-on-taste
+  + post-merge outcome-by-axis, **stratified by domain** (rendering vs mutation; the catch-rate
+  is NOT constant). Outcomes, not labels — dodges the circular-labeling/selection-bias traps.
