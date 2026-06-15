@@ -212,9 +212,11 @@ surfaces/features authored as capsules. External authoring stays out until
 §16 trigger 4. Each port feeds vocabulary/IR refinements back before the
 alphabet widens. (Sharpens D7's trajectory.)
 
-### D19 — `braid encode` author input = JSON-of-IR over the SDK Builder — **INTERPRETED** (Director-selected live, 2026-06-14)
+### D19 — `braid encode` author input = JSON-of-IR over the SDK Builder — **LOCKED** (Director-confirmed on merge of PR #3, 2026-06-14)
 > Director, live this session (2026-06-14), choosing among three framed
 > options for what `braid encode` consumes: **"A"** — JSON-of-IR transcription.
+> Confirmed by the Director's direction to merge PR #3 ("merge and run
+> termination") — INTERPRETED→LOCKED per the lock legend's conversion process.
 
 The U6 CLI's `encode` reads a **JSON that is a 1:1 data transcription of the
 IR structures** (`intent`, optional `budget`/`confirm`/`evidence`, `strands:
