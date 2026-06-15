@@ -3,11 +3,21 @@
 > ⚠️ **Name provisional (ADR-088 D15).** "Braid" is a working codename until the
 > Director finalizes naming. Identity is the spec + decision register, never the
 > word.
+>
+> ⚠️ **"Machine-first" is legacy framing (superseded by D20).** The thesis is
+> *predictable-surface + confinement + amortized human judgment* — not stripping
+> human affordances. The verifier owns a correctness/safety **floor**, not "good
+> code." The phrase persists in the ADR filename/title for provenance only; the
+> decision register (D20, D28–D30) is authoritative.
 
-**Braid** is Logic OS's machine-first application framework. Programs are
-content-addressed graphs of typed terms drawn from a closed capability
-vocabulary; a deterministic compiler/verifier pipeline — not an AI, not a
-reviewer — owns compliance, and humans audit rendered manifests.
+**Braid** is Logic OS's application framework for the era where **AI authors and
+humans design**. Programs are content-addressed graphs of typed terms drawn from a
+closed capability vocabulary. A deterministic compiler/verifier — not an AI, not a
+reviewer — owns a **floor** of correctness and confinement-safety (types, effects,
+capability attenuation, taint, bounds); **humans own the architecture and intent**
+above that floor and audit rendered manifests. AI and humans never share a
+representation — they meet at a shared verified **anchor** through separate
+projections (register D20, D28–D30).
 
 This repository was extracted from
 [`logic-os-kernel`](https://github.com/srinji-kaggss/logic-os-kernel) (PR #564)
