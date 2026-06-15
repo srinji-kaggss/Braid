@@ -211,3 +211,29 @@ states the machine-first thesis) — landing first (D16), then further
 surfaces/features authored as capsules. External authoring stays out until
 §16 trigger 4. Each port feeds vocabulary/IR refinements back before the
 alphabet widens. (Sharpens D7's trajectory.)
+
+### D19 — `braid encode` author input = JSON-of-IR over the SDK Builder — **INTERPRETED** (Director-selected live, 2026-06-14)
+> Director, live this session (2026-06-14), choosing among three framed
+> options for what `braid encode` consumes: **"A"** — JSON-of-IR transcription.
+
+The U6 CLI's `encode` reads a **JSON that is a 1:1 data transcription of the
+IR structures** (`intent`, optional `budget`/`confirm`/`evidence`, `strands:
+[{term, inputs:[idx]}]`, `outputs:[idx]`) and routes it through the existing
+`braid-sdk` `Builder` against the pinned `registry_v0`. Grants are *derived*
+from the terms used, and `vocab_version`/`registry_cid`/`ir_version` are
+filled from the bound registry — never hand-typed (no magic constant; the
+`registry_cid` is recomputed from the pinned registry, satisfying the
+calculator-reconstructable bar). The CLI path is therefore byte-identical to
+the SDK path and reproduces the pinned reference CIDs (T13).
+
+**The fence** (so this stays inside D17/D6, not past them): JSON-of-IR is a
+*transport encoding of the IR data model* — the "author capsules as IR data"
+path the PRD already licenses (PRD §3 actor row). It is **NOT** the textual
+surface syntax / grammar / parser the PRD lists as a non-goal (PRD §non-goals)
+and that D17 keeps gated. No sugar, no defaults beyond the SDK's, no semantics
+the `Capsule`/registry don't already enforce. If a real surface grammar is
+ever wanted, that remains a separate, D6-gated decision.
+*Why A over the alternatives*: "bytes-only CLI" leaves scenario #12's "human,
+no AI, **CLI only**: author" unmet (it would need Rust); "example emitter" is a
+demo that can't author the new/edited capsules the T12 widening gate must
+exercise. (Enriches D17; does not unlock grammar work.)

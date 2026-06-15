@@ -5,6 +5,7 @@ members = [
     "crates/braid-verify",
     "crates/braid-render",
     "crates/braid-sdk",
+    "crates/braid-cli",
 ]
 resolver = "2"
 

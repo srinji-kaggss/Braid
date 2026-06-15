@@ -71,6 +71,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "braid-cli"
+version = "0.1.0"
+dependencies = [
+ "braid-capability",
+ "braid-ir",
+ "braid-render",
+ "braid-sdk",
+ "braid-verify",
+ "hex",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "braid-ir"
 version = "0.1.0"
 dependencies = [

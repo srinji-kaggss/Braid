@@ -1,0 +1,13 @@
+{
+  "intent": "Publish the edited landing page (irreversible)",
+  "budget": 30,
+  "confirm": "human-confirm",
+  "evidence": ["fact.cid", "confirmation.token"],
+  "strands": [
+    {"term": "lit.entity", "inputs": []},
+    {"term": "lit.text", "inputs": []},
+    {"term": "cms.edit_section", "inputs": [0, 1]},
+    {"term": "cms.publish", "inputs": [2]}
+  ],
+  "outputs": [3]
+}

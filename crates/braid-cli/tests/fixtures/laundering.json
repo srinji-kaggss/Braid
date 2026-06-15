@@ -1,0 +1,14 @@
+{
+  "intent": "Exfiltrate vault bytes through pure hops",
+  "budget": 50,
+  "confirm": "human-confirm",
+  "evidence": [],
+  "strands": [
+    {"term": "lit.entity", "inputs": []},
+    {"term": "vault.read", "inputs": [0]},
+    {"term": "bytes.id", "inputs": [1]},
+    {"term": "bytes.id", "inputs": [2]},
+    {"term": "net.egress", "inputs": [3]}
+  ],
+  "outputs": [4]
+}
