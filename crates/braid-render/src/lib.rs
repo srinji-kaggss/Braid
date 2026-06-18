@@ -157,6 +157,18 @@ pub fn manifest_diff(old: &Manifest, new: &Manifest) -> Vec<Delta> {
     let mut deltas = Vec::new();
     let set = |v: &[String]| -> BTreeSet<String> { v.iter().cloned().collect() };
 
+    if old.capsule_cid != new.capsule_cid {
+        deltas.push(Delta {
+            kind: DeltaKind::Neutral,
+            field: "capsule",
+            detail: format!(
+                "{} -> {}",
+                old.capsule_cid.to_hex(),
+                new.capsule_cid.to_hex()
+            ),
+        });
+    }
+
     let (old_caps, new_caps) = (set(&old.capabilities), set(&new.capabilities));
     for added in new_caps.difference(&old_caps) {
         deltas.push(Delta {
@@ -229,6 +241,44 @@ pub fn manifest_diff(old: &Manifest, new: &Manifest) -> Vec<Delta> {
         deltas.push(Delta {
             kind: DeltaKind::Neutral,
             field: "intent",
+            detail: "changed".into(),
+        });
+    }
+    if old.strand_count != new.strand_count {
+        deltas.push(Delta {
+            kind: DeltaKind::Neutral,
+            field: "strands",
+            detail: format!("{} -> {}", old.strand_count, new.strand_count),
+        });
+    }
+    if old.total_cost != new.total_cost {
+        deltas.push(Delta {
+            kind: DeltaKind::Neutral,
+            field: "cost",
+            detail: format!("{} -> {}", old.total_cost, new.total_cost),
+        });
+    }
+    if old.irreversible_strands != new.irreversible_strands {
+        deltas.push(Delta {
+            kind: DeltaKind::Neutral,
+            field: "irreversible_strands",
+            detail: format!(
+                "{} -> {}",
+                old.irreversible_strands, new.irreversible_strands
+            ),
+        });
+    }
+    if old.egress_strands != new.egress_strands {
+        deltas.push(Delta {
+            kind: DeltaKind::Neutral,
+            field: "egress_strands",
+            detail: format!("{} -> {}", old.egress_strands, new.egress_strands),
+        });
+    }
+    if old.evidence != new.evidence {
+        deltas.push(Delta {
+            kind: DeltaKind::Neutral,
+            field: "evidence",
             detail: "changed".into(),
         });
     }

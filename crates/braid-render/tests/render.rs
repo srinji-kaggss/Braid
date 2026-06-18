@@ -87,6 +87,27 @@ fn identical_manifests_produce_no_deltas() {
 }
 
 #[test]
+fn changed_artifact_is_not_reported_as_no_change() {
+    let old = edit_section_capsule();
+    let mut new = old.clone();
+    new.evidence.push("audit.extra".into());
+    assert_ne!(old.cid(), new.cid());
+
+    let deltas = manifest_diff(
+        &manifest(&old, &registry_v0()).unwrap(),
+        &manifest(&new, &registry_v0()).unwrap(),
+    );
+    assert!(!deltas.is_empty());
+    assert!(!has_widening(&deltas));
+    assert!(deltas.iter().any(|d| d.kind == DeltaKind::Neutral
+        && d.field == "capsule"
+        && d.detail.contains(&new.cid().to_hex())));
+    assert!(deltas
+        .iter()
+        .any(|d| d.kind == DeltaKind::Neutral && d.field == "evidence"));
+}
+
+#[test]
 fn unknown_term_renders_nothing() {
     // A manifest must not exist for an unverifiable capsule (fail-closed).
     let mut c = edit_section_capsule();
