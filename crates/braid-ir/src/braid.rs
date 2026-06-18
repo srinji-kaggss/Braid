@@ -26,7 +26,10 @@ pub struct Braid {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BraidError {
     /// An input/output references a strand index ≥ its own position / len.
-    ForwardReference { strand: usize, index: u32 },
+    ForwardReference {
+        strand: usize,
+        index: u32,
+    },
     OutputOutOfRange(u32),
     Empty,
     NoOutputs,
@@ -42,7 +45,10 @@ impl Braid {
         for (i, s) in self.strands.iter().enumerate() {
             for &inp in &s.inputs {
                 if inp as usize >= i {
-                    return Err(BraidError::ForwardReference { strand: i, index: inp });
+                    return Err(BraidError::ForwardReference {
+                        strand: i,
+                        index: inp,
+                    });
                 }
             }
         }
@@ -72,7 +78,10 @@ impl Braid {
             })
             .collect();
         Value::map(vec![
-            ("outputs", Value::List(self.outputs.iter().map(|&o| Value::Int(o as i64)).collect())),
+            (
+                "outputs",
+                Value::List(self.outputs.iter().map(|&o| Value::Int(o as i64)).collect()),
+            ),
             ("strands", Value::List(strands)),
         ])
     }

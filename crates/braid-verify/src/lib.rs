@@ -11,9 +11,9 @@
 
 pub mod decode;
 
+use braid_capability::Capability;
 use braid_ir::term::{EffectClass, Exposure};
 use braid_ir::{Capsule, Cid, ConfirmPolicy, TermRegistry, TypeTag, IR_VERSION};
-use braid_capability::Capability;
 
 /// Pipeline stages, in locked order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,7 +73,10 @@ pub fn verify(bytes: &[u8], registry: &TermRegistry, ambient: &[Capability]) -> 
     for (i, s) in capsule.braid.strands.iter().enumerate() {
         let Some(spec) = registry.get(&s.term) else {
             // Unknown = deny, never "best effort" (L9 / scenario #14).
-            return reject(Stage::Structure, format!("unknown term `{}` at strand {i}", s.term));
+            return reject(
+                Stage::Structure,
+                format!("unknown term `{}` at strand {i}", s.term),
+            );
         };
         if spec.inputs.len() != s.inputs.len() {
             return reject(
@@ -107,7 +110,10 @@ pub fn verify(bytes: &[u8], registry: &TermRegistry, ambient: &[Capability]) -> 
     // Stage 5 — capability (strand ⊆ grants ⊆ ambient; attenuation-only).
     for g in &capsule.grants {
         if !ambient.contains(g) {
-            return reject(Stage::Capability, format!("grant `{g}` exceeds ambient authority"));
+            return reject(
+                Stage::Capability,
+                format!("grant `{g}` exceeds ambient authority"),
+            );
         }
     }
     for (i, s) in capsule.braid.strands.iter().enumerate() {
@@ -116,7 +122,10 @@ pub fn verify(bytes: &[u8], registry: &TermRegistry, ambient: &[Capability]) -> 
             if !capsule.grants.contains(cap) {
                 return reject(
                     Stage::Capability,
-                    format!("strand {i} `{}` requires undeclared capability `{cap}`", s.term),
+                    format!(
+                        "strand {i} `{}` requires undeclared capability `{cap}`",
+                        s.term
+                    ),
                 );
             }
         }

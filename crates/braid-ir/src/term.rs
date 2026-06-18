@@ -251,7 +251,12 @@ fn term_to_canon(t: &TermSpec) -> Value {
         ("id", Value::Text(t.id.clone())),
         (
             "inputs",
-            Value::List(t.inputs.iter().map(|i| Value::Text(type_to_text(i))).collect()),
+            Value::List(
+                t.inputs
+                    .iter()
+                    .map(|i| Value::Text(type_to_text(i)))
+                    .collect(),
+            ),
         ),
         ("output", Value::Text(type_to_text(&t.output))),
         ("effect", Value::Text(effect_to_text(t.effect).into())),
@@ -274,7 +279,14 @@ fn term_from_canon(v: &Value) -> Result<TermSpec, RegistryError> {
     // `capability` and `ceiling` are optional; the rest required. The allowed
     // set is the exhaustive key universe — any other key is a smuggled field.
     if !v.require_only_keys(&[
-        "id", "inputs", "output", "effect", "exposure", "cost", "capability", "ceiling",
+        "id",
+        "inputs",
+        "output",
+        "effect",
+        "exposure",
+        "cost",
+        "capability",
+        "ceiling",
     ]) {
         return Err(RegistryError::Malformed("term: unknown field"));
     }

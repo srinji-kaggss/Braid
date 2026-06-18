@@ -159,6 +159,59 @@ fn diff_identical_is_no_change() {
     assert!(String::from_utf8_lossy(&d.stdout).contains("no change"));
 }
 
+/// U9/T4/T6 — rendering is a human-review projection of an ADMITTED artifact,
+/// not a side door around the verifier. A canonical capsule with a stale
+/// registry pin must be refused before any manifest text is emitted.
+#[test]
+fn render_refuses_version_skewed_capsule() {
+    let (base, _) = encode("edit_section.json", "render_bad_version_base.braid");
+    let mut capsule = braid_ir::Capsule::from_bytes(&std::fs::read(&base).unwrap()).unwrap();
+    capsule.vocab_version += 1;
+    let bad = tmp("render_bad_version.braid");
+    std::fs::write(&bad, capsule.to_bytes()).unwrap();
+
+    let r = run(&["render", bad.to_str().unwrap()]);
+    assert_eq!(
+        r.status.code(),
+        Some(2),
+        "render must refuse verifier-rejected capsules"
+    );
+    assert!(r.stdout.is_empty(), "must not emit a manifest");
+    let err = String::from_utf8_lossy(&r.stderr);
+    assert!(
+        err.contains("not admitted for review") && err.contains("VersionPin"),
+        "got: {err}"
+    );
+}
+
+/// Same fail-closed rule for the manifest-diff gate: an invalid new artifact
+/// must not be classed as "no change" or "neutral" just because its renderable
+/// fields happen to look harmless.
+#[test]
+fn diff_refuses_version_skewed_capsule() {
+    let (base, _) = encode("edit_section.json", "diff_bad_version_base.braid");
+    let mut capsule = braid_ir::Capsule::from_bytes(&std::fs::read(&base).unwrap()).unwrap();
+    capsule.registry_cid = braid_ir::Cid([0u8; 32]);
+    let bad = tmp("diff_bad_version.braid");
+    std::fs::write(&bad, capsule.to_bytes()).unwrap();
+
+    let d = run(&["diff", base.to_str().unwrap(), bad.to_str().unwrap()]);
+    assert_eq!(
+        d.status.code(),
+        Some(2),
+        "diff must refuse verifier-rejected capsules"
+    );
+    assert!(
+        !String::from_utf8_lossy(&d.stdout).contains("no change"),
+        "invalid artifact must not be presented as an ordinary diff"
+    );
+    let err = String::from_utf8_lossy(&d.stderr);
+    assert!(
+        err.contains("not admitted for review") && err.contains("VersionPin"),
+        "got: {err}"
+    );
+}
+
 /// The laundering capsule (vault bytes -> pure hops -> egress) is rejected at
 /// the taint stage; verify exits 1 (policy-negative), not 2 (operator error).
 #[test]

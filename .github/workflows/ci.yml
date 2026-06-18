@@ -18,12 +18,8 @@ jobs:
         with:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
-      # //why scoped to braid-cli, not --all: the pre-extraction crates were
-      # committed without a rustfmt pass, so a workspace fmt gate would fail on
-      # code U6 didn't touch. Formatting the whole workspace is its own
-      # deliberate PR (tracked follow-up), not smuggled into U6.
-      - name: format (braid-cli)
-        run: cargo fmt -p braid-cli -- --check
+      - name: format
+        run: cargo fmt --all --check
       - name: clippy (warnings are errors)
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: test

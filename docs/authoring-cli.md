@@ -26,6 +26,12 @@ braid render <capsule.braid>               # the human-review manifest
 braid diff   <old.braid> <new.braid>       # manifest delta; fails on any Widening
 ```
 
+`render` and `diff` are human-review projections of **admitted** artifacts.
+They first run the verifier using the capsule's declared grants as ambient
+authority, matching `verify`'s default happy-path check. A canonical but
+verifier-rejected capsule (for example, stale `vocab_version` or
+`registry_cid`) is refused before manifest text is emitted.
+
 **Exit codes:** `0` ok · `1` policy-negative (a clean run that ends in
 `REJECT` or `WIDENING`) · `2` operator error (bad usage / IO / malformed input
 / author-time reject). The split lets CI and `&&` chains distinguish "the tool

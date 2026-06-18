@@ -23,7 +23,11 @@ fn manifest_rendering_is_deterministic() {
 
 #[test]
 fn manifest_surfaces_the_dangerous_facts() {
-    let m = manifest(&publish_capsule(ConfirmPolicy::HumanConfirm), &registry_v0()).unwrap();
+    let m = manifest(
+        &publish_capsule(ConfirmPolicy::HumanConfirm),
+        &registry_v0(),
+    )
+    .unwrap();
     assert_eq!(m.irreversible_strands, 1);
     assert!(m.effects.contains(&"irreversible".to_string()));
     let text = render_text(&m);
@@ -34,20 +38,28 @@ fn manifest_surfaces_the_dangerous_facts() {
 #[test]
 fn capability_addition_is_a_widening() {
     let old = manifest(&edit_section_capsule(), &registry_v0()).unwrap();
-    let new = manifest(&publish_capsule(ConfirmPolicy::HumanConfirm), &registry_v0()).unwrap();
+    let new = manifest(
+        &publish_capsule(ConfirmPolicy::HumanConfirm),
+        &registry_v0(),
+    )
+    .unwrap();
     let deltas = manifest_diff(&old, &new);
     assert!(has_widening(&deltas));
-    assert!(deltas
-        .iter()
-        .any(|d| d.kind == DeltaKind::Widening && d.field == "capabilities" && d.detail == "+intent.emit"));
-    assert!(deltas
-        .iter()
-        .any(|d| d.kind == DeltaKind::Widening && d.field == "effects" && d.detail == "+irreversible"));
+    assert!(deltas.iter().any(|d| d.kind == DeltaKind::Widening
+        && d.field == "capabilities"
+        && d.detail == "+intent.emit"));
+    assert!(deltas.iter().any(|d| d.kind == DeltaKind::Widening
+        && d.field == "effects"
+        && d.detail == "+irreversible"));
 }
 
 #[test]
 fn dropping_confirmation_is_a_widening() {
-    let old = manifest(&publish_capsule(ConfirmPolicy::HumanConfirm), &registry_v0()).unwrap();
+    let old = manifest(
+        &publish_capsule(ConfirmPolicy::HumanConfirm),
+        &registry_v0(),
+    )
+    .unwrap();
     let new = manifest(&publish_capsule(ConfirmPolicy::None), &registry_v0()).unwrap();
     let deltas = manifest_diff(&old, &new);
     assert!(deltas
@@ -57,7 +69,11 @@ fn dropping_confirmation_is_a_widening() {
 
 #[test]
 fn narrowing_is_not_flagged_as_widening() {
-    let old = manifest(&publish_capsule(ConfirmPolicy::HumanConfirm), &registry_v0()).unwrap();
+    let old = manifest(
+        &publish_capsule(ConfirmPolicy::HumanConfirm),
+        &registry_v0(),
+    )
+    .unwrap();
     let new = manifest(&edit_section_capsule(), &registry_v0()).unwrap();
     let deltas = manifest_diff(&old, &new);
     assert!(!has_widening(&deltas));

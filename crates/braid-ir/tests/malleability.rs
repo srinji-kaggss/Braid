@@ -27,7 +27,10 @@ fn floats_do_not_exist() {
         let mut bytes = vec![head];
         bytes.extend([0u8; 8]);
         assert!(
-            matches!(decode_strict(&bytes), Err(CanonError::ForbiddenForm(_)) | Err(CanonError::TrailingBytes)),
+            matches!(
+                decode_strict(&bytes),
+                Err(CanonError::ForbiddenForm(_)) | Err(CanonError::TrailingBytes)
+            ),
             "float head {head:#x} must be rejected"
         );
     }
@@ -35,9 +38,18 @@ fn floats_do_not_exist() {
 
 #[test]
 fn tags_and_null_rejected() {
-    assert!(matches!(decode_strict(&[0xc0, 0x00]), Err(CanonError::ForbiddenForm(_)))); // tag
-    assert!(matches!(decode_strict(&[0xf6]), Err(CanonError::ForbiddenForm(_)))); // null
-    assert!(matches!(decode_strict(&[0xf7]), Err(CanonError::ForbiddenForm(_)))); // undefined
+    assert!(matches!(
+        decode_strict(&[0xc0, 0x00]),
+        Err(CanonError::ForbiddenForm(_))
+    )); // tag
+    assert!(matches!(
+        decode_strict(&[0xf6]),
+        Err(CanonError::ForbiddenForm(_))
+    )); // null
+    assert!(matches!(
+        decode_strict(&[0xf7]),
+        Err(CanonError::ForbiddenForm(_))
+    )); // undefined
 }
 
 #[test]
@@ -98,7 +110,10 @@ fn invalid_utf8_text_rejected() {
 fn encode_decode_is_identity_on_canonical_values() {
     let v = Value::map(vec![
         ("a", Value::Int(-42)),
-        ("b", Value::List(vec![Value::Bool(true), Value::Bytes(vec![1, 2, 3])])),
+        (
+            "b",
+            Value::List(vec![Value::Bool(true), Value::Bytes(vec![1, 2, 3])]),
+        ),
         ("cc", Value::Text("héllo".into())),
     ]);
     let bytes = encode(&v);
@@ -149,7 +164,10 @@ fn assert_nested_smuggle_rejected(mutate: impl Fn(&mut braid_ir::Value)) {
     mutate(&mut v);
     let bytes = braid_ir::canon::encode(&v);
     // Bytes are still individually canonical (the Value round-trips)…
-    assert!(braid_ir::decode_strict(&bytes).is_ok(), "value-level canonical");
+    assert!(
+        braid_ir::decode_strict(&bytes).is_ok(),
+        "value-level canonical"
+    );
     // …but the capsule projection must REJECT the unknown nested field.
     assert!(
         Capsule::from_bytes(&bytes).is_err(),

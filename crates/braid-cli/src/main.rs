@@ -313,6 +313,7 @@ fn cmd_render(args: &[String]) -> CliResult {
     let path = single_path(args, "render")?;
     let capsule = read_capsule(path)?;
     let registry = registry_v0();
+    require_admit_for_review(path, &capsule, &registry)?;
     let m = manifest(&capsule, &registry).map_err(|e| format!("render: {e:?}"))?;
     print!("{}", render_text(&m));
     Ok(())
@@ -327,6 +328,8 @@ fn cmd_diff(args: &[String]) -> CliResult {
     let registry = registry_v0();
     let old = read_capsule(&args[0])?;
     let new = read_capsule(&args[1])?;
+    require_admit_for_review(&args[0], &old, &registry)?;
+    require_admit_for_review(&args[1], &new, &registry)?;
     let m_old = manifest(&old, &registry).map_err(|e| format!("render old: {e:?}"))?;
     let m_new = manifest(&new, &registry).map_err(|e| format!("render new: {e:?}"))?;
     let deltas = manifest_diff(&m_old, &m_new);
@@ -389,4 +392,21 @@ fn read_bytes(path: &str) -> Result<Vec<u8>, String> {
 fn read_capsule(path: &str) -> Result<Capsule, String> {
     let bytes = read_bytes(path)?;
     Capsule::from_bytes(&bytes).map_err(|e| format!("{path}: not a canonical capsule: {e:?}"))
+}
+
+/// Human-review outputs are projections of admitted artifacts, not a parallel
+/// path around the verifier. Use the capsule's declared grants as the ambient
+/// authority, matching `verify`'s default happy-path check.
+fn require_admit_for_review(
+    path: &str,
+    capsule: &Capsule,
+    registry: &braid_ir::TermRegistry,
+) -> CliResult {
+    let bytes = capsule.to_bytes();
+    match verify(&bytes, registry, &capsule.grants) {
+        Verdict::Admit { .. } => Ok(()),
+        Verdict::Reject { stage, reason } => Err(format!(
+            "{path}: not admitted for review [{stage:?}] {reason}"
+        )),
+    }
 }

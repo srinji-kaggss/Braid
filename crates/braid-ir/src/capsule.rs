@@ -64,7 +64,15 @@ impl Capsule {
         Value::map(vec![
             ("braid", self.braid.to_canon()),
             ("budget", Value::Int(self.budget as i64)),
-            ("grants", Value::List(self.grants.iter().map(|c| Value::Text(c.to_string())).collect())),
+            (
+                "grants",
+                Value::List(
+                    self.grants
+                        .iter()
+                        .map(|c| Value::Text(c.to_string()))
+                        .collect(),
+                ),
+            ),
             ("intent", Value::Text(self.intent.clone())),
             (
                 "confirm",
@@ -76,7 +84,15 @@ impl Capsule {
                     .into(),
                 ),
             ),
-            ("evidence", Value::List(self.evidence.iter().map(|e| Value::Text(e.clone())).collect())),
+            (
+                "evidence",
+                Value::List(
+                    self.evidence
+                        .iter()
+                        .map(|e| Value::Text(e.clone()))
+                        .collect(),
+                ),
+            ),
             ("ir_version", Value::Int(self.ir_version as i64)),
             ("registry_cid", Value::Bytes(self.registry_cid.0.to_vec())),
             ("vocab_version", Value::Int(self.vocab_version as i64)),
@@ -159,8 +175,15 @@ impl Capsule {
         // Allowlist (not a bare count) so a new field can never silently widen
         // the gate; the required keys above already enforce presence.
         if !v.require_only_keys(&[
-            "braid", "budget", "grants", "intent", "confirm", "evidence", "ir_version",
-            "registry_cid", "vocab_version",
+            "braid",
+            "budget",
+            "grants",
+            "intent",
+            "confirm",
+            "evidence",
+            "ir_version",
+            "registry_cid",
+            "vocab_version",
         ]) {
             return Err(CapsuleError::Malformed("capsule: unknown field"));
         }
