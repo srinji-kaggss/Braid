@@ -50,10 +50,28 @@ pub fn registry_v0() -> TermRegistry {
         t("lit.text", vec![], Text, None, Pure, Public, None, 1),
         t("lit.bytes", vec![], Bytes, None, Pure, Public, None, 1),
         t("lit.entity", vec![], Entity, None, Pure, Public, None, 1),
-        t("text.concat", vec![Text, Text], Text, None, Pure, Public, None, 1),
+        t(
+            "text.concat",
+            vec![Text, Text],
+            Text,
+            None,
+            Pure,
+            Public,
+            None,
+            1,
+        ),
         t("bytes.id", vec![Bytes], Bytes, None, Pure, Public, None, 1),
         // ── pure render (output is a typed Directive, never DOM — D16) ──
-        t("view.section", vec![Text], Directive, None, Pure, Public, None, 2),
+        t(
+            "view.section",
+            vec![Text],
+            Directive,
+            None,
+            Pure,
+            Public,
+            None,
+            2,
+        ),
         t(
             "view.page",
             vec![List(Box::new(Directive))],
@@ -121,7 +139,8 @@ pub fn registry_v0() -> TermRegistry {
 
     let mut reg = TermRegistry::new(VOCAB_VERSION);
     for spec in specs {
-        reg.insert(spec).expect("registry_v0 specs are statically valid");
+        reg.insert(spec)
+            .expect("registry_v0 specs are statically valid");
     }
     reg
 }

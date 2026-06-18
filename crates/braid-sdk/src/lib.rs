@@ -17,10 +17,10 @@
 //!
 //! Boundary (D3): depends only on `braid-ir` + `braid-capability`.
 
+use braid_capability::Capability;
 use braid_ir::braid::{Braid, Strand as IrStrand};
 use braid_ir::term::TypeTag;
 use braid_ir::{Capsule, ConfirmPolicy, EffectClass, TermRegistry, IR_VERSION};
-use braid_capability::Capability;
 
 /// A typed reference to a strand already placed in the braid. Carries its
 /// output type so wiring is type-checked the moment it is used as an input.
@@ -46,12 +46,24 @@ struct TypeTagId(usize);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BuildError {
     UnknownTerm(String),
-    Arity { term: String, expected: usize, got: usize },
-    TypeMismatch { term: String, slot: usize, expected: TypeTag, got: TypeTag },
+    Arity {
+        term: String,
+        expected: usize,
+        got: usize,
+    },
+    TypeMismatch {
+        term: String,
+        slot: usize,
+        expected: TypeTag,
+        got: TypeTag,
+    },
     NoOutputs,
     /// A declared budget below the composed cost (the SDK refuses to author an
     /// over-budget capsule rather than emit one the verifier will reject).
-    BudgetTooLow { needed: u64, set: u64 },
+    BudgetTooLow {
+        needed: u64,
+        set: u64,
+    },
     /// Irreversible/egress term used without a confirm policy set.
     ConfirmRequired,
 }
@@ -184,7 +196,10 @@ impl<'r> Builder<'r> {
         }
         let budget = self.budget.unwrap_or(self.cost);
         if budget < self.cost {
-            return Err(BuildError::BudgetTooLow { needed: self.cost, set: budget });
+            return Err(BuildError::BudgetTooLow {
+                needed: self.cost,
+                set: budget,
+            });
         }
         let confirm = match self.confirm {
             Some(c) => c,

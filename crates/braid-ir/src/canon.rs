@@ -46,7 +46,9 @@ pub enum CanonError {
 /// deterministic encoding order for definite-length text keys (the length is
 /// in the head byte(s), so encoded-byte comparison sees it first).
 pub fn key_cmp(a: &str, b: &str) -> std::cmp::Ordering {
-    a.len().cmp(&b.len()).then_with(|| a.as_bytes().cmp(b.as_bytes()))
+    a.len()
+        .cmp(&b.len())
+        .then_with(|| a.as_bytes().cmp(b.as_bytes()))
 }
 
 // ───────────────────────────── encoder ─────────────────────────────

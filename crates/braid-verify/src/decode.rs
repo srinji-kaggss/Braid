@@ -73,7 +73,9 @@ impl<'a> Cursor<'a> {
             }
             27 => {
                 let v = u64::from_be_bytes(self.slice(8)?.try_into().unwrap());
-                (v > 0xffff_ffff).then_some(v).ok_or(DecodeError::NonMinimal)
+                (v > 0xffff_ffff)
+                    .then_some(v)
+                    .ok_or(DecodeError::NonMinimal)
             }
             _ => Err(DecodeError::Forbidden("reserved/indefinite")),
         }
@@ -101,7 +103,9 @@ impl<'a> Cursor<'a> {
         }
         let n = self.arg(first)?;
         match major {
-            0 => i64::try_from(n).map(Value::Int).map_err(|_| DecodeError::IntRange),
+            0 => i64::try_from(n)
+                .map(Value::Int)
+                .map_err(|_| DecodeError::IntRange),
             1 => i64::try_from(n)
                 .map(|x| Value::Int(-1 - x))
                 .map_err(|_| DecodeError::IntRange),

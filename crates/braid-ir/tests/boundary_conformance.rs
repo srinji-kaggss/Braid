@@ -29,7 +29,15 @@ const ALLOWED_DEV: &[&str] = &["hex", "proptest", "braid-ir", "braid-render"];
 
 /// First path segment allowlist for `use` statements in src/**.
 const ALLOWED_USE_ROOTS: &[&str] = &[
-    "crate", "super", "self", "std", "core", "alloc", "blake3", "braid_capability", "braid_ir",
+    "crate",
+    "super",
+    "self",
+    "std",
+    "core",
+    "alloc",
+    "blake3",
+    "braid_capability",
+    "braid_ir",
 ];
 
 fn toml_section_keys(toml: &str, section: &str) -> Vec<String> {
@@ -94,7 +102,9 @@ fn src_use_statements_stay_inside_the_boundary() {
             let src = fs::read_to_string(&f).unwrap();
             for (ln, line) in src.lines().enumerate() {
                 let t = line.trim();
-                let Some(rest) = t.strip_prefix("use ").or_else(|| t.strip_prefix("pub use "))
+                let Some(rest) = t
+                    .strip_prefix("use ")
+                    .or_else(|| t.strip_prefix("pub use "))
                 else {
                     continue;
                 };

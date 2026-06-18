@@ -103,7 +103,14 @@ pub fn render_text(m: &Manifest) -> String {
     line("ir_version", m.ir_version.to_string());
     line("vocab_version", m.vocab_version.to_string());
     line("registry", m.registry_cid.to_hex());
-    line("capabilities", if m.capabilities.is_empty() { "(none)".into() } else { m.capabilities.join(", ") });
+    line(
+        "capabilities",
+        if m.capabilities.is_empty() {
+            "(none)".into()
+        } else {
+            m.capabilities.join(", ")
+        },
+    );
     line("effects", m.effects.join(", "));
     line("irreversible_strands", m.irreversible_strands.to_string());
     line("egress_strands", m.egress_strands.to_string());
@@ -116,7 +123,14 @@ pub fn render_text(m: &Manifest) -> String {
             ConfirmPolicy::HumanConfirm => "human-confirm".into(),
         },
     );
-    line("evidence", if m.evidence.is_empty() { "(none)".into() } else { m.evidence.join(", ") });
+    line(
+        "evidence",
+        if m.evidence.is_empty() {
+            "(none)".into()
+        } else {
+            m.evidence.join(", ")
+        },
+    );
     out
 }
 
@@ -141,29 +155,52 @@ pub struct Delta {
 /// facts the gate computes, never impressions a tired reviewer forms.
 pub fn manifest_diff(old: &Manifest, new: &Manifest) -> Vec<Delta> {
     let mut deltas = Vec::new();
-    let set =
-        |v: &[String]| -> BTreeSet<String> { v.iter().cloned().collect() };
+    let set = |v: &[String]| -> BTreeSet<String> { v.iter().cloned().collect() };
 
     let (old_caps, new_caps) = (set(&old.capabilities), set(&new.capabilities));
     for added in new_caps.difference(&old_caps) {
-        deltas.push(Delta { kind: DeltaKind::Widening, field: "capabilities", detail: format!("+{added}") });
+        deltas.push(Delta {
+            kind: DeltaKind::Widening,
+            field: "capabilities",
+            detail: format!("+{added}"),
+        });
     }
     for removed in old_caps.difference(&new_caps) {
-        deltas.push(Delta { kind: DeltaKind::Narrowing, field: "capabilities", detail: format!("-{removed}") });
+        deltas.push(Delta {
+            kind: DeltaKind::Narrowing,
+            field: "capabilities",
+            detail: format!("-{removed}"),
+        });
     }
 
     let (old_fx, new_fx) = (set(&old.effects), set(&new.effects));
     for added in new_fx.difference(&old_fx) {
-        deltas.push(Delta { kind: DeltaKind::Widening, field: "effects", detail: format!("+{added}") });
+        deltas.push(Delta {
+            kind: DeltaKind::Widening,
+            field: "effects",
+            detail: format!("+{added}"),
+        });
     }
     for removed in old_fx.difference(&new_fx) {
-        deltas.push(Delta { kind: DeltaKind::Narrowing, field: "effects", detail: format!("-{removed}") });
+        deltas.push(Delta {
+            kind: DeltaKind::Narrowing,
+            field: "effects",
+            detail: format!("-{removed}"),
+        });
     }
 
     if new.budget > old.budget {
-        deltas.push(Delta { kind: DeltaKind::Widening, field: "budget", detail: format!("{} -> {}", old.budget, new.budget) });
+        deltas.push(Delta {
+            kind: DeltaKind::Widening,
+            field: "budget",
+            detail: format!("{} -> {}", old.budget, new.budget),
+        });
     } else if new.budget < old.budget {
-        deltas.push(Delta { kind: DeltaKind::Narrowing, field: "budget", detail: format!("{} -> {}", old.budget, new.budget) });
+        deltas.push(Delta {
+            kind: DeltaKind::Narrowing,
+            field: "budget",
+            detail: format!("{} -> {}", old.budget, new.budget),
+        });
     }
 
     // Dropping human confirmation is the sharpest widening there is — but
@@ -172,16 +209,28 @@ pub fn manifest_diff(old: &Manifest, new: &Manifest) -> Vec<Delta> {
     if old.confirm == ConfirmPolicy::HumanConfirm && new.confirm == ConfirmPolicy::None {
         let still_dangerous = new.irreversible_strands + new.egress_strands > 0;
         deltas.push(Delta {
-            kind: if still_dangerous { DeltaKind::Widening } else { DeltaKind::Neutral },
+            kind: if still_dangerous {
+                DeltaKind::Widening
+            } else {
+                DeltaKind::Neutral
+            },
             field: "confirm",
             detail: "human-confirm -> none".into(),
         });
     } else if old.confirm == ConfirmPolicy::None && new.confirm == ConfirmPolicy::HumanConfirm {
-        deltas.push(Delta { kind: DeltaKind::Narrowing, field: "confirm", detail: "none -> human-confirm".into() });
+        deltas.push(Delta {
+            kind: DeltaKind::Narrowing,
+            field: "confirm",
+            detail: "none -> human-confirm".into(),
+        });
     }
 
     if old.intent != new.intent {
-        deltas.push(Delta { kind: DeltaKind::Neutral, field: "intent", detail: "changed".into() });
+        deltas.push(Delta {
+            kind: DeltaKind::Neutral,
+            field: "intent",
+            detail: "changed".into(),
+        });
     }
     deltas
 }

@@ -2,11 +2,11 @@
 //! reference CIDs byte-for-byte, (b) are admitted by the independent verifier,
 //! and (c) reject illegal compositions at author time.
 
+use braid_capability::Capability;
 use braid_ir::examples::{edit_section_capsule, publish_capsule};
 use braid_ir::{registry_v0, ConfirmPolicy};
 use braid_sdk::{BuildError, Builder};
 use braid_verify::{verify, Verdict};
-use braid_capability::Capability;
 
 fn ambient() -> Vec<Capability> {
     vec![
@@ -51,7 +51,9 @@ fn sdk_built_capsule_is_admitted() {
     let capsule = b.build().unwrap();
     assert_eq!(
         verify(&capsule.to_bytes(), &reg, &ambient()),
-        Verdict::Admit { capsule_cid: capsule.cid() }
+        Verdict::Admit {
+            capsule_cid: capsule.cid()
+        }
     );
 }
 
@@ -89,14 +91,24 @@ fn arity_mismatch_is_an_author_time_error() {
     let mut b = Builder::new(&reg, "x");
     let txt = b.strand("lit.text", &[]).unwrap();
     let err = b.strand("cms.edit_section", &[txt]).unwrap_err();
-    assert!(matches!(err, BuildError::Arity { expected: 2, got: 1, .. }));
+    assert!(matches!(
+        err,
+        BuildError::Arity {
+            expected: 2,
+            got: 1,
+            ..
+        }
+    ));
 }
 
 #[test]
 fn unknown_term_is_an_author_time_error() {
     let reg = registry_v0();
     let mut b = Builder::new(&reg, "x");
-    assert!(matches!(b.strand("eval", &[]), Err(BuildError::UnknownTerm(_))));
+    assert!(matches!(
+        b.strand("eval", &[]),
+        Err(BuildError::UnknownTerm(_))
+    ));
 }
 
 #[test]
@@ -119,7 +131,10 @@ fn over_budget_refused_at_author_time() {
     let txt = b.strand("lit.text", &[]).unwrap(); // cost 1
     b.output(txt);
     b.budget(0);
-    assert!(matches!(b.build().unwrap_err(), BuildError::BudgetTooLow { .. }));
+    assert!(matches!(
+        b.build().unwrap_err(),
+        BuildError::BudgetTooLow { .. }
+    ));
 }
 
 #[test]
@@ -143,5 +158,10 @@ fn budget_tight_sizes_to_cost() {
     b.budget_tight();
     let capsule = b.build().unwrap();
     assert_eq!(capsule.budget, 3); // 1 + 2
-    assert_eq!(verify(&capsule.to_bytes(), &reg, &ambient()), Verdict::Admit { capsule_cid: capsule.cid() });
+    assert_eq!(
+        verify(&capsule.to_bytes(), &reg, &ambient()),
+        Verdict::Admit {
+            capsule_cid: capsule.cid()
+        }
+    );
 }

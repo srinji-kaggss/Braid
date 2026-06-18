@@ -61,6 +61,16 @@ human approves a manifest that doesn't describe what runs.
 admission record binds (capsule CID, manifest CID, artifact CID); runtime
 re-derives the manifest at load and refuses on mismatch (acceptance #10).
 **Pinned by**: U2 binding tests; U7 load-time re-verification.
+**U9 finding (closed, Medium)**: the operator CLI's `render`/`diff` path
+strict-decoded canonical capsules but did not require a verifier `ADMIT`
+before emitting human-review output. A stale-version or bogus-registry capsule
+was rejected by `verify` yet could still be rendered or diffed as an ordinary
+manifest, weakening the review gate's fail-closed story. Fixed by making
+`render` and `diff` call the verifier first (ambient = declared grants, same
+as `verify`'s default) and refuse verifier-rejected capsules before manifest
+text is emitted. Regression: `crates/braid-cli/tests/cli_loop.rs`
+(`render_refuses_version_skewed_capsule`,
+`diff_refuses_version_skewed_capsule`).
 
 ## T5 — Capability/effect laundering via composition
 Every strand passes its local check; the *path* exceeds: vault-read → pure →
