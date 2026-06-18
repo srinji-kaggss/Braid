@@ -144,6 +144,17 @@ security-review label; narrowing/no-change diffs are visually distinct.
 Red-team requirement: a deliberate widening PR must be caught before v0 ships
 (success metric).
 **Pinned by**: U6; acceptance #11.
+**U9 finding (closed, Medium)**: `manifest_diff` could return an empty delta
+set for two different admitted capsules when the changed fields did not alter
+capabilities, effect classes, budget, confirmation, or intent. The CLI then
+printed `no change`, even though the capsule CID and review-visible evidence
+policy had changed. Fixed by emitting neutral deltas for capsule CID and other
+review-visible non-widening fields (strand count, cost, irreversible/egress
+counts, evidence), so only identical manifests produce `no change`; the
+widening gate's exit semantics remain unchanged. Regression:
+`braid-render/tests/render.rs::changed_artifact_is_not_reported_as_no_change`
+and
+`braid-cli/tests/cli_loop.rs::diff_neutral_artifact_change_is_not_no_change`.
 
 ## T13 — AI-only path dependence (sovereignty failure)
 The pipeline quietly grows steps only an AI can perform (unwritten knowledge,

@@ -114,6 +114,11 @@ braid diff edit.braid edit_widened.braid
 #   (exit 1 — the gate fires)
 ```
 
+Non-widening artifact changes are still shown. `no change` is reserved for the
+same admitted capsule/manifest, not merely "same authority." For example, an
+evidence-policy-only change exits `0` but prints neutral `capsule` and
+`evidence` deltas.
+
 `--grant` on `verify` models the authority the *principal* holds (default: the
 capsule's own declared grants). Hand it a narrower set to see attenuation
 enforced:

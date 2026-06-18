@@ -159,6 +159,30 @@ fn diff_identical_is_no_change() {
     assert!(String::from_utf8_lossy(&d.stdout).contains("no change"));
 }
 
+/// T12/U9 — `no change` must mean the same admitted artifact, not merely "no
+/// new capability/effect." A neutral evidence-policy change should pass the
+/// widening gate but still produce an explicit diff.
+#[test]
+fn diff_neutral_artifact_change_is_not_no_change() {
+    let (base, _) = encode("edit_section.json", "neutral_base.braid");
+    let mut capsule = braid_ir::Capsule::from_bytes(&std::fs::read(&base).unwrap()).unwrap();
+    capsule.evidence.push("audit.extra".into());
+    let changed = tmp("neutral_changed.braid");
+    std::fs::write(&changed, capsule.to_bytes()).unwrap();
+
+    let d = run(&["diff", base.to_str().unwrap(), changed.to_str().unwrap()]);
+    assert!(
+        d.status.success(),
+        "neutral changes pass the widening gate (exit 0)"
+    );
+    let out = String::from_utf8_lossy(&d.stdout);
+    assert!(!out.contains("no change"), "got: {out}");
+    assert!(
+        out.contains("neutral") && out.contains("capsule") && out.contains("evidence"),
+        "got: {out}"
+    );
+}
+
 /// U9/T4/T6 — rendering is a human-review projection of an ADMITTED artifact,
 /// not a side door around the verifier. A canonical capsule with a stale
 /// registry pin must be refused before any manifest text is emitted.
