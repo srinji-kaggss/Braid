@@ -7,11 +7,11 @@
 # Usage:  scripts/keel-floor.sh [--concept <id>]
 #         (defaults to NotSlop gate concept)
 #
-# Requires: node (>=22), cargo, the keel repo at ~/keel (or KEEL_ROOT).
+# Requires: node (>=22), cargo, keel vendored at keel/ (or KEEL_ROOT).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-KEEL="${KEEL_ROOT:-$HOME/keel}"
+KEEL="${KEEL_ROOT:-$ROOT/keel}"
 PROFILE="$ROOT/braid.profile.json"
 
 if [ ! -f "$KEEL/src/run.mjs" ]; then

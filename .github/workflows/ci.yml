@@ -55,11 +55,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: checkout Keel
-        uses: actions/checkout@v4
-        with:
-          repository: srinji-kaggss/keel
-          path: keel
       - name: Tier-1 evidence (cargo test + clippy)
         run: cargo test --workspace
       - name: Keel semantic floor
