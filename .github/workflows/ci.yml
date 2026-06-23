@@ -41,3 +41,33 @@ jobs:
       # on a seeded widening (T12) and a laundering capsule rejected at taint.
       - name: CLI-only loop
         run: ./scripts/cli-loop.sh target/release/braid
+
+  tier2-semantic:
+    name: Keel safety-assurance floor (NotSlop)
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: checkout Keel
+        uses: actions/checkout@v4
+        with:
+          repository: srinji-kaggss/keel
+          path: keel
+      - name: Tier-1 evidence (cargo test + clippy)
+        run: cargo test --workspace
+      - name: Keel semantic floor
+        env:
+          KEEL_ROOT: ./keel
+        run: ./scripts/keel-floor.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: braid-ci-evidence
+          path: .ci-runs/
