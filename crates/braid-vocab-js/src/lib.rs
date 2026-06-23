@@ -281,10 +281,7 @@ mod tests {
             intent: "JS: eval without confirm (the escalation probe)".into(),
             grants: vec![Capability::new(JS_EVAL_NAME)],
             braid: Braid {
-                strands: vec![
-                    strand("js.lit.string", vec![]),
-                    strand("js.eval", vec![0]),
-                ],
+                strands: vec![strand("js.lit.string", vec![]), strand("js.eval", vec![0])],
                 outputs: vec![1],
             },
             budget: 30,

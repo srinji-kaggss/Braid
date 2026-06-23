@@ -24,6 +24,8 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: test
         run: cargo test --workspace
+      - name: calibration (flight hours — external pre-validated vectors)
+        run: cargo test -p braid-ir --test calibration
 
   cli-loop:
     name: scenario #12 + T12 widening gate

@@ -26,11 +26,13 @@ fn allowed_deps(krate: &str) -> &'static [&'static str] {
 
 /// Dev-dependency allowlist (tests only; never linked into the artifact).
 /// `braid-vocab-cms` is a vocabulary package used by the substrate's tests
-/// as a concrete registry to exercise the codec/registry — it is NOT a
-/// runtime dep of the substrate (D31: vocabularies are consumer-side).
+/// as a concrete registry to exercise the codec/registry. `serde_json` is
+/// test-only parsing of the pre-validated RFC 8949 / BLAKE3 calibration
+/// corpora (D-FLIGHT) — never linked into the artifact.
 const ALLOWED_DEV: &[&str] = &[
     "hex",
     "proptest",
+    "serde_json",
     "braid-ir",
     "braid-render",
     "braid-vocab-cms",

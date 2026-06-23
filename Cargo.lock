@@ -93,6 +93,7 @@ dependencies = [
  "braid-vocab-cms",
  "hex",
  "proptest",
+ "serde_json",
 ]
 
 [[package]]

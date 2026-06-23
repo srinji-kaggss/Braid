@@ -16,4 +16,5 @@ braid-capability = { workspace = true }
 [dev-dependencies]
 hex = { workspace = true }
 proptest = { workspace = true }
+serde_json = { workspace = true }
 braid-vocab-cms = { workspace = true }

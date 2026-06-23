@@ -1,0 +1,234 @@
+[
+{
+"hex": "00",
+"decoded": 0,
+"kind": "int"
+},
+{
+"hex": "01",
+"decoded": 1,
+"kind": "int"
+},
+{
+"hex": "0a",
+"decoded": 10,
+"kind": "int"
+},
+{
+"hex": "17",
+"decoded": 23,
+"kind": "int"
+},
+{
+"hex": "1818",
+"decoded": 24,
+"kind": "int"
+},
+{
+"hex": "1819",
+"decoded": 25,
+"kind": "int"
+},
+{
+"hex": "1864",
+"decoded": 100,
+"kind": "int"
+},
+{
+"hex": "1903e8",
+"decoded": 1000,
+"kind": "int"
+},
+{
+"hex": "1a000f4240",
+"decoded": 1000000,
+"kind": "int"
+},
+{
+"hex": "1b000000e8d4a51000",
+"decoded": 1000000000000,
+"kind": "int"
+},
+{
+"hex": "1bffffffffffffffff",
+"decoded": 18446744073709551615,
+"kind": "int"
+},
+{
+"hex": "c249010000000000000000",
+"decoded": 18446744073709551616,
+"kind": "int"
+},
+{
+"hex": "3bffffffffffffffff",
+"decoded": -18446744073709551616,
+"kind": "int"
+},
+{
+"hex": "c349010000000000000000",
+"decoded": -18446744073709551617,
+"kind": "int"
+},
+{
+"hex": "20",
+"decoded": -1,
+"kind": "int"
+},
+{
+"hex": "29",
+"decoded": -10,
+"kind": "int"
+},
+{
+"hex": "3863",
+"decoded": -100,
+"kind": "int"
+},
+{
+"hex": "3903e7",
+"decoded": -1000,
+"kind": "int"
+},
+{
+"hex": "f4",
+"decoded": false,
+"kind": "bool"
+},
+{
+"hex": "f5",
+"decoded": true,
+"kind": "bool"
+},
+{
+"hex": "60",
+"decoded": "",
+"kind": "str"
+},
+{
+"hex": "6161",
+"decoded": "a",
+"kind": "str"
+},
+{
+"hex": "6449455446",
+"decoded": "IETF",
+"kind": "str"
+},
+{
+"hex": "62225c",
+"decoded": "\"\\",
+"kind": "str"
+},
+{
+"hex": "62c3bc",
+"decoded": "\u00fc",
+"kind": "str"
+},
+{
+"hex": "63e6b0b4",
+"decoded": "\u6c34",
+"kind": "str"
+},
+{
+"hex": "64f0908591",
+"decoded": "\ud800\udd51",
+"kind": "str"
+},
+{
+"hex": "80",
+"decoded": [],
+"kind": "list"
+},
+{
+"hex": "83010203",
+"decoded": [
+1,
+2,
+3
+],
+"kind": "list"
+},
+{
+"hex": "8301820203820405",
+"decoded": [
+1,
+[
+2,
+3
+],
+[
+4,
+5
+]
+],
+"kind": "list"
+},
+{
+"hex": "98190102030405060708090a0b0c0d0e0f101112131415161718181819",
+"decoded": [
+1,
+2,
+3,
+4,
+5,
+6,
+7,
+8,
+9,
+10,
+11,
+12,
+13,
+14,
+15,
+16,
+17,
+18,
+19,
+20,
+21,
+22,
+23,
+24,
+25
+],
+"kind": "list"
+},
+{
+"hex": "a0",
+"decoded": {},
+"kind": "dict"
+},
+{
+"hex": "a26161016162820203",
+"decoded": {
+"a": 1,
+"b": [
+2,
+3
+]
+},
+"kind": "dict"
+},
+{
+"hex": "826161a161626163",
+"decoded": [
+"a",
+{
+"b": "c"
+}
+],
+"kind": "list"
+},
+{
+"hex": "a56161614161626142616361436164614461656145",
+"decoded": {
+"a": "A",
+"b": "B",
+"c": "C",
+"d": "D",
+"e": "E"
+},
+"kind": "dict"
+}
+]
