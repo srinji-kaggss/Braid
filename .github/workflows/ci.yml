@@ -11,7 +11,7 @@ env:
 jobs:
   test:
     name: build · test · lint
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -29,7 +29,7 @@ jobs:
 
   cli-loop:
     name: scenario #12 + T12 widening gate
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -44,7 +44,7 @@ jobs:
 
   tier2-semantic:
     name: Keel safety-assurance floor (NotSlop)
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [test]
     steps:
       - uses: actions/checkout@v4
