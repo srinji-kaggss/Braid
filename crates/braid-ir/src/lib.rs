@@ -12,15 +12,21 @@
 //! small enough to own outright, and `braid-verify` must be able to implement
 //! an INDEPENDENT decoder (D9) against a spec we control.
 //!
+//! //why no domain vocabulary lives here (D31): Braid is a *global* IR. A
+//! consumer pulls `braid-ir` for the substrate (types, encoding, CID,
+//! registry shape, capsule) and a vocabulary package (`braid-vocab-cms`,
+//! `braid-vocab-js`, …) for the term alphabet + capability space. Baking a
+//! domain vocabulary into the substrate would force every consumer to fork
+//! to escape it — the "good enough to not be a fork" failure. The substrate
+//! is registry-parametric: `verify` and the SDK take any `TermRegistry`.
+//!
 //! Boundary covenant (D3): this crate depends only on `blake3` and
-//! `canvas-protocol`. Enforced by `tests/boundary_conformance.rs`.
+//! `braid-capability`. Enforced by `tests/boundary_conformance.rs`.
 
 pub mod braid;
 pub mod canon;
 pub mod capsule;
 pub mod cid;
-pub mod examples;
-pub mod registry_v0;
 pub mod term;
 pub mod value;
 
@@ -28,6 +34,5 @@ pub use crate::braid::{Braid, Strand};
 pub use crate::canon::{decode_strict, encode, CanonError};
 pub use crate::capsule::{Capsule, ConfirmPolicy, IR_VERSION};
 pub use crate::cid::Cid;
-pub use crate::registry_v0::registry_v0;
 pub use crate::term::{EffectClass, Exposure, TermRegistry, TermSpec, TypeTag};
 pub use crate::value::Value;

@@ -54,8 +54,10 @@ pub enum BuildError {
     TypeMismatch {
         term: String,
         slot: usize,
-        expected: TypeTag,
-        got: TypeTag,
+        // Boxed to keep `BuildError` small — `TypeTag::Opaque` carries owned
+        // strings that pushed the variant over clippy's large-err threshold.
+        expected: Box<TypeTag>,
+        got: Box<TypeTag>,
     },
     NoOutputs,
     /// A declared budget below the composed cost (the SDK refuses to author an
@@ -135,8 +137,8 @@ impl<'r> Builder<'r> {
                 return Err(BuildError::TypeMismatch {
                     term: term_id.to_string(),
                     slot,
-                    expected: expected.clone(),
-                    got: got.clone(),
+                    expected: Box::new(expected.clone()),
+                    got: Box::new(got.clone()),
                 });
             }
         }

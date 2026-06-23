@@ -3,17 +3,20 @@
 //! and (c) reject illegal compositions at author time.
 
 use braid_capability::Capability;
-use braid_ir::examples::{edit_section_capsule, publish_capsule};
-use braid_ir::{registry_v0, ConfirmPolicy};
+use braid_ir::ConfirmPolicy;
 use braid_sdk::{BuildError, Builder};
 use braid_verify::{verify, Verdict};
+use braid_vocab_cms::{
+    cap, edit_section_capsule, publish_capsule, registry_v0, INTENT_EMIT_NAME, REMOTE_COMPUTE_NAME,
+    SIGNAL_EMIT_NAME, TAPE_READ_NAME,
+};
 
 fn ambient() -> Vec<Capability> {
     vec![
-        Capability::SignalEmit,
-        Capability::IntentEmit,
-        Capability::TapeRead,
-        Capability::RemoteCompute,
+        cap!(SIGNAL_EMIT_NAME),
+        cap!(INTENT_EMIT_NAME),
+        cap!(TAPE_READ_NAME),
+        cap!(REMOTE_COMPUTE_NAME),
     ]
 }
 

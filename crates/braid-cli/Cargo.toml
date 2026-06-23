@@ -3,6 +3,9 @@ name = "braid-cli"
 version = "0.1.0"
 edition = "2021"
 description = "Braid CLI — the human-reconstructable encode/decode/verify/render/diff loop (ADR-088 G6/L7, U6 #2)"
+repository = "https://github.com/srinji-kaggss/Braid"
+homepage = "https://github.com/srinji-kaggss/Braid"
+license = "MIT"
 
 [[bin]]
 name = "braid"
@@ -20,6 +23,7 @@ braid-verify = { workspace = true }
 braid-render = { workspace = true }
 braid-sdk = { path = "../braid-sdk" }
 braid-capability = { workspace = true }
+braid-vocab-cms = { workspace = true }
 serde = { workspace = true }
 serde_json = "1.0.140"
 

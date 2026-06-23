@@ -1,8 +1,8 @@
-capsule: 3e9816f1fa77e75ada2b25bcbba82bc0c31248edf8198d89944dc7e882f15f4a
+capsule: 43ed11f1d863a214ca4ac51bbfaa5078166ddcc228fda717c25fa358bf8da3a6
 intent: demo-port: read the work case-study listing — projection read, no writes
 ir_version: 0
 vocab_version: 1
-registry: f5a15299db728c83bc810eb08453d086121d89e747f196fcf0633b444dde61bb
+registry: afaa7dcc9ab2f7d1530da72306c7d821c573f8aa9eda2b5c6e463f121f634acd
 capabilities: tape.read
 effects: pure, read
 irreversible_strands: 0

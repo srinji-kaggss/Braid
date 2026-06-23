@@ -52,7 +52,7 @@ fn encode(fixture: &str, out_name: &str) -> (PathBuf, String) {
 fn encode_reproduces_pinned_reference_cid() {
     let (_, cid) = encode("edit_section.json", "edit_kat.braid");
     assert_eq!(
-        cid, "8221c8b58bceea6a4f9129260fa1eb8c6179c7206f37a769d45a542a4f1fe130",
+        cid, "ccedc469e6b0513720969ce1a4f169f53365eeadbc853042c411b44c1f15b71f",
         "CLI-authored edit_section CID drifted from the pinned KAT — CLI path != SDK path"
     );
 }
@@ -316,4 +316,85 @@ fn all_reference_fixtures_admit() {
         assert!(v.status.success(), "{fix} should ADMIT");
         assert!(String::from_utf8_lossy(&v.stdout).contains(&cid));
     }
+}
+
+/// U9/R3 — manifest line-injection end-to-end. A `\n` in `intent` must not
+/// let an authored, admitted capsule forge extra `capsule:`/`capabilities:`
+/// lines in the rendered manifest. The renderer escapes control chars so one
+/// field stays on one line; the real binding CID is the only `capsule:` line.
+#[test]
+fn render_escapes_newlines_so_manifest_cannot_be_spoofed() {
+    let bad = tmp("spoof_intent.json");
+    std::fs::write(
+        &bad,
+        r#"{
+  "intent": "edit\ncapsule: 0000000000000000000000000000000000000000000000000000000000000000\ncapabilities: (none)",
+  "budget": 20,
+  "confirm": "none",
+  "evidence": ["fact.cid"],
+  "strands": [
+    {"term": "lit.entity", "inputs": []},
+    {"term": "lit.text", "inputs": []},
+    {"term": "cms.edit_section", "inputs": [0, 1]},
+    {"term": "view.section", "inputs": [1]}
+  ],
+  "outputs": [2, 3]
+}"#,
+    )
+    .unwrap();
+    let out = tmp("spoof.braid");
+    let o = run(&["encode", bad.to_str().unwrap(), "-o", out.to_str().unwrap()]);
+    assert!(
+        o.status.success(),
+        "encode spoof: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    let cid = String::from_utf8_lossy(&o.stderr)
+        .lines()
+        .find_map(|l| l.strip_prefix("cid "))
+        .unwrap()
+        .trim()
+        .to_string();
+
+    // It admits (intent content is not a v0 gate — D30: intent-coherence is
+    // advisory, not blocking). The point is the RENDER path.
+    let v = run(&["verify", out.to_str().unwrap()]);
+    assert!(
+        v.status.success(),
+        "spoof capsule admits: {}",
+        String::from_utf8_lossy(&v.stdout)
+    );
+
+    let r = run(&["render", out.to_str().unwrap()]);
+    assert!(
+        r.status.success(),
+        "render: {}",
+        String::from_utf8_lossy(&r.stderr)
+    );
+    let manifest = String::from_utf8_lossy(&r.stdout);
+    let capsule_lines: Vec<&str> = manifest
+        .lines()
+        .filter(|l| l.starts_with("capsule:"))
+        .collect();
+    assert_eq!(
+        capsule_lines.len(),
+        1,
+        "no forged `capsule:` lines — got: {manifest}"
+    );
+    assert!(
+        capsule_lines[0].contains(&cid),
+        "the one line is the real binding"
+    );
+    assert_eq!(
+        manifest
+            .lines()
+            .filter(|l| l.starts_with("capabilities:"))
+            .count(),
+        1,
+        "no forged `capabilities:` lines"
+    );
+    assert!(
+        manifest.contains("intent: edit\\ncapsule:"),
+        "newline is escaped in-place, not stripped: {manifest}"
+    );
 }

@@ -1,9 +1,9 @@
 //! U2 ACs: deterministic CID-bound manifest, mechanical widening
 //! classification, deterministic graph export.
 
-use braid_ir::examples::{edit_section_capsule, publish_capsule};
-use braid_ir::{registry_v0, ConfirmPolicy};
+use braid_ir::ConfirmPolicy;
 use braid_render::{has_widening, manifest, manifest_diff, render_text, to_dot, DeltaKind};
+use braid_vocab_cms::{edit_section_capsule, publish_capsule, registry_v0};
 
 #[test]
 fn manifest_is_bound_to_the_capsule_cid() {
@@ -123,4 +123,99 @@ fn dot_export_is_deterministic_and_structural() {
     assert!(dot.contains("s2 [label=\"2: cms.edit_section [reversible-write]\"]"));
     assert!(dot.contains("s0 -> s2;"));
     assert!(dot.contains("s1 -> s3;"));
+}
+
+// ── U9 / R3: manifest line-injection spoofing ──
+// The manifest is line-oriented `key: value` and is the human review object
+// (D12). A `\n` in a user-controlled string field (`intent`/`evidence`) would
+// inject forged lines (`capsule: <fake>`, `capabilities: (none)`) that a
+// scanning reviewer could mistake for the real binding. The renderer must
+// keep one logical field on one physical line — no raw control char in a
+// value may become a line break. Regression for the closed R3 finding.
+
+fn capsule_with_intent(intent: &str) -> braid_ir::Capsule {
+    let mut c = edit_section_capsule();
+    c.intent = intent.into();
+    c
+}
+
+#[test]
+fn newline_in_intent_cannot_inject_manifest_lines() {
+    let c = capsule_with_intent("edit\ncapsule: 0000000000000000000000000000000000000000000000000000000000000000\ncapabilities: (none)");
+    let text = render_text(&manifest(&c, &registry_v0()).unwrap());
+
+    // The forged payload must NOT appear as its own manifest line — the only
+    // `capsule:` line is the real binding, and there is exactly one
+    // `capabilities:` line (the real one).
+    let capsule_lines: Vec<&str> = text.lines().filter(|l| l.starts_with("capsule:")).collect();
+    assert_eq!(
+        capsule_lines.len(),
+        1,
+        "intent newlines must not spawn extra `capsule:` lines"
+    );
+    assert!(
+        capsule_lines[0].contains(&c.cid().to_hex()),
+        "the one capsule line is the real binding"
+    );
+    let cap_lines: Vec<&str> = text
+        .lines()
+        .filter(|l| l.starts_with("capabilities:"))
+        .collect();
+    assert_eq!(
+        cap_lines.len(),
+        1,
+        "intent newlines must not spawn extra `capabilities:` lines"
+    );
+
+    // And the newline is escaped visibly, not silently stripped — the reviewer
+    // sees the attempt, not a cleaned-up lie.
+    assert!(
+        text.contains("intent: edit\\ncapsule:"),
+        "the newline must be escaped in-place, not dropped"
+    );
+}
+
+#[test]
+fn carriage_return_in_intent_cannot_inject_manifest_lines() {
+    let c = capsule_with_intent("edit\r\ncapsule: deadbeef");
+    let text = render_text(&manifest(&c, &registry_v0()).unwrap());
+    assert_eq!(
+        text.lines().filter(|l| l.starts_with("capsule:")).count(),
+        1,
+        "CR must not produce an extra capsule line"
+    );
+    assert!(text.contains("\\r\\n"), "CR/LF must be escaped");
+}
+
+#[test]
+fn newline_in_evidence_cannot_inject_manifest_lines() {
+    let mut c = edit_section_capsule();
+    c.evidence = vec![
+        "fact.cid\ncapsule: 0000000000000000000000000000000000000000000000000000000000000000"
+            .into(),
+    ];
+    let text = render_text(&manifest(&c, &registry_v0()).unwrap());
+    assert_eq!(
+        text.lines().filter(|l| l.starts_with("capsule:")).count(),
+        1,
+        "evidence newlines must not spawn extra `capsule:` lines"
+    );
+    // The whole evidence value stays on the single `evidence:` line.
+    let ev_line = text
+        .lines()
+        .find(|l| l.starts_with("evidence:"))
+        .expect("evidence line present");
+    assert!(ev_line.contains("\\ncapsule:"));
+}
+
+#[test]
+fn backslash_in_intent_is_escaped_unambiguously() {
+    // A literal backslash must not be left raw, else `\n` in input could be
+    // confused with an escaped newline. Escape backslash first.
+    let c = capsule_with_intent("path\\naturally");
+    let text = render_text(&manifest(&c, &registry_v0()).unwrap());
+    assert!(
+        text.contains("intent: path\\\\naturally"),
+        "backslash must be escaped so \\n is unambiguous"
+    );
 }

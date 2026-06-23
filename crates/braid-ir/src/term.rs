@@ -12,6 +12,14 @@ use std::str::FromStr;
 
 /// The closed type universe of strand wiring. No interpretable-code type
 /// exists (T1) and no float type exists (T8) — by construction, not by check.
+///
+/// //why an `Opaque` variant (D31): a *global* IR must let each vocabulary
+/// package declare its own domain types (CMS `entity`/`directive`, JS
+/// `function`/`record`, …) without a core edit per language. The dotted
+/// label is the protocol-stable identity (compared by `(label, args)`); it
+/// is what canonical encoding serializes, so a rename is CID-breaking. The
+/// core keeps only the language-neutral atoms (`Bool`/`Int`/`Bytes`/`Text`/
+/// `Cid`/`List`); every domain type is a vocabulary-owned `Opaque`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypeTag {
     Bool,
@@ -20,11 +28,13 @@ pub enum TypeTag {
     Bytes,
     Text,
     Cid,
-    /// A reference to a governed entity (work object / page / section …).
-    Entity,
-    /// A typed render directive (the ViewDirective/MotionDirective family —
-    /// D16: render output is ALWAYS this, never DOM/HTML strings).
-    Directive,
+    /// A vocabulary-defined domain type: a dotted label plus optional type
+    /// arguments (e.g. `Opaque("cms.entity", [])`, `Opaque("js.record", [Text])`).
+    /// The label is the identity; the verifier compares `(label, args)` by
+    /// structural equality. No core type lives here — `Entity`/`Directive`
+    /// are now `Opaque("cms.entity", [])` / `Opaque("cms.directive", [])` in
+    /// the `braid-vocab-cms` package.
+    Opaque(String, Vec<TypeTag>),
     List(Box<TypeTag>),
 }
 
@@ -186,8 +196,17 @@ fn type_to_text(t: &TypeTag) -> String {
         TypeTag::Bytes => "bytes".into(),
         TypeTag::Text => "text".into(),
         TypeTag::Cid => "cid".into(),
-        TypeTag::Entity => "entity".into(),
-        TypeTag::Directive => "directive".into(),
+        TypeTag::Opaque(label, args) => {
+            if args.is_empty() {
+                label.clone()
+            } else {
+                format!(
+                    "{}<{}>",
+                    label,
+                    args.iter().map(type_to_text).collect::<Vec<_>>().join(", ")
+                )
+            }
+        }
         TypeTag::List(inner) => format!("list<{}>", type_to_text(inner)),
     }
 }
@@ -199,14 +218,26 @@ fn type_from_text(s: &str) -> Result<TypeTag, RegistryError> {
         "bytes" => TypeTag::Bytes,
         "text" => TypeTag::Text,
         "cid" => TypeTag::Cid,
-        "entity" => TypeTag::Entity,
-        "directive" => TypeTag::Directive,
         _ => {
-            let inner = s
-                .strip_prefix("list<")
-                .and_then(|r| r.strip_suffix('>'))
-                .ok_or(RegistryError::Malformed("type tag"))?;
-            TypeTag::List(Box::new(type_from_text(inner)?))
+            // `list<...>` is the only core parameterized form; everything else
+            // is a vocabulary `Opaque`. A label with `<...>` carries type args.
+            if let Some(inner) = s.strip_prefix("list<").and_then(|r| r.strip_suffix('>')) {
+                TypeTag::List(Box::new(type_from_text(inner)?))
+            } else if let Some(open) = s.find('<') {
+                let label = s[..open].to_string();
+                let args_str = &s[open + 1..s.len() - 1];
+                let args = if args_str.is_empty() {
+                    Vec::new()
+                } else {
+                    args_str
+                        .split(',')
+                        .map(|a| type_from_text(a.trim()))
+                        .collect::<Result<Vec<_>, _>>()?
+                };
+                TypeTag::Opaque(label, args)
+            } else {
+                TypeTag::Opaque(s.to_string(), Vec::new())
+            }
         }
     })
 }

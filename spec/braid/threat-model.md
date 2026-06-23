@@ -204,3 +204,22 @@ the Director's (CODEBOOK §8) — decompose, log, sequence.
 - **R3**: the manifest renderer is itself trusted presentation code; D12's
   re-derivation check bounds, but does not eliminate, rendering bugs — U9 must
   include manifest-spoofing attempts.
+  **U9 finding (closed, Medium)**: `render_text` emitted user-controlled
+  string fields (`intent`, `evidence`) verbatim into the line-oriented
+  `key: value` manifest. A `\n` in `intent` injected forged `capsule:` /
+  `capabilities:` / `intent:` lines *above* the real binding CID and
+  *before* the true `capabilities:` line — an admitted capsule could present
+  a reviewer with a benign-looking manifest whose real authority was buried
+  below forged lines. Same vector via `evidence`. (The capsule admits because
+  intent content is not a v0 gate — D30: intent-coherence is advisory, not
+  blocking; the exploit is against the *review object*, not the admission
+  gate.) Fixed by `escape_field` at the emission boundary
+  (`braid-render/src/lib.rs`): `\` / `\n` / `\r` / `\t` are escaped so one
+  logical field always renders on exactly one physical line; the only raw
+  newlines in the output are the ones the emitter inserts between fields.
+  Regression: `braid-render/tests/render.rs`
+  (`newline_in_intent_cannot_inject_manifest_lines`,
+  `carriage_return_in_intent_cannot_inject_manifest_lines`,
+  `newline_in_evidence_cannot_inject_manifest_lines`,
+  `backslash_in_intent_is_escaped_unambiguously`) and end-to-end
+  `braid-cli/tests/cli_loop.rs::render_escapes_newlines_so_manifest_cannot_be_spoofed`.

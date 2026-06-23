@@ -66,8 +66,7 @@ name = "braid-capability"
 version = "0.1.0"
 dependencies = [
  "serde",
- "strum",
- "strum_macros",
+ "serde_json",
 ]
 
 [[package]]
@@ -79,6 +78,7 @@ dependencies = [
  "braid-render",
  "braid-sdk",
  "braid-verify",
+ "braid-vocab-cms",
  "hex",
  "serde",
  "serde_json",
@@ -90,6 +90,7 @@ version = "0.1.0"
 dependencies = [
  "blake3",
  "braid-capability",
+ "braid-vocab-cms",
  "hex",
  "proptest",
 ]
@@ -100,6 +101,7 @@ version = "0.1.0"
 dependencies = [
  "braid-capability",
  "braid-ir",
+ "braid-vocab-cms",
 ]
 
 [[package]]
@@ -110,6 +112,7 @@ dependencies = [
  "braid-ir",
  "braid-render",
  "braid-verify",
+ "braid-vocab-cms",
 ]
 
 [[package]]
@@ -119,7 +122,26 @@ dependencies = [
  "blake3",
  "braid-capability",
  "braid-ir",
+ "braid-vocab-cms",
  "hex",
+]
+
+[[package]]
+name = "braid-vocab-cms"
+version = "0.1.0"
+dependencies = [
+ "braid-capability",
+ "braid-ir",
+]
+
+[[package]]
+name = "braid-vocab-js"
+version = "0.1.0"
+dependencies = [
+ "braid-capability",
+ "braid-ir",
+ "braid-sdk",
+ "braid-verify",
 ]
 
 [[package]]
@@ -446,12 +468,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rustversion"
-version = "1.0.22"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
-
-[[package]]
 name = "rusty-fork"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -517,28 +533,6 @@ name = "shlex"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
-
-[[package]]
-name = "strum"
-version = "0.26.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fec0f0aef304996cf250b31b5a10dee7980c85da9d759361292b8bca5a18f06"
-dependencies = [
- "strum_macros",
-]
-
-[[package]]
-name = "strum_macros"
-version = "0.26.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c6bee85a5a24955dc440386795aa378cd9cf82acd5f764469152d2270e581be"
-dependencies = [
- "heck",
- "proc-macro2",
- "quote",
- "rustversion",
- "syn",
-]
 
 [[package]]
 name = "syn"

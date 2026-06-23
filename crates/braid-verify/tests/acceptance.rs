@@ -2,16 +2,19 @@
 //! Numbering follows `spec/braid/PRD.md`.
 
 use braid_capability::Capability;
-use braid_ir::examples::{edit_section_capsule, laundering_capsule, publish_capsule};
-use braid_ir::{registry_v0, ConfirmPolicy};
+use braid_ir::ConfirmPolicy;
 use braid_verify::{verify, Stage, Verdict};
+use braid_vocab_cms::{
+    cap, edit_section_capsule, laundering_capsule, publish_capsule, registry_v0, INTENT_EMIT_NAME,
+    REMOTE_COMPUTE_NAME, SIGNAL_EMIT_NAME, TAPE_READ_NAME,
+};
 
 fn full_ambient() -> Vec<Capability> {
     vec![
-        Capability::SignalEmit,
-        Capability::IntentEmit,
-        Capability::TapeRead,
-        Capability::RemoteCompute,
+        cap!(SIGNAL_EMIT_NAME),
+        cap!(INTENT_EMIT_NAME),
+        cap!(TAPE_READ_NAME),
+        cap!(REMOTE_COMPUTE_NAME),
     ]
 }
 
@@ -59,7 +62,7 @@ fn scenario_2b_irreversible_with_confirm_admits() {
 fn scenario_4_grant_exceeding_ambient_rejected() {
     // Ambient lacks SignalEmit — the capsule's request must not survive.
     let c = edit_section_capsule();
-    let ambient = vec![Capability::TapeRead];
+    let ambient = vec![cap!(TAPE_READ_NAME)];
     expect_reject(
         verify(&c.to_bytes(), &registry_v0(), &ambient),
         Stage::Capability,
@@ -192,7 +195,7 @@ fn egress_below_ceiling_with_confirm_admits() {
         vocab_version: registry_v0().vocab_version,
         registry_cid: registry_v0().cid(),
         intent: "Egress public bytes (gated, confirmed)".into(),
-        grants: vec![Capability::RemoteCompute],
+        grants: vec![cap!(REMOTE_COMPUTE_NAME)],
         braid: Braid {
             strands: vec![
                 Strand {

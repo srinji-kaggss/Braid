@@ -3,6 +3,9 @@ name = "braid-ir"
 version = "0.1.0"
 edition = "2021"
 description = "Braid machine-first framework — typed term-graph IR, canonical encoding, content addressing (ADR-088, spec/braid/, U1 #558)"
+repository = "https://github.com/srinji-kaggss/Braid"
+homepage = "https://github.com/srinji-kaggss/Braid"
+license = "MIT"
 
 [dependencies]
 # Declared kernel contracts ONLY (ADR-088 D3 boundary; pinned by
@@ -13,3 +16,4 @@ braid-capability = { workspace = true }
 [dev-dependencies]
 hex = { workspace = true }
 proptest = { workspace = true }
+braid-vocab-cms = { workspace = true }

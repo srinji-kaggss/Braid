@@ -125,7 +125,7 @@ fn capsule_grant_order_malleability_rejected() {
     use braid_ir::{Capsule, Value};
     // Take the canonical example, swap grant order at the VALUE level, and
     // confirm the struct parser refuses it (grant-order is canonical too).
-    let capsule = braid_ir::examples::publish_capsule(braid_ir::ConfirmPolicy::HumanConfirm);
+    let capsule = braid_vocab_cms::publish_capsule(braid_ir::ConfirmPolicy::HumanConfirm);
     let mut v = capsule.to_canon();
     if let Value::Map(m) = &mut v {
         let grants = m.get_mut("grants").unwrap();
@@ -139,7 +139,7 @@ fn capsule_grant_order_malleability_rejected() {
 #[test]
 fn capsule_unknown_extra_field_rejected() {
     use braid_ir::{Capsule, Value};
-    let capsule = braid_ir::examples::edit_section_capsule();
+    let capsule = braid_vocab_cms::edit_section_capsule();
     let mut v = capsule.to_canon();
     if let Value::Map(m) = &mut v {
         m.insert("zz_smuggle".into(), Value::Int(1));
@@ -159,7 +159,7 @@ fn capsule_unknown_extra_field_rejected() {
 /// the capsule no longer parses.
 fn assert_nested_smuggle_rejected(mutate: impl Fn(&mut braid_ir::Value)) {
     use braid_ir::Capsule;
-    let capsule = braid_ir::examples::edit_section_capsule();
+    let capsule = braid_vocab_cms::edit_section_capsule();
     let mut v = capsule.to_canon();
     mutate(&mut v);
     let bytes = braid_ir::canon::encode(&v);
@@ -206,7 +206,7 @@ fn smuggled_key_in_strand_map_rejected() {
 #[test]
 fn smuggled_key_in_registry_term_rejected() {
     use braid_ir::{TermRegistry, Value};
-    let reg = braid_ir::registry_v0();
+    let reg = braid_vocab_cms::registry_v0();
     let mut v = reg.to_canon();
     if let Value::Map(top) = &mut v {
         if let Some(Value::List(terms)) = top.get_mut("terms") {
@@ -224,7 +224,7 @@ fn smuggled_key_in_registry_term_rejected() {
 #[test]
 fn smuggled_key_in_registry_top_map_rejected() {
     use braid_ir::{TermRegistry, Value};
-    let mut v = braid_ir::registry_v0().to_canon();
+    let mut v = braid_vocab_cms::registry_v0().to_canon();
     if let Value::Map(top) = &mut v {
         top.insert("zz".into(), Value::Int(7));
     }
@@ -238,9 +238,9 @@ fn smuggled_key_in_registry_top_map_rejected() {
 fn accepted_capsule_bytes_round_trip_identically() {
     use braid_ir::Capsule;
     for capsule in [
-        braid_ir::examples::edit_section_capsule(),
-        braid_ir::examples::publish_capsule(braid_ir::ConfirmPolicy::HumanConfirm),
-        braid_ir::examples::laundering_capsule(),
+        braid_vocab_cms::edit_section_capsule(),
+        braid_vocab_cms::publish_capsule(braid_ir::ConfirmPolicy::HumanConfirm),
+        braid_vocab_cms::laundering_capsule(),
     ] {
         let bytes = capsule.to_bytes();
         let parsed = Capsule::from_bytes(&bytes).expect("canonical");

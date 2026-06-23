@@ -3,7 +3,13 @@ name = "braid-render"
 version = "0.1.0"
 edition = "2021"
 description = "Braid manifest renderer + widening diff + braid-graph export (ADR-088 D12/D17, U2 #559)"
+repository = "https://github.com/srinji-kaggss/Braid"
+homepage = "https://github.com/srinji-kaggss/Braid"
+license = "MIT"
 
 [dependencies]
 braid-ir = { workspace = true }
 braid-capability = { workspace = true }
+
+[dev-dependencies]
+braid-vocab-cms = { workspace = true }

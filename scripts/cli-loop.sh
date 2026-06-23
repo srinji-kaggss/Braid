@@ -40,7 +40,7 @@ expect_exit 0 "decode  edit_section"         -- "$BRAID" decode "$WORK/edit.brai
 
 # CID parity (T13): CLI-authored edit_section == the pinned reference KAT.
 CID="$("$BRAID" encode "$FIX/edit_section.json" -o "$WORK/k.braid" 2>&1 >/dev/null | sed -n 's/^cid //p')"
-[ "$CID" = "8221c8b58bceea6a4f9129260fa1eb8c6179c7206f37a769d45a542a4f1fe130" ] \
+[ "$CID" = "ccedc469e6b0513720969ce1a4f169f53365eeadbc853042c411b44c1f15b71f" ] \
   && pass "CID parity with pinned KAT" || fail "CID drift: $CID"
 
 # 2. The irreversible publish admits only with its confirm policy intact.

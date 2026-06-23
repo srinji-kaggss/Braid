@@ -25,7 +25,16 @@ fn allowed_deps(krate: &str) -> &'static [&'static str] {
 }
 
 /// Dev-dependency allowlist (tests only; never linked into the artifact).
-const ALLOWED_DEV: &[&str] = &["hex", "proptest", "braid-ir", "braid-render"];
+/// `braid-vocab-cms` is a vocabulary package used by the substrate's tests
+/// as a concrete registry to exercise the codec/registry — it is NOT a
+/// runtime dep of the substrate (D31: vocabularies are consumer-side).
+const ALLOWED_DEV: &[&str] = &[
+    "hex",
+    "proptest",
+    "braid-ir",
+    "braid-render",
+    "braid-vocab-cms",
+];
 
 /// First path segment allowlist for `use` statements in src/**.
 const ALLOWED_USE_ROOTS: &[&str] = &[

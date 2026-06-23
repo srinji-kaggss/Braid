@@ -36,11 +36,11 @@
 
 use std::process::ExitCode;
 
-use braid_ir::registry_v0;
 use braid_ir::{Capsule, ConfirmPolicy};
 use braid_render::{has_widening, manifest, manifest_diff, render_text, DeltaKind};
 use braid_sdk::Builder;
 use braid_verify::{verify, Verdict};
+use braid_vocab_cms::registry_v0;
 use serde::{Deserialize, Serialize};
 
 // ── JSON-of-IR author form (D19). `deny_unknown_fields` mirrors the IR's

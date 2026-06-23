@@ -2,7 +2,10 @@
 name = "braid-capability"
 version = "0.1.0"
 edition = "2021"
-description = "Vendored kernel capability contract — the closed Capability permission token Braid binds to (ADR-088 D3 boundary)"
+description = "Capability token — the closed permission vocabulary boundary for the Braid global IR (ADR-088 D3, D31)"
+repository = "https://github.com/srinji-kaggss/Braid"
+homepage = "https://github.com/srinji-kaggss/Braid"
+license = "MIT"
 
 [lib]
 name = "braid_capability"
@@ -10,5 +13,6 @@ path = "src/lib.rs"
 
 [dependencies]
 serde = { workspace = true }
-strum = { workspace = true }
-strum_macros = { workspace = true }
+
+[dev-dependencies]
+serde_json = "1.0"

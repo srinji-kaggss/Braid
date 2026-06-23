@@ -89,6 +89,28 @@ pub fn manifest(capsule: &Capsule, registry: &TermRegistry) -> Result<Manifest, 
     })
 }
 
+/// Escape control characters in a manifest field value so a single logical
+/// field can NEVER produce more than one manifest line (threat R3: the
+/// manifest is the review object; a `\n` in `intent`/`evidence`/etc. would
+/// inject forged `capsule:`/`capabilities:` lines that a scanning reviewer
+/// could mistake for the real binding). The manifest is line-oriented
+/// `key: value`; the only raw newlines in the output are the ones this
+/// emitter inserts between fields. Backslash is escaped first so the mapping
+/// is unambiguous and reversible.
+fn escape_field(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
 /// Deterministic text rendering — what a reviewer (or a PR diff) reads.
 pub fn render_text(m: &Manifest) -> String {
     let mut out = String::new();
@@ -99,7 +121,7 @@ pub fn render_text(m: &Manifest) -> String {
         out.push('\n');
     };
     line("capsule", m.capsule_cid.to_hex());
-    line("intent", m.intent.clone());
+    line("intent", escape_field(&m.intent));
     line("ir_version", m.ir_version.to_string());
     line("vocab_version", m.vocab_version.to_string());
     line("registry", m.registry_cid.to_hex());
@@ -108,10 +130,21 @@ pub fn render_text(m: &Manifest) -> String {
         if m.capabilities.is_empty() {
             "(none)".into()
         } else {
-            m.capabilities.join(", ")
+            m.capabilities
+                .iter()
+                .map(|c| escape_field(c))
+                .collect::<Vec<_>>()
+                .join(", ")
         },
     );
-    line("effects", m.effects.join(", "));
+    line(
+        "effects",
+        m.effects
+            .iter()
+            .map(|e| escape_field(e))
+            .collect::<Vec<_>>()
+            .join(", "),
+    );
     line("irreversible_strands", m.irreversible_strands.to_string());
     line("egress_strands", m.egress_strands.to_string());
     line("strands", m.strand_count.to_string());
@@ -128,7 +161,11 @@ pub fn render_text(m: &Manifest) -> String {
         if m.evidence.is_empty() {
             "(none)".into()
         } else {
-            m.evidence.join(", ")
+            m.evidence
+                .iter()
+                .map(|e| escape_field(e))
+                .collect::<Vec<_>>()
+                .join(", ")
         },
     );
     out

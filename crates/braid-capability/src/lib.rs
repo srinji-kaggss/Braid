@@ -1,71 +1,102 @@
-//! Vendored kernel capability contract (ADR-088 D3 boundary).
+//! Capability token — the closed permission vocabulary boundary (ADR-088 D3).
 //!
-//! SOURCE OF TRUTH: `canvas-protocol::Capability` on the Logic OS kernel
-//! (`srinji-kaggss/logic-os-kernel`, `origin/main` —
-//! `kernel/crates/canvas-protocol/src/lib.rs`). This is a VERBATIM mirror of
-//! the closed permission-token enum, vendored so Braid stands alone without a
-//! path/git dependency back into the kernel workspace.
+//! //why a string newtype, not a fixed enum: Braid is a *global* IR (D31). A
+//! fixed enum of verbs ties every consumer to one domain's capability space —
+//! the kernel's `signal.emit`/`motion.schedule`, the browser's `web.dom.read`,
+//! a JS frontend's `js.eval`, a Julia frontend's `julia.io` are mutually
+//! foreign. A union enum re-couples every consumer to every other domain's
+//! verbs (the "good enough to not be a fork" failure). A content-addressed
+//! string token lets each vocabulary package declare its own capability space,
+//! while the verifier's attenuation check (grant ⊆ ambient) works on any token
+//! set — the lattice order is declared per-vocabulary, not hardcoded here.
 //!
-//! //why vendored, not depended-on: ADR-088 frames Braid as the extractable
-//! machine-first framework. Only the `Capability` enum crosses the kernel
-//! boundary (D3); pulling the whole `canvas-protocol` crate (and its serde_json
-//! / uuid / chrono surface) into a standalone repo would import kernel types
-//! Braid never uses. The mirror is kept byte-identical so re-sync is a trivial
-//! diff against `origin/main`.
+//! The dotted name (`web.dom.read`, `compute.remote`) is the protocol-stable
+//! identity: it is what canonical encoding serializes, what the manifest
+//! renders, and what feeds capsule CIDs. Drift in a name silently changes
+//! content addresses — vocabulary packages own their names the way the kernel
+//! enum owned its `#[strum(serialize)]` attributes.
 //!
-//! INVARIANT: do not edit the variants, `#[serde(rename = …)]`, or
-//! `#[strum(serialize = …)]` attributes here independently. The strum-`Display`
-//! string is stored into the Braid IR (`term.rs`) and therefore feeds capsule
-//! CIDs / pinned KAT vectors — drift here silently changes content addresses.
-//! If the kernel bumps the enum, re-vendor verbatim from `origin/main`.
+//! The token is canonicalized at construction (the dotted name is stored
+//! verbatim; no normalization) so `Capability::new("web.dom.read")` and
+//! `Capability::from_str("web.dom.read")` produce the same bytes.
 
 use serde::{Deserialize, Serialize};
-use strum_macros::{Display, EnumIter, EnumString};
+use std::fmt;
+use std::str::FromStr;
 
-/// Permission token.
-/// //why: ARCH-02 establishes this as the single source of truth for all kernel capability checks.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Display, EnumString, EnumIter)]
-#[serde(rename_all = "lowercase")]
-#[strum(serialize_all = "kebab-case")]
-pub enum Capability {
-    #[serde(rename = "signal.emit")]
-    #[strum(serialize = "signal.emit")]
-    SignalEmit,
-    #[serde(rename = "signal.subscribe")]
-    #[strum(serialize = "signal.subscribe")]
-    SignalSubscribe,
-    #[serde(rename = "tape.read")]
-    #[strum(serialize = "tape.read")]
-    TapeRead,
-    #[serde(rename = "view.inject")]
-    #[strum(serialize = "view.inject")]
-    ViewInject,
-    #[serde(rename = "intent.emit")]
-    #[strum(serialize = "intent.emit")]
-    IntentEmit,
-    #[serde(rename = "motion.schedule")]
-    #[strum(serialize = "motion.schedule")]
-    MotionSchedule,
-    #[serde(rename = "motion.observe")]
-    #[strum(serialize = "motion.observe")]
-    MotionObserve,
-    #[serde(rename = "motion.patch")]
-    #[strum(serialize = "motion.patch")]
-    MotionPatch,
-    #[serde(rename = "motion.plugin.register")]
-    #[strum(serialize = "motion.plugin.register")]
-    MotionPluginRegister,
-    #[serde(rename = "motion.replay")]
-    #[strum(serialize = "motion.replay")]
-    MotionReplay,
-    #[serde(rename = "efface.shred")]
-    #[strum(serialize = "efface.shred")]
-    Shred,
-    #[serde(rename = "efface.rtbf")]
-    #[strum(serialize = "efface.rtbf")]
-    Rtbf,
-    /// Outbound remote computation request (#447).
-    #[serde(rename = "compute.remote")]
-    #[strum(serialize = "compute.remote")]
-    RemoteCompute,
+/// A capability permission token — a dotted string name drawn from a
+/// vocabulary's declared capability space. Capabilities are compared by name;
+/// the verifier checks `grant ⊆ ambient` by name equality.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct Capability(pub String);
+
+impl Capability {
+    /// Construct a capability from its dotted name. The name is stored
+    /// verbatim (no normalization) so it round-trips through canonical
+    /// encoding byte-for-byte.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self(name.into())
+    }
+
+    /// The dotted name — the protocol-stable identity.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for Capability {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl FromStr for Capability {
+    type Err = std::convert::Infallible;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(s.to_string()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn name_is_the_identity() {
+        let cap = Capability::new("web.dom.read");
+        assert_eq!(cap.as_str(), "web.dom.read");
+        assert_eq!(cap.to_string(), "web.dom.read");
+        assert_eq!(Capability::from_str("web.dom.read").unwrap(), cap);
+    }
+
+    #[test]
+    fn equality_is_by_name() {
+        assert_eq!(Capability::new("a.b"), Capability::new("a.b"));
+        assert_ne!(Capability::new("a.b"), Capability::new("a.c"));
+    }
+
+    #[test]
+    fn arbitrary_dotted_names_are_representable() {
+        // A global IR must accept any vocabulary's capability space — kernel,
+        // browser, JS, Julia — without a core edit.
+        for name in [
+            "signal.emit",
+            "web.dom.read",
+            "js.eval",
+            "julia.io",
+            "compute.remote",
+        ] {
+            let cap = Capability::new(name);
+            assert_eq!(cap.as_str(), name);
+        }
+    }
+
+    #[test]
+    fn serde_round_trips_the_name() {
+        let cap = Capability::new("motion.schedule");
+        let j = serde_json::to_string(&cap).unwrap();
+        assert_eq!(j, "\"motion.schedule\"");
+        let back: Capability = serde_json::from_str(&j).unwrap();
+        assert_eq!(back, cap);
+    }
 }

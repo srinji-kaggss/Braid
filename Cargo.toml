@@ -2,6 +2,8 @@
 members = [
     "crates/braid-capability",
     "crates/braid-ir",
+    "crates/braid-vocab-cms",
+    "crates/braid-vocab-js",
     "crates/braid-verify",
     "crates/braid-render",
     "crates/braid-sdk",
@@ -20,20 +22,20 @@ resolver = "2"
 # Content-addressed hash chain (BLAKE3 CIDs under lw.braid.*).
 blake3 = "1.8.5"
 
-# Vendored kernel capability contract (the D3 boundary; see
-# crates/braid-capability). serde/strum deps mirror canvas-protocol's so the
-# vendored Capability stays a verbatim mirror of origin/main.
+# The capability token newtype uses serde for canonical round-trip; no strum
+# needed (D31: string-tagged capabilities replaced the kernel enum mirror).
 serde = { version = "1.0.228", features = ["derive"] }
-strum = { version = "0.26.3", features = ["derive"] }
-strum_macros = "0.26.4"
 
 # Test-only.
 hex = "0.4.3"
 proptest = "1.6.0"
+serde_json = "1.0"
 
 # Intra-workspace crates.
 braid-capability = { path = "crates/braid-capability" }
 braid-ir = { path = "crates/braid-ir" }
+braid-vocab-cms = { path = "crates/braid-vocab-cms" }
+braid-vocab-js = { path = "crates/braid-vocab-js" }
 braid-verify = { path = "crates/braid-verify" }
 braid-render = { path = "crates/braid-render" }
 

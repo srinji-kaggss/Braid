@@ -1,8 +1,8 @@
-capsule: 5bb1c3b90f78ad832c628617bfe4d0079b395458400feaf1ec430e0abb65fbf3
+capsule: 195a7455e56b42dde32a79218c1b675420bc2de310184d16413a027d6261f33a
 intent: demo-port: edit the services page then publish it — irreversible, human-confirmed
 ir_version: 0
 vocab_version: 1
-registry: f5a15299db728c83bc810eb08453d086121d89e747f196fcf0633b444dde61bb
+registry: afaa7dcc9ab2f7d1530da72306c7d821c573f8aa9eda2b5c6e463f121f634acd
 capabilities: intent.emit, signal.emit
 effects: irreversible, pure, reversible-write
 irreversible_strands: 1

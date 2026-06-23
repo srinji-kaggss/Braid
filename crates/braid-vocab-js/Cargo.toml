@@ -1,0 +1,20 @@
+[package]
+name = "braid-vocab-js"
+version = "0.1.0"
+edition = "2021"
+description = "Braid vocabulary package — JavaScript elaboration target (D31: Braid as a global IR). JS source elaborates into these terms; the one braid-verify admits them. The seed of 'renders JS useless': JS stops being a runtime surface and becomes an authoring frontend over the verified substrate."
+repository = "https://github.com/srinji-kaggss/Braid"
+homepage = "https://github.com/srinji-kaggss/Braid"
+license = "MIT"
+
+[lib]
+name = "braid_vocab_js"
+path = "src/lib.rs"
+
+[dependencies]
+braid-capability = { workspace = true }
+braid-ir = { workspace = true }
+
+[dev-dependencies]
+braid-verify = { workspace = true }
+braid-sdk = { path = "../braid-sdk" }

@@ -60,11 +60,11 @@ fn encode(fixture_name: &str, out_name: &str) -> (PathBuf, String) {
 /// Pinned CIDs for the three admitted demo-port actions. These are the
 /// content-addresses of the canonical bytes; a change here means the authoring
 /// or encoding path moved — investigate before re-pinning.
-const CID_EDIT_HOME_HERO: &str = "e160ad02e081e856f18815957246ff224af333bd3dcc44411609dd8ad1227ac2";
+const CID_EDIT_HOME_HERO: &str = "26f6162e1a5fb5f6e3a46724a991a8b4dc48e08c223016fb86c3c8de38594226";
 const CID_PUBLISH_SERVICES: &str =
-    "5bb1c3b90f78ad832c628617bfe4d0079b395458400feaf1ec430e0abb65fbf3";
+    "195a7455e56b42dde32a79218c1b675420bc2de310184d16413a027d6261f33a";
 const CID_RENDER_WORK_LISTING: &str =
-    "3e9816f1fa77e75ada2b25bcbba82bc0c31248edf8198d89944dc7e882f15f4a";
+    "43ed11f1d863a214ca4ac51bbfaa5078166ddcc228fda717c25fa358bf8da3a6";
 
 /// Scenario #1 — AI authors an "edit page section" capsule (reversible, local):
 /// admitted; the manifest shows no egress and no irreversible effect.

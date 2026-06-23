@@ -446,3 +446,59 @@ It survives only **deflated**, and the deflation is the honest thesis:
   CMS toy): does gate-admission predict *blind* senior-approval? + false-positive-rate-on-taste
   + post-merge outcome-by-axis, **stratified by domain** (rendering vs mutation; the catch-rate
   is NOT constant). Outcomes, not labels — dodges the circular-labeling/selection-bias traps.
+
+---
+
+## Amendments — 2026-06-23 (Director session: Braid as a global translator IR / brew-scale dependency / "renders JS useless")
+
+**Provenance**: live Director session 2026-06-23, working from (a) the next-gen-browser-engine
+ADRs (ADR-001 standalone browser, ADR-005 immutable content-addressed acyclic term graph =
+Braid's IR shape, ADR-007 LLM not core runtime) and `BRAID_BRIDGE.md` ("the browser depends on
+`braid-ir` and `braid-capability`"), (b) the kernel's `braid_vocab_binding.rs` seam (a pinned
+snapshot literally waiting for Braid to be wired in: "When `braid-ir` is wired in: replace ONLY
+the body"), (c) the Director's framing: "Braid needs to standalone work for a few langs first as
+a global IR and try to replace Java," "braid needs to be good enough to not be a fork and become a
+dependency," and the brew-scale bar ("brew as in how ubiquitous it is, think from that scale
+(billions)"). Synthesis by Claude; INTERPRETED entries are veto-on-review per the lock legend.
+These ENRICH the foundations; D6's surface-syntax gate is unchanged (no grammar authored here).
+
+### D31 — Braid is a GLOBAL TRANSLATOR IR, not a browser-CMS framework — **INTERPRETED**
+The Director's reframing: Braid is a machinistic, verifiable term IR (Lean/Julia-flavored: real,
+not invented syntax) that source languages compile *into*; "custom lang" means the IR is the
+global translator, "renders JS useless" means JS stops being a runtime authority surface and
+becomes an authoring frontend over the verified substrate. The bar is Homebrew-ubiquity: a
+dependency so fundamental and trivial to pull in that every runtime/language toolchain in the
+ecosystem ends up depending on it, not a niche framework consumers must fork to escape.
+**Adopted structural consequences (built this session):**
+- **Substrate vs vocabulary separation.** `braid-ir` ships ONLY the language-neutral substrate
+  (`Value`/`canon`/`Cid`/`TermRegistry`/`Capsule`/`TypeTag` atoms). No domain vocabulary lives in
+  the substrate. `registry_v0` and the CMS examples moved to a new `braid-vocab-cms` crate; the
+  kernel's 10 motion/browser capability verbs moved there as named consts. A consumer pulls the
+  substrate + a vocabulary package, never the substrate alone with a baked-in domain.
+- **String-tagged capabilities.** `Capability` is a content-addressed string newtype
+  (`Capability::new("js.eval")`), not a fixed enum. Each vocabulary owns its capability space
+  (`web.*`, `js.*`, `julia.*`); the verifier's attenuation check (grant ⊆ ambient) works on any
+  token set — the lattice order is declared per-vocabulary, not hardcoded in the core. A union
+  enum (re-coupling every consumer to every other domain's verbs) is the explicit anti-pattern.
+- **`TypeTag::Opaque` for vocabulary-defined types.** The core type universe is the language-
+  neutral atoms (`Bool`/`Int`/`Bytes`/`Text`/`Cid`/`List`); every domain type (`cms.entity`,
+  `cms.directive`, `js.string`, `js.object`, `js.function`) is a vocabulary-owned
+  `Opaque(label, args)`. A new language adds types without a core edit.
+- **The verifier is already registry-parametric** (`verify(bytes, &TermRegistry, &[Capability])`);
+  the coupling was only at the tooling layer. The CLI/SDK now take a vocabulary's registry rather
+  than hardcoding `registry_v0`.
+- **`braid-vocab-js` is the second vocabulary**, proving the claim: a JS capsule with `js.*`
+  capabilities admits via the ONE `braid-verify`, no fork, no core edit (test:
+  `js_capsule_admits_via_the_one_verifier`). This is the seed of "renders JS useless."
+**What does NOT change (locked invariants preserved):** D8 canonical encoding, D9 verifier
+independence, D10 no authority, D11 versioning, D12 manifest, D6 surface-syntax gate. The KAT
+vectors re-pinned once (the `Entity`/`Directive` → `Opaque` encoding move changed registry/capsule
+CIDs — a conscious, one-time re-pin recorded in `vectors/capsule_v0.kat`). The kernel's
+`braid_vocab_binding.rs` snapshot's dotted names (`compute.remote`, `signal.emit`) are preserved
+verbatim in `braid-vocab-cms`, so the kernel consumer binds without re-pinning on the name axis.
+**Relationship to D6 (non-goal: "replacing existing languages"):** D31 moves the *replacement*
+ambition from blue-sky-non-goal to a phased target, but the *mechanism* (a surface grammar) stays
+D6-gated. Braid becomes a dependency by being the verified IR that languages elaborate INTO, not
+by authoring a competing textual syntax. "Replace Java" = Java elaborates to Braid IR and the
+JVM stops being the authority surface; it does NOT mean Braid ships a Java-syntax grammar in v0.
+(Enriches D5/D14/D17; sharpens D6; generalizes D20's "anchor" framing to a multi-language anchor.)

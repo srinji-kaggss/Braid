@@ -3,9 +3,9 @@
 //! every vector and every constructible artifact. Any disagreement is RED:
 //! a parse differential here is exactly the trusting-trust gap (T2).
 
-use braid_ir::examples::{edit_section_capsule, laundering_capsule, publish_capsule};
-use braid_ir::{registry_v0, ConfirmPolicy};
+use braid_ir::ConfirmPolicy;
 use braid_verify::decode::{decode_canonical, reencode};
+use braid_vocab_cms::{edit_section_capsule, laundering_capsule, publish_capsule, registry_v0};
 use std::fs;
 use std::path::PathBuf;
 
