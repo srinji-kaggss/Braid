@@ -1,0 +1,132 @@
+{
+  "_comment": "Braid safety-assurance profile (U-SA, D32). Binds Keel's 20 evidence atoms to Braid's Tier-1 tools. Gate concept: NotSlop. Graded atoms without mechanical numeric extraction are left unbound (unknown). Workspace-wide commands (cargo test, clippy) run once at the workspace level; per-crate tests bind individually.",
+  "target": {
+    "name": "braid",
+    "root": ".",
+    "ecosystem": "rust"
+  },
+  "units": [
+    {
+      "unit": "crate",
+      "discover": {
+        "type": "literal",
+        "values": ["."]
+      }
+    }
+  ],
+  "bindings": [
+    {
+      "atom": "referential_truth",
+      "unit": "crate",
+      "evidence": {
+        "tool": "cargo",
+        "argv": ["check", "--workspace"],
+        "ok_when": "exit==0"
+      }
+    },
+    {
+      "atom": "type_soundness",
+      "unit": "crate",
+      "evidence": {
+        "tool": "cargo",
+        "argv": ["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"],
+        "ok_when": "exit==0"
+      }
+    },
+    {
+      "atom": "specification_fidelity",
+      "unit": "crate",
+      "evidence": {
+        "tool": "cargo",
+        "argv": ["test", "--workspace"],
+        "ok_when": "exit==0"
+      }
+    },
+    {
+      "atom": "precondition_correctness",
+      "unit": "crate",
+      "evidence": {
+        "tool": "cargo",
+        "argv": ["test", "-p", "braid-verify", "--", "--test-threads=1"],
+        "ok_when": "exit==0"
+      }
+    },
+    {
+      "atom": "postcondition_correctness",
+      "unit": "crate",
+      "evidence": {
+        "tool": "cargo",
+        "argv": ["test", "-p", "braid-verify", "-p", "braid-render"],
+        "ok_when": "exit==0"
+      }
+    },
+    {
+      "atom": "invariant_preservation",
+      "unit": "crate",
+      "evidence": {
+        "tool": "cargo",
+        "argv": ["test", "-p", "braid-ir"],
+        "ok_when": "exit==0"
+      }
+    },
+    {
+      "atom": "totality_or_controlled_partiality",
+      "unit": "crate",
+      "evidence": {
+        "tool": "cargo",
+        "argv": ["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"],
+        "ok_when": "exit==0"
+      }
+    },
+    {
+      "atom": "data_model_truth",
+      "unit": "crate",
+      "evidence": {
+        "tool": "cargo",
+        "argv": ["test", "-p", "braid-ir"],
+        "ok_when": "exit==0"
+      }
+    },
+    {
+      "atom": "error_semantics",
+      "unit": "crate",
+      "evidence": {
+        "tool": "cargo",
+        "argv": ["test", "-p", "braid-verify", "-p", "braid-ir", "-p", "braid-sdk"],
+        "ok_when": "exit==0"
+      }
+    },
+    {
+      "atom": "security_by_construction",
+      "unit": "crate",
+      "evidence": {
+        "tool": "cargo",
+        "argv": ["test", "-p", "braid-verify"],
+        "ok_when": "exit==0"
+      }
+    },
+    {
+      "atom": "testability_falsifiability",
+      "unit": "crate",
+      "evidence": {
+        "tool": "cargo",
+        "argv": ["test", "--workspace"],
+        "ok_when": "exit==0"
+      }
+    },
+    {
+      "atom": "change_locality",
+      "unit": "crate",
+      "evidence": {
+        "tool": "cargo",
+        "argv": ["test", "--workspace"],
+        "ok_when": "exit==0"
+      }
+    }
+  ],
+  "gate_concept": "NotSlop",
+  "execution_policy": {
+    "allow": ["cargo", "bash", "node"],
+    "env_passthrough": ["HOME", "CARGO_HOME", "RUSTUP_HOME", "USER"]
+  }
+}
