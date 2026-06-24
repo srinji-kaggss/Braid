@@ -20,9 +20,13 @@
 //! verbatim; no normalization) so `Capability::new("web.dom.read")` and
 //! `Capability::from_str("web.dom.read")` produce the same bytes.
 
+#![no_std]
+extern crate alloc;
+
+use alloc::string::{String, ToString};
+use core::fmt;
+use core::str::FromStr;
 use serde::{Deserialize, Serialize};
-use std::fmt;
-use std::str::FromStr;
 
 /// A capability permission token — a dotted string name drawn from a
 /// vocabulary's declared capability space. Capabilities are compared by name;
@@ -51,7 +55,7 @@ impl fmt::Display for Capability {
 }
 
 impl FromStr for Capability {
-    type Err = std::convert::Infallible;
+    type Err = core::convert::Infallible;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self(s.to_string()))
     }

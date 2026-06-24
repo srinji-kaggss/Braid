@@ -20,11 +20,11 @@ resolver = "2"
 # ─────────────────────────────────────────────────────────────────────────────
 [workspace.dependencies]
 # Content-addressed hash chain (BLAKE3 CIDs under lw.braid.*).
-blake3 = "1.8.5"
+blake3 = { version = "1.8.5", default-features = false }
 
 # The capability token newtype uses serde for canonical round-trip; no strum
 # needed (D31: string-tagged capabilities replaced the kernel enum mirror).
-serde = { version = "1.0.228", features = ["derive"] }
+serde = { version = "1.0.228", default-features = false, features = ["derive", "alloc"] }
 
 # Test-only.
 hex = "0.4.3"

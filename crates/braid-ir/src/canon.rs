@@ -15,7 +15,9 @@
 //! - no trailing bytes; nesting depth capped.
 
 use crate::value::Value;
-use std::collections::BTreeMap;
+use alloc::collections::BTreeMap;
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 
 /// Maximum nesting depth (fail-closed resource bound, not a tunable).
 pub const MAX_DEPTH: usize = 64;
@@ -45,7 +47,7 @@ pub enum CanonError {
 /// Canonical key order: length first, then bytewise — equals RFC 8949
 /// deterministic encoding order for definite-length text keys (the length is
 /// in the head byte(s), so encoded-byte comparison sees it first).
-pub fn key_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+pub fn key_cmp(a: &str, b: &str) -> core::cmp::Ordering {
     a.len()
         .cmp(&b.len())
         .then_with(|| a.as_bytes().cmp(b.as_bytes()))
@@ -223,7 +225,7 @@ impl<'a> Reader<'a> {
             2 => Ok(Value::Bytes(self.take(n as usize)?.to_vec())),
             3 => {
                 let raw = self.take(n as usize)?;
-                let s = std::str::from_utf8(raw).map_err(|_| CanonError::Utf8)?;
+                let s = core::str::from_utf8(raw).map_err(|_| CanonError::Utf8)?;
                 Ok(Value::Text(s.to_string()))
             }
             4 => {
@@ -252,11 +254,11 @@ impl<'a> Reader<'a> {
                     }
                     let kn = self.arg(kb)?;
                     let raw = self.take(kn as usize)?;
-                    let k = std::str::from_utf8(raw)
+                    let k = core::str::from_utf8(raw)
                         .map_err(|_| CanonError::Utf8)?
                         .to_string();
                     if let Some(p) = &prev {
-                        if key_cmp(p, &k) != std::cmp::Ordering::Less {
+                        if key_cmp(p, &k) != core::cmp::Ordering::Less {
                             return Err(CanonError::KeyOrder);
                         }
                     }

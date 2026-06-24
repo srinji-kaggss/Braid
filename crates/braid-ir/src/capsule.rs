@@ -7,7 +7,10 @@ use crate::cid::{Cid, CAPSULE_DOMAIN};
 use crate::term::RegistryError;
 use crate::value::Value;
 use braid_capability::Capability;
-use std::str::FromStr;
+use alloc::string::{String, ToString};
+use alloc::vec;
+use alloc::vec::Vec;
+use core::str::FromStr;
 
 /// Braid IR version. Bumped on ANY change to capsule/braid/registry canonical
 /// shape; admission refuses a mismatch (D11). Pinned by `tests/kat.rs`.
