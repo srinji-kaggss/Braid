@@ -5,7 +5,9 @@
 //! in `Int` with term-level scaling. The absence of the variant — not a
 //! runtime check — is what makes a float unrepresentable.
 
-use std::collections::BTreeMap;
+use alloc::collections::BTreeMap;
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 
 /// A value in the Braid IR. Closed; every variant has exactly one canonical
 /// byte form under [`crate::canon`].

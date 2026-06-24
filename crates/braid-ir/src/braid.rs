@@ -7,6 +7,9 @@
 
 use crate::term::RegistryError;
 use crate::value::Value;
+use alloc::string::String;
+use alloc::vec;
+use alloc::vec::Vec;
 
 /// One term application. `inputs[i]` is the index of the strand whose output
 /// feeds this strand's i-th parameter.

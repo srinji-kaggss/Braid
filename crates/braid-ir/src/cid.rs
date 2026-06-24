@@ -3,6 +3,9 @@
 //! `state-fabric::compute_content_hash` (domain ‖ framed fields), under Braid's
 //! own `lw.braid.*` namespace so a Braid hash can never collide a fact hash.
 
+use alloc::format;
+use alloc::string::String;
+
 /// Domain for a capsule's content address.
 pub const CAPSULE_DOMAIN: &[u8] = b"lw.braid.capsule.v0";
 /// Domain for a term-registry's content address (pinned inside every capsule —
@@ -38,7 +41,7 @@ impl Cid {
         }
         let mut out = [0u8; 32];
         for (i, chunk) in hex.as_bytes().chunks(2).enumerate() {
-            let s = std::str::from_utf8(chunk).ok()?;
+            let s = core::str::from_utf8(chunk).ok()?;
             out[i] = u8::from_str_radix(s, 16).ok()?;
         }
         Some(Cid(out))

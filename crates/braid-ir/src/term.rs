@@ -7,8 +7,13 @@ use crate::canon;
 use crate::cid::{Cid, REGISTRY_DOMAIN};
 use crate::value::Value;
 use braid_capability::Capability;
-use std::collections::BTreeMap;
-use std::str::FromStr;
+use alloc::boxed::Box;
+use alloc::collections::BTreeMap;
+use alloc::format;
+use alloc::string::{String, ToString};
+use alloc::vec;
+use alloc::vec::Vec;
+use core::str::FromStr;
 
 /// The closed type universe of strand wiring. No interpretable-code type
 /// exists (T1) and no float type exists (T8) — by construction, not by check.

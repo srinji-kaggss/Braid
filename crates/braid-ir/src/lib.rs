@@ -23,6 +23,9 @@
 //! Boundary covenant (D3): this crate depends only on `blake3` and
 //! `braid-capability`. Enforced by `tests/boundary_conformance.rs`.
 
+#![no_std]
+extern crate alloc;
+
 pub mod braid;
 pub mod canon;
 pub mod capsule;
