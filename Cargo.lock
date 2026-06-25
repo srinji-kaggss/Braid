@@ -146,6 +146,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "braid-vocab-web"
+version = "0.1.0"
+dependencies = [
+ "braid-capability",
+ "braid-ir",
+]
+
+[[package]]
 name = "cc"
 version = "1.2.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
