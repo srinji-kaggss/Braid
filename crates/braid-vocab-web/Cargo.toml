@@ -1,0 +1,16 @@
+[package]
+name = "braid-vocab-web"
+version = "0.1.0"
+edition = "2021"
+description = "Braid vocabulary package — the browser engine's closed web.* action vocabulary (ADR-088 D31; the term alphabet next-gen-browser-engine binds against)"
+repository = "https://github.com/srinji-kaggss/Braid"
+homepage = "https://github.com/srinji-kaggss/Braid"
+license = "MIT"
+
+[lib]
+name = "braid_vocab_web"
+path = "src/lib.rs"
+
+[dependencies]
+braid-capability = { workspace = true }
+braid-ir = { workspace = true }
