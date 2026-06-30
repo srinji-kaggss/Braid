@@ -1,0 +1,30 @@
+[package]
+name = "braid-elaborate-js"
+version = "0.1.0"
+edition = "2021"
+description = "A thin JavaScript-expression frontend that elaborates JS source into Braid IR (D31, U11). The first real frontend over the global IR: JS text in, an admitted Capsule out, via the one braid-verify — JS as an authoring frontend over the verified substrate, not a runtime authority."
+repository = "https://github.com/srinji-kaggss/Braid"
+homepage = "https://github.com/srinji-kaggss/Braid"
+license = "MIT"
+
+[lib]
+name = "braid_elaborate_js"
+path = "src/lib.rs"
+
+[[bin]]
+name = "braid-elaborate-js"
+path = "src/main.rs"
+
+# A consumer/frontend crate, not trust-base (like braid-cli/braid-sdk). It
+# elaborates INTO the substrate via the SDK; it is not part of the D3 boundary
+# the substrate crates (braid-ir/braid-verify/braid-render) are fenced to.
+[dependencies]
+braid-ir = { workspace = true }
+braid-capability = { workspace = true }
+braid-verify = { workspace = true }
+braid-render = { workspace = true }
+braid-sdk = { workspace = true }
+braid-vocab-js = { workspace = true }
+
+[dev-dependencies]
+braid-vocab-js = { workspace = true }
