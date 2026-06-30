@@ -1,4 +1,4 @@
-# Braid — Debt Register (2026-06-23)
+# Braid — Debt Register (2026-06-23; updated 2026-06-30 for U11–U13)
 
 > The gap between the current state and the Java-ecosystem end state (PRD §1:
 > "Java/WASM-scale — a self-sufficient runtime ecosystem"). Honest, on record.
@@ -107,20 +107,23 @@ predicates is not machine-checked (D-SA5 in the spec).
 ## What "done for v0" would mean (the honest bar)
 
 The PRD's v0 goals (G1–G6) are met. The PRD's *end-state ambition* (Java/WASM-
-scale) is not v0 and was never claimed to be. The honest v0 claim is:
-**a verified IR substrate with two vocabulary seeds, a safety-assurance floor
-(specified), and zero consumers.** That is roughly where Java was in 1991
-before the JVM ran anything — the `.class` + verifier layer, no VM, no stdlib,
-no users.
+scale) is not v0 and was never claimed to be. The honest claim **as of the
+post-v0 frontier (U11–U13)**: **a verified IR substrate with a built
+safety-assurance floor, a real JS expression frontend (U11–U12) compiling text
+into admitted capsules, a first multi-capsule build tool (U13), and still zero
+*external* consumers.** That is a little past where Java was in 1991 — the
+`.class` + verifier layer now has a working front-end compiler and a project
+builder, but still no VM, no stdlib at scale, and no outside dependents.
 
 ## Priority order (my recommendation)
 
-1. **`U-SA`** — build the safety-assurance floor (this spec). Unblocks
-   trustworthy work on everything else; a Java-ecosystem substrate without it
-   ships slop. Low effort (wiring, not reinvention) once D32 is ratified.
-2. **A real JS→Braid elaborator** — turns "renders JS useless" from
-   architectural to operational. The proof of the whole global-IR thesis.
-3. **One real consumer live-wired** — the browser collapse or the kernel
-   binding. Zero dependents = not yet a dependency.
-4. **U7 / a runtime** — the biggest gap but blocked on the kernel WASM epic.
+1. ~~**`U-SA`** — safety-assurance floor.~~ ✅ **Done.**
+2. ~~**A real JS→Braid elaborator.**~~ ✅ **Done (U11–U12).** "Renders JS
+   useless" is operational for the expression subset.
+3. **One real consumer live-wired (U14)** — the browser collapse or the kernel
+   binding. Zero external dependents = not yet a dependency. **Now the top
+   open lever.**
+4. **U15 — Lean⇄verifier conformance** — closes D-SEMANTICS; the last piece of
+   the Tier-2 floor's rigour.
+5. **U7 / a runtime** — the biggest gap but blocked on the kernel WASM epic.
    Either unblock that or build a minimal Braid-direct interpreter.
