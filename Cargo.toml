@@ -10,6 +10,7 @@ members = [
     "crates/braid-sdk",
     "crates/braid-cli",
     "crates/braid-elaborate-js",
+    "crates/braid-project",
 ]
 resolver = "2"
 

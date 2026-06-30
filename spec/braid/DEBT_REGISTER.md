@@ -25,6 +25,9 @@
 - ✅ **JS expression language + vocab v2** (U12, D-VOCAB.1) — operator-
   precedence frontend (`+ - * < == && || !`, booleans) over 16 pure JS terms,
   with a mutation-proven anti-escape-hatch guard and re-pinned CIDs.
+- ✅ **Multi-capsule project build** (U13, D-TOOLCHAIN.1) — `braid-project`:
+  manifest → elaborate + admit all (fail-closed) → deterministic project CID;
+  cross-capsule anti-dredging guards (no rewrite/aggregation, no shadowing).
 
 ## Open debts (the Java-ecosystem gap)
 
@@ -68,11 +71,14 @@ unit** (Strand carries no operand — D8-locked work, not a vocab change).
 **Closes**: U12 (expansion + governance — done); a stdlib-scale JS vocabulary
 (later); the substrate-level literal-payload unit.
 
-### D-TOOLCHAIN — Partial toolchain
-`braid-cli` (encode/decode/verify/render/diff) exists. No package manager, no
-build tool for multi-capsule projects, no docs generator, no `braid test`
-harness for capsules (vs. tests *of* the substrate).
-**Closes**: PRD §5 P4+.
+### D-TOOLCHAIN — Partial toolchain *(first slice LANDED — U13)*
+🟡 **Partially closed.** `braid-cli` (encode/decode/verify/render/diff) plus the
+new `braid-project` crate: a multi-capsule project manifest + `braid-project
+build` that elaborates + admits every capsule fail-closed and emits a
+deterministic project CID. Remaining: no package manager/registry (PRD §49
+non-goal), no docs generator, no `braid test` harness for capsules yet, and the
+manifest is JS-expression-only (no intents/anchors).
+**Closes**: U13 (project build — done); PRD §5 P4+ (the rest).
 
 ### D-SA — Tier-2 safety-assurance floor *(BUILT — U-SA landed)*
 ✅ **Closed.** The "stop slop" semantic floor is no longer just a spec: `U-SA`

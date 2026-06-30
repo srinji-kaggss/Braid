@@ -1,0 +1,8 @@
+{
+  "name": "demo",
+  "capsules": [
+    { "name": "greeting", "source": "\"hello\" + \"world\"" },
+    { "name": "math",     "source": "1 + 2 * 3" },
+    { "name": "check",    "source": "1 < 2 && true" }
+  ]
+}
