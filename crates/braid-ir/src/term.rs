@@ -6,13 +6,13 @@
 use crate::canon;
 use crate::cid::{Cid, REGISTRY_DOMAIN};
 use crate::value::Value;
-use braid_capability::Capability;
 use alloc::boxed::Box;
 use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec;
 use alloc::vec::Vec;
+use braid_capability::Capability;
 use core::str::FromStr;
 
 /// The closed type universe of strand wiring. No interpretable-code type

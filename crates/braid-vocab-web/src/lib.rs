@@ -234,7 +234,10 @@ mod tests {
                 assert!(term.egress_ceiling.is_some());
             }
         }
-        assert_eq!(r.get("web.download").unwrap().effect, EffectClass::Irreversible);
+        assert_eq!(
+            r.get("web.download").unwrap().effect,
+            EffectClass::Irreversible
+        );
     }
 
     #[test]
@@ -243,7 +246,10 @@ mod tests {
         for id in ["web.execute_js", "web.execute_wasm"] {
             let term = r.get(id).unwrap();
             assert_ne!(term.effect, EffectClass::Egress);
-            assert_eq!(term.capability.as_ref().unwrap().as_str(), COMPUTE_LOCAL_NAME);
+            assert_eq!(
+                term.capability.as_ref().unwrap().as_str(),
+                COMPUTE_LOCAL_NAME
+            );
         }
     }
 
