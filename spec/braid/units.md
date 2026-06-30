@@ -231,15 +231,31 @@ green and trip under mutation. **Out of scope, deferred honestly**: literal
 > not belong in a vocabulary expansion. Filed as its own future unit; **not**
 > silently folded into U12.
 
-## U13 — multi-capsule project model + `braid` toolchain
-**Closes**: **D-TOOLCHAIN** (no build/test model for projects of many capsules).
-**Scope**: a typed project manifest (a set of capsules + their intents/anchors),
-`braid build` (elaborate + admit every capsule, fail-closed on any reject) and
-`braid test` (a harness for capsules, distinct from tests *of* the substrate).
-No package *registry* (PRD §49 non-goal) — local project only.
-**AC**: a multi-capsule sample project builds and tests through one command;
-one rejecting capsule fails the whole build deterministically with the stage.
-**Verification**: integration test over a fixture project; CI job.
+## U13 — multi-capsule project model + toolchain *(first slice LANDED this session)*
+**Closes**: the first increment of **D-TOOLCHAIN** (no build model for projects
+of many capsules).
+**Scope**: a new `braid-project` consumer crate — a JSON project manifest (a set
+of named JS-expression capsules), `braid-project build <manifest>` that
+elaborates + admits **every** capsule through the one verifier (fail-closed on
+the first failure) and emits a deterministic, order-independent **project CID**.
+No package *registry* (PRD §49 non-goal); `braid test` and richer manifests
+(intents/anchors) are later increments.
+**Hardening (the three dredging classes, cross-capsule, mutation-proven)**:
+- *Composition/aggregation exfil (T1/T5)*: `project_does_not_rewrite_or_aggregate`
+  proves a capsule's CID inside a project is byte-identical to its standalone
+  elaboration (no rewrite/re-wire) and that every capsule holds zero grants —
+  building together pools no authority; `one_bad_capsule_fails_the_whole_build`
+  proves fail-closed (no partial-admit surface); `duplicate_names_are_rejected`
+  proves no shadowing.
+- *Context/spec drift*: the project CID is pinned for the demo fixture.
+- *Test-hollowing/Goodhart (T14/T7)*: `project_cid_tracks_content` proves the
+  pin is a real function of content (changing a source moves it);
+  `project_cid_is_reorder_invariant` proves the set semantics.
+**AC**: a multi-capsule fixture builds through one command; one rejecting/
+failing capsule fails the whole build, naming it; the cross-capsule guards are
+green and trip under mutation.
+**Verification**: `cargo test -p braid-project` (8 tests);
+`cargo run -p braid-project -- build <manifest>`.
 
 ## U14 — first live consumer collapse *(cross-repo coordination)*
 **Closes**: **D-CONSUMER** ("become a dependency" has zero live dependents).

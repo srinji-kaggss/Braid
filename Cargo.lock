@@ -109,6 +109,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "braid-project"
+version = "0.1.0"
+dependencies = [
+ "braid-elaborate-js",
+ "braid-ir",
+ "braid-verify",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "braid-render"
 version = "0.1.0"
 dependencies = [

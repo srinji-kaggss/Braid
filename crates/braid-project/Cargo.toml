@@ -1,0 +1,26 @@
+[package]
+name = "braid-project"
+version = "0.1.0"
+edition = "2021"
+description = "Multi-capsule Braid project toolchain (U13). A project is a set of named JS-expression capsules; `braid-project build` elaborates + admits every one through the one braid-verify, fail-closed, and emits a deterministic project CID. The first step toward a `braid build` for projects of many capsules (D-TOOLCHAIN)."
+repository = "https://github.com/srinji-kaggss/Braid"
+homepage = "https://github.com/srinji-kaggss/Braid"
+license = "MIT"
+
+[lib]
+name = "braid_project"
+path = "src/lib.rs"
+
+[[bin]]
+name = "braid-project"
+path = "src/main.rs"
+
+# A consumer/toolchain crate, not trust-base. It composes the frontend
+# (braid-elaborate-js) and reads verdicts off the one verifier; it adds zero
+# authority and builds no second verifier.
+[dependencies]
+braid-ir = { workspace = true }
+braid-verify = { workspace = true }
+braid-elaborate-js = { path = "../braid-elaborate-js" }
+serde = { workspace = true }
+serde_json = "1.0.140"
