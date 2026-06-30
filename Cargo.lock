@@ -85,6 +85,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "braid-elaborate-js"
+version = "0.1.0"
+dependencies = [
+ "braid-capability",
+ "braid-ir",
+ "braid-render",
+ "braid-sdk",
+ "braid-verify",
+ "braid-vocab-js",
+]
+
+[[package]]
 name = "braid-ir"
 version = "0.1.0"
 dependencies = [

@@ -6,10 +6,10 @@ use crate::canon::{self, CanonError};
 use crate::cid::{Cid, CAPSULE_DOMAIN};
 use crate::term::RegistryError;
 use crate::value::Value;
-use braid_capability::Capability;
 use alloc::string::{String, ToString};
 use alloc::vec;
 use alloc::vec::Vec;
+use braid_capability::Capability;
 use core::str::FromStr;
 
 /// Braid IR version. Bumped on ANY change to capsule/braid/registry canonical

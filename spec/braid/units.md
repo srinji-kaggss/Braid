@@ -1,4 +1,4 @@
-# Braid — issue-ready unit plan (U0–U10)
+# Braid — issue-ready unit plan (U0–U15)
 
 **Rule**: no issue, no work — each unit becomes a GitHub issue before
 implementation, citing this file. Sequence rule: lowest unit whose blocked-by
@@ -20,6 +20,18 @@ expected wherever a check has teeth.
 | U8 Day-0 CMS reference | U6 (U7 for execution leg) | T14 |
 | U9 adversarial hacker pass | U6 (re-run after U8) | all |
 | U10 Rust SDK polish | U3 | T13 |
+| U11 JS→Braid elaborator (thin slice) | U6 U10 | T13 (closes D-ELAB.1) |
+| U12 JS vocabulary at scale | U11 | T2 T13 (closes D-VOCAB) |
+| U13 multi-capsule project + toolchain | U6 | T13 (closes D-TOOLCHAIN) |
+| U14 first live consumer collapse | U1 (cross-repo) | T15 (closes D-CONSUMER) |
+| U15 Lean⇄verifier conformance | U3 U4 U5 | T2 T11 (closes D-SEMANTICS) |
+
+> **U0–U10 = v0 (shipped).** U11–U15 are the **post-v0 frontier**: the
+> Java-ecosystem gap catalogued in `DEBT_REGISTER.md`, chunked into issue-ready
+> units. Sequencing still obeys the lowest-satisfied-blocked-by rule; D-RUN
+> (U7) stays blocked on the kernel WASM runtime and is *not* re-chunked here.
+> The discipline is **thin vertical slices** — each unit is the smallest end-to-
+> end increment that moves a debt, not a big-bang.
 
 ---
 
@@ -152,3 +164,82 @@ the CLI path so the SDK never becomes the only path (T13).
 `compile_fail` doctests for illegal compositions the type system can catch
 statically.
 **Verification**: `cargo test -p braid-sdk` + doctests.
+
+---
+
+# Post-v0 frontier (U11–U15) — closing the Java-ecosystem gap
+
+Each unit names the `DEBT_REGISTER.md` debt it moves. The bar is unchanged: no
+substrate/verifier rewrite (the v0 floor is locked), thin vertical slices,
+evidence on the issue.
+
+## U11 — JS→Braid elaborator: the first real frontend *(thin slice — LANDED this session)*
+**Closes**: the first increment of **D-ELAB**. Makes "renders JS useless" (D31)
+*operational*, not just architectural — JS *text* compiles into the verified
+substrate via the one `braid-verify`, with zero AI in the path.
+**Scope**: a `braid-elaborate-js` **consumer** crate (frontend, not trust-base;
+outside the D3 boundary the substrate crates are fenced to). A JS *expression*
+grammar — string literals, integer-number literals, the binary `+` (left-assoc,
+parenthesizable) — lexed + parsed (hand-written recursive descent, no external
+parser dep) and elaborated through `braid_sdk::Builder` over
+`braid_vocab_js::registry_v0()`: `+` → `js.concat` for two strings, `js.add` for
+two numbers. Library API (`elaborate_js`, `elaborate_and_admit`) + a
+`braid-elaborate-js` binary that prints CID + verdict + manifest (SDK/CLI parity,
+T13). **Explicitly out of scope (→ U12):** identifiers, calls, statements, the
+`js.eval`/`js.fetch` escalation probes, and literal *values* (the seed
+`js.lit.*` terms are valueless — IR/CID is a function of structure, not content).
+**AC**: a JS expression elaborates to a capsule the verifier **Admits**; a mixed
+`string + number` is **rejected at elaboration** (fail-closed, no coercion, no
+malformed capsule reaches the verifier); a pinned-CID test fixes the
+human-reconstructable-loop guarantee (same source ⇒ same CID); left-assoc and
+parenthesized grouping are structurally distinct; malformed sources fail closed.
+**Verification**: `cargo test -p braid-elaborate-js` (7 tests, all green);
+`cargo run -p braid-elaborate-js -- '"hello" + "world"'` prints ADMIT;
+`boundary_conformance.rs` still green (the consumer crate respects the boundary).
+
+## U12 — JS vocabulary at scale + literal payloads
+**Closes**: **D-VOCAB** (the 8-term seed → a usable JS subset) and the
+literal-value gap U11 deferred.
+**Scope**: grow `braid-vocab-js` past the seed — value-carrying `js.lit.*`
+(literal bytes/number in the term), comparison + boolean ops, more string ops,
+the typing for `let`/identifiers (a name-resolution pass in the elaborator). A
+written **vocabulary-extension governance note** (PRD §5 P5): how a term is
+added, versioned (D11), and KAT-pinned. The elaborator (U11) consumes the
+widened registry with no second verifier.
+**AC**: a representative JS subset (assignment + arithmetic + comparison)
+round-trips source → admit; vocab version bump is a conscious KAT re-pin;
+distinct literal *values* yield distinct CIDs (the U11 limitation is closed).
+**Verification**: `cargo test -p braid-vocab-js -p braid-elaborate-js`.
+
+## U13 — multi-capsule project model + `braid` toolchain
+**Closes**: **D-TOOLCHAIN** (no build/test model for projects of many capsules).
+**Scope**: a typed project manifest (a set of capsules + their intents/anchors),
+`braid build` (elaborate + admit every capsule, fail-closed on any reject) and
+`braid test` (a harness for capsules, distinct from tests *of* the substrate).
+No package *registry* (PRD §49 non-goal) — local project only.
+**AC**: a multi-capsule sample project builds and tests through one command;
+one rejecting capsule fails the whole build deterministically with the stage.
+**Verification**: integration test over a fixture project; CI job.
+
+## U14 — first live consumer collapse *(cross-repo coordination)*
+**Closes**: **D-CONSUMER** ("become a dependency" has zero live dependents).
+**Scope**: spec + execute the seam that deletes the browser engine's parallel
+`BraidTerm` enum onto `braid-ir`/`braid-capability`/`braid-vocab-web` (the
+`docs/BRAID_STEER.md` collapse), and live-wire the kernel's
+`braid_vocab_binding.rs` snapshot to decode `braid_vocab_cms::registry_v0()`.
+Braid ships only the substrate + the steer; the consumer owns its vocabulary.
+**AC**: one real consumer compiles against the published Braid crates with its
+parallel IR deleted; the kernel binding decodes the live registry with its
+snapshot assertions still green (the dotted names are preserved verbatim).
+**Verification**: the consumer repo's CI; the kernel binding test.
+
+## U15 — Lean⇄verifier conformance check
+**Closes**: **D-SEMANTICS** (the 8 verifier stages are not machine-checked
+against the Lean predicates D22 names as the proof oracle).
+**Scope**: a conformance harness mapping each `braid-verify` stage to its Lean
+predicate (`excellent_not_hallucinated` skeleton), failing CI if a stage's
+admit/reject behavior diverges from the proven rule. Part of the `U-SA` Tier-2
+agenda; no new runtime, no AI in the verdict path (D32).
+**AC**: every stage has a named Lean predicate it conforms to; a seeded stage
+regression (mutation) trips the conformance gate red.
+**Verification**: the conformance job; mutation evidence.

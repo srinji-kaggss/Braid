@@ -38,6 +38,7 @@ for exactly what changed in the move.
 | `crates/braid-render` | CID-bound manifest, deterministic text rendering, widening/narrowing diff, DOT graph export. |
 | `crates/braid-sdk` | Typed authoring builder over `braid-ir`; takes any vocabulary's registry. |
 | `crates/braid-cli` | The `braid` binary: `encode`/`decode`/`verify`/`render`/`diff` — the human-reconstructable loop (no AI, no Rust). Pins the `braid-vocab-cms` registry for the CMS reference workflow. |
+| `crates/braid-elaborate-js` | **Frontend** (U11): lexes/parses a JS expression subset (literals + `+`) and elaborates JS *text* into an admitted capsule via the one `braid-verify`. The first real frontend over the global IR — "renders JS useless" made operational (D31). |
 | `spec/braid/` | PRD, decision register (`DECISIONS.md`), threat model, unit plan, KAT vectors. **Start here: `spec/braid/README.md`.** |
 | `docs/` | ADR-088 (ratified doctrine + locked invariants); `authoring-cli.md` (hand-author a capsule). |
 
@@ -45,7 +46,7 @@ for exactly what changed in the move.
 
 ```bash
 cargo check --workspace
-cargo test --workspace      # 103 tests
+cargo test --workspace      # 117 tests
 cargo clippy --workspace --all-targets
 ./scripts/cli-loop.sh       # scenario #12 end-to-end (also a CI job)
 ```

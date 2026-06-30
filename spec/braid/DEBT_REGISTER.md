@@ -17,6 +17,11 @@
   capabilities, `TypeTag::Opaque`, 2 vocabularies (CMS + JS proof-of-concept).
 - ✅ **Publishability** — `braid-v0.1` git tag cut; `braid-capability`
   crates.io-ready; the rest `cargo add --git`.
+- ✅ **Tier-2 safety-assurance CI** (U-SA, D32) — `braid.profile.json` binds
+  Keel's 20 atoms (gate `NotSlop`); `keel/` vendored; the gate runs in CI.
+- ✅ **First real language frontend** (U11, D31) — `braid-elaborate-js`
+  compiles a JS expression subset (literals + `+`) into admitted capsules via
+  the one verifier; "renders JS useless" is operational for that subset.
 
 ## Open debts (the Java-ecosystem gap)
 
@@ -27,13 +32,18 @@ with no V. A Java-ecosystem substrate without execution is a spec, not a
 product.
 **Closes**: U7 (blocked); PRD §1 "self-sufficient runtime ecosystem."
 
-### D-ELAB — No real language frontend / elaborator
-No JS→Braid parser exists. No Java→Braid. No surface syntax (D6-gated). The
-"renders JS useless" claim is *architectural* (the IR shape can accept any
-language — D31), not *operational* (no tool actually compiles a language to it).
-A Java ecosystem needs a `javac`.
-**Closes**: a real JS→Braid elaborator (proposed next unit); D6-gated surface
-syntax for the human authoring direction.
+### D-ELAB — No real language frontend / elaborator *(first slice LANDED — U11)*
+🟡 **Partially closed.** `braid-elaborate-js` (U11) is the first real frontend:
+it lexes/parses a JS *expression* subset (string/number literals + `+`,
+parenthesizable) and **compiles JS text into an admitted capsule** via the one
+`braid-verify` — the "renders JS useless" claim (D31) is now *operational* for
+that subset, not just architectural. Remaining gap: it is an *expression* slice
+(no identifiers/statements/calls; valueless `js.lit.*`), there is no Java→Braid,
+and no D6-gated surface syntax for the human authoring direction. A Java
+ecosystem still needs a full `javac`-class frontend.
+**Closes**: U11 (the expression slice — done); U12 (JS at scale + literal
+payloads); D6-gated surface syntax (later); eventually a real multi-language
+frontend.
 
 ### D-CONSUMER — Zero real consumers
 The browser engine has a parallel `BraidTerm` enum (steer note delivered at
@@ -54,11 +64,14 @@ build tool for multi-capsule projects, no docs generator, no `braid test`
 harness for capsules (vs. tests *of* the substrate).
 **Closes**: PRD §5 P4+.
 
-### D-SA — No Tier-2 safety-assurance floor (the spec this session produced)
-Braid's CI is Tier-1 only (fmt/clippy/test). The "stop slop" semantic floor
-(Keel + Excellent Code Framework) is *specified* (`SAFETY_ASSURANCE_CI_SPEC.md`)
-but not built. Without it, a PR can compile, pass tests, and still be slop.
-**Closes**: `U-SA` (the unit filed from the spec).
+### D-SA — Tier-2 safety-assurance floor *(BUILT — U-SA landed)*
+✅ **Closed.** The "stop slop" semantic floor is no longer just a spec: `U-SA`
+landed (commit `6f74c82` + the Keel-vendoring `ae83171`). `braid.profile.json`
+binds Keel's 20 evidence atoms to Braid's Tier-1 tools (gate concept `NotSlop`),
+`keel/` is vendored (schema + engine), and `.github/workflows/ci.yml` runs the
+Keel gate in CI. The design rationale stays in `SAFETY_ASSURANCE_CI_SPEC.md`.
+**Remaining**: the Lean⇄verifier conformance check (tracked separately as
+D-SEMANTICS / U15), not the Keel wiring itself.
 
 ### D-SEMANTICS — The verifier's stage semantics are not machine-checked against the Lean predicates
 D22 says Lean is the unforked proof oracle; the Rust verifier implements
