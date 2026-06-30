@@ -197,19 +197,39 @@ parenthesized grouping are structurally distinct; malformed sources fail closed.
 `cargo run -p braid-elaborate-js -- '"hello" + "world"'` prints ADMIT;
 `boundary_conformance.rs` still green (the consumer crate respects the boundary).
 
-## U12 — JS vocabulary at scale + literal payloads
-**Closes**: **D-VOCAB** (the 8-term seed → a usable JS subset) and the
-literal-value gap U11 deferred.
-**Scope**: grow `braid-vocab-js` past the seed — value-carrying `js.lit.*`
-(literal bytes/number in the term), comparison + boolean ops, more string ops,
-the typing for `let`/identifiers (a name-resolution pass in the elaborator). A
-written **vocabulary-extension governance note** (PRD §5 P5): how a term is
-added, versioned (D11), and KAT-pinned. The elaborator (U11) consumes the
-widened registry with no second verifier.
-**AC**: a representative JS subset (assignment + arithmetic + comparison)
-round-trips source → admit; vocab version bump is a conscious KAT re-pin;
-distinct literal *values* yield distinct CIDs (the U11 limitation is closed).
+## U12 — JS vocabulary expansion (pure operators) *(LANDED this session)*
+**Closes**: the first increment of **D-VOCAB** (8-term seed → a usable
+expression language).
+**Scope (revised — see the note below on literal payloads)**: grow
+`braid-vocab-js` v1→**v2** with eight new **pure** terms — `js.sub`, `js.mul`,
+`js.lt`, `js.eq.num`, `js.eq.str`, `js.and`, `js.or`, `js.not` — and extend the
+`braid-elaborate-js` frontend to a full operator-precedence expression language
+(`+ - * < == && || !`, boolean literals, parentheses; left-assoc; type-directed
+overload resolution to distinct typed terms). A **vocabulary-extension
+governance note** (module doc in `braid-vocab-js`): bump-and-re-pin, pure-by-
+default, repurpose > extend > mint.
+**Hardening (the three dredging classes, mutation-proven)**:
+- *Composition/aggregation exfil (T1/T5)*: `dangerous_terms()` + the
+  `expansion_added_no_escape_hatch` guard pin the authority surface to exactly
+  `{js.dom.querySelector, js.eval, js.fetch}` — a capability cannot ride in on a
+  "math" term; and `no_composition_yields_authority` proves no expression, however
+  composed, yields a capsule with grants. The probes stay *unspellable* from text.
+- *Context/spec drift*: vocab version bumped to 2; the registry CID and the
+  frontend capsule CIDs re-pinned in the same change (no silent CID move).
+- *Test-hollowing/Goodhart (T14/T7)*: every operator test asserts real strand
+  structure + wiring + an ADMIT verdict, and a per-operator type-mismatch reject.
+**AC**: the expression language round-trips source → admit; the three guards are
+green and trip under mutation. **Out of scope, deferred honestly**: literal
+*values* and identifiers/`let` (see note).
 **Verification**: `cargo test -p braid-vocab-js -p braid-elaborate-js`.
+
+> **Literal payloads are a substrate unit, not a vocabulary one.** `Strand` is
+> `{ term, inputs }` — it carries no operand/constant, so `js.lit.string`
+> records *that* a string literal occurs, not its bytes (the CMS `lit.text` is
+> the same). Carrying values needs a `braid-ir` change (Strand + canonical
+> encoding + verifier + render + a KAT re-pin) — locked-substrate work that does
+> not belong in a vocabulary expansion. Filed as its own future unit; **not**
+> silently folded into U12.
 
 ## U13 — multi-capsule project model + `braid` toolchain
 **Closes**: **D-TOOLCHAIN** (no build/test model for projects of many capsules).

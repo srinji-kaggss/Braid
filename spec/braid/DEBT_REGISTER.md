@@ -22,6 +22,9 @@
 - ✅ **First real language frontend** (U11, D31) — `braid-elaborate-js`
   compiles a JS expression subset (literals + `+`) into admitted capsules via
   the one verifier; "renders JS useless" is operational for that subset.
+- ✅ **JS expression language + vocab v2** (U12, D-VOCAB.1) — operator-
+  precedence frontend (`+ - * < == && || !`, booleans) over 16 pure JS terms,
+  with a mutation-proven anti-escape-hatch guard and re-pinned CIDs.
 
 ## Open debts (the Java-ecosystem gap)
 
@@ -52,11 +55,18 @@ pinned snapshot (`braid_vocab_binding.rs`) not live-wired. "Become a
 dependency" is now *possible* (tag cut) but has *zero actual dependents*.
 **Closes**: the browser collapse; the kernel binding live-wire (#565).
 
-### D-VOCAB — Vocabulary libraries are seeds, not a stdlib
-2 vocabs: `braid-vocab-cms` (12 terms, demo), `braid-vocab-js` (8 terms,
-proof-of-concept). Java's stdlib is thousands of packages. No package registry
-(D-non-goal, PRD §49). No governance flow for vocabulary extension (PRD §5 P5).
-**Closes**: a real JS vocabulary at scale; a vocabulary governance flow.
+### D-VOCAB — Vocabulary libraries are seeds, not a stdlib *(first slice LANDED — U12)*
+🟡 **Partially closed.** `braid-vocab-js` grew v1→**v2** (8→16 terms: the
+pure-operator expansion — arithmetic, comparison, boolean logic) and now backs a
+real operator-precedence expression language in `braid-elaborate-js`. A
+**vocabulary-extension governance flow** exists (module doc + the
+`expansion_added_no_escape_hatch` / pinned-CID guards mechanically enforcing
+bump-and-re-pin + pure-by-default). Remaining: still far from a stdlib (no
+statements/identifiers, no string library, no `cms`-scale breadth); no package
+registry (PRD §49 non-goal); **literal payloads remain deferred to a substrate
+unit** (Strand carries no operand — D8-locked work, not a vocab change).
+**Closes**: U12 (expansion + governance — done); a stdlib-scale JS vocabulary
+(later); the substrate-level literal-payload unit.
 
 ### D-TOOLCHAIN — Partial toolchain
 `braid-cli` (encode/decode/verify/render/diff) exists. No package manager, no

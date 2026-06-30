@@ -19,13 +19,39 @@
 //! foreign to the kernel's `signal.emit`/`motion.*` and to the browser's
 //! `web.*`. That is the point: a global IR lets each language own its
 //! capability space while sharing the one attenuation-checking verifier.
+//!
+//! ## Vocabulary-extension governance (U12 / PRD §5 P5)
+//! Adding a term is a contract change. The rules, mechanically guarded by the
+//! tests in this file:
+//! 1. **Bump [`VOCAB_VERSION`] and re-pin consciously.** Any change to the term
+//!    set changes `registry_v0().cid()` and every capsule's bytes. The version
+//!    bump + the re-pinned CID guards (here and in `braid-elaborate-js`) make
+//!    that a recorded event, never silent drift (D11; anti-dredging class
+//!    "context/spec drift").
+//! 2. **Pure-by-default; danger is explicit and enumerated.** A new term is
+//!    `EffectClass::Pure` with no capability UNLESS it genuinely needs one.
+//!    `dangerous_terms()` is the *closed* list of effectful terms; the
+//!    `expansion_added_no_escape_hatch` test fails if an expansion grows that
+//!    set without updating the list — so a capability cannot be smuggled in on
+//!    a "math" term (anti-dredging class "composition/aggregation exfil",
+//!    T1/T5).
+//! 3. **Prefer repurpose > extend > mint** (lgwks schema discipline): overloads
+//!    map to distinct typed terms (`js.eq.num`/`js.eq.str`), never one term with
+//!    a widened, ambiguous signature.
 
 use braid_capability::Capability;
 use braid_ir::term::{EffectClass, Exposure, TermRegistry, TermSpec, TypeTag};
 
 /// Vocabulary version for the JS elaboration target. Independent of the CMS
 /// vocab's version — each vocabulary versioning is a conscious event (D11).
-pub const VOCAB_VERSION: u32 = 1;
+///
+/// **v1 → v2 (U12):** added the pure-operator expansion (`js.sub`, `js.mul`,
+/// `js.lt`, `js.eq.num`, `js.eq.str`, `js.and`, `js.or`, `js.not`). A
+/// conscious, recorded bump: it changes `registry_v0().cid()` and therefore
+/// every JS capsule's bytes, so the pinned CIDs in `braid-elaborate-js` and the
+/// registry-CID guard below were re-pinned in the same change (anti-drift: a
+/// CID never moves silently).
+pub const VOCAB_VERSION: u32 = 2;
 
 // ── capability constants (this vocabulary's `js.*` space) ──
 pub const JS_DOM_READ_NAME: &str = "js.dom.read";
@@ -149,6 +175,89 @@ pub fn registry_v0() -> TermRegistry {
             None,
             1,
         ),
+        // ── U12 expansion: more pure arithmetic (fixed-point; no floats — D8) ──
+        t(
+            "js.sub",
+            vec![js_number(), js_number()],
+            js_number(),
+            None,
+            Pure,
+            Public,
+            None,
+            1,
+        ),
+        t(
+            "js.mul",
+            vec![js_number(), js_number()],
+            js_number(),
+            None,
+            Pure,
+            Public,
+            None,
+            1,
+        ),
+        // ── U12 expansion: comparison / equality → boolean (typed overloads) ──
+        t(
+            "js.lt",
+            vec![js_number(), js_number()],
+            js_boolean(),
+            None,
+            Pure,
+            Public,
+            None,
+            1,
+        ),
+        t(
+            "js.eq.num",
+            vec![js_number(), js_number()],
+            js_boolean(),
+            None,
+            Pure,
+            Public,
+            None,
+            1,
+        ),
+        t(
+            "js.eq.str",
+            vec![js_string(), js_string()],
+            js_boolean(),
+            None,
+            Pure,
+            Public,
+            None,
+            1,
+        ),
+        // ── U12 expansion: boolean logic ──
+        t(
+            "js.and",
+            vec![js_boolean(), js_boolean()],
+            js_boolean(),
+            None,
+            Pure,
+            Public,
+            None,
+            1,
+        ),
+        t(
+            "js.or",
+            vec![js_boolean(), js_boolean()],
+            js_boolean(),
+            None,
+            Pure,
+            Public,
+            None,
+            1,
+        ),
+        t(
+            "js.not",
+            vec![js_boolean()],
+            js_boolean(),
+            None,
+            Pure,
+            Public,
+            None,
+            1,
+        ),
         // ── DOM reads (gated, read-only) ──
         t(
             "js.dom.querySelector",
@@ -197,6 +306,22 @@ pub fn registry_v0() -> TermRegistry {
     reg
 }
 
+/// The terms in a registry that carry authority — a capability and/or a
+/// non-`Pure` effect. Computed from the registry, never hardcoded, so it
+/// reflects the actual term set. The governance guard pins the *expected*
+/// result against a closed list: an expansion that smuggles a capability onto
+/// a "math" term, or adds a new effectful term, changes this set and trips the
+/// test (anti-dredging — composition/aggregation exfil, T1/T5).
+pub fn dangerous_terms(reg: &TermRegistry) -> Vec<String> {
+    let mut out: Vec<String> = reg
+        .terms()
+        .filter(|s| s.capability.is_some() || s.effect != EffectClass::Pure)
+        .map(|s| s.id.clone())
+        .collect();
+    out.sort();
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -204,6 +329,11 @@ mod tests {
     use braid_ir::capsule::{Capsule, ConfirmPolicy, IR_VERSION};
     use braid_sdk::Builder;
     use braid_verify::{verify, Stage, Verdict};
+
+    /// Pinned CID of `registry_v0()` at `VOCAB_VERSION = 2`. Re-pinned
+    /// consciously whenever the term set changes (see the governance note).
+    const PINNED_REGISTRY_CID_V2: &str =
+        "a79e1716ce1c3a05645b9c32cabf7895b93c05f57e0b77a18174c360b8233815";
 
     fn strand(term: &str, inputs: Vec<u32>) -> Strand {
         Strand {
@@ -215,12 +345,78 @@ mod tests {
     #[test]
     fn registry_v0_builds() {
         let r = registry_v0();
-        assert_eq!(r.len(), 8);
+        // 8 seed terms + 8 U12 pure-operator terms.
+        assert_eq!(r.len(), 16);
         assert!(r.get("js.eval").is_some());
         assert!(r.get("js.lit.string").is_some());
+        // The U12 expansion is present and typed.
+        for added in [
+            "js.sub",
+            "js.mul",
+            "js.lt",
+            "js.eq.num",
+            "js.eq.str",
+            "js.and",
+            "js.or",
+            "js.not",
+        ] {
+            assert!(r.get(added).is_some(), "missing U12 term {added}");
+        }
         // A term foreign to this vocabulary is absent — the registry is closed.
         assert!(r.get("cms.publish").is_none());
         assert!(r.get("eval").is_none());
+    }
+
+    /// Anti-dredging (composition/aggregation exfil — T1/T5): the U12 expansion
+    /// added ONLY safe-by-construction terms. The set of authority-bearing
+    /// terms is exactly the closed list it was before — no capability was
+    /// smuggled onto a "math"/"logic" term, no new effectful term appeared.
+    /// Mutation-proof: give `js.add` a capability, or make `js.mul` `Egress`,
+    /// and this goes red.
+    #[test]
+    fn expansion_added_no_escape_hatch() {
+        let r = registry_v0();
+        assert_eq!(
+            dangerous_terms(&r),
+            // the ONLY terms allowed to carry authority — sorted
+            vec![
+                "js.dom.querySelector".to_string(),
+                "js.eval".to_string(),
+                "js.fetch".to_string(),
+            ],
+            "an expansion changed the authority surface — that must be a \
+             conscious, reviewed event, not a silent escape hatch"
+        );
+        // Every U12 term is pure and capability-free, individually.
+        for id in [
+            "js.sub",
+            "js.mul",
+            "js.lt",
+            "js.eq.num",
+            "js.eq.str",
+            "js.and",
+            "js.or",
+            "js.not",
+        ] {
+            let s = r.get(id).unwrap();
+            assert_eq!(s.effect, EffectClass::Pure, "{id} must be Pure");
+            assert!(s.capability.is_none(), "{id} must hold no capability");
+        }
+    }
+
+    /// Anti-dredging (context/spec drift): the JS registry CID is pinned. It
+    /// moves only on a conscious vocabulary change — which MUST be paired with
+    /// a `VOCAB_VERSION` bump and this re-pin in the same commit (D11). A silent
+    /// term-set change trips this guard.
+    #[test]
+    fn registry_cid_is_pinned_to_vocab_v2() {
+        let r = registry_v0();
+        assert_eq!(r.vocab_version, 2);
+        assert_eq!(
+            r.cid().to_hex(),
+            PINNED_REGISTRY_CID_V2,
+            "the JS registry CID moved without a recorded re-pin"
+        );
     }
 
     #[test]
