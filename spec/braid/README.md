@@ -53,8 +53,9 @@ surface; Braid adds zero authority.
   `crates/braid-verify` (U3–U5 #560 — independent decoder + the full
   fail-closed stage pipeline incl. path-level taint), `crates/braid-render`
   (U2 #559 — CID-bound manifest, widening diff, DOT export). All acceptance
-  scenarios implemented as tests; mutation evidence on the issues. Pending:
-  Director review of D5/D16 interpretations, U9 hacker pass, merge.
+  scenarios implemented as tests; mutation evidence on the issues. **Merged to
+  `main`; U9 hacker pass landed.** (D5/D16/D31 remain INTERPRETED pending
+  Director veto — see `DEBT_REGISTER.md` D-CONFIRM.)
 - U6 `braid-cli` + CI widening gate **landed** (#2, 2026-06-14):
   `encode|decode|verify|render|diff`; `encode` reads JSON-of-IR (D19) through
   the SDK so the CLI path reproduces the pinned reference CIDs; scenario #12
@@ -69,8 +70,26 @@ surface; Braid adds zero authority.
   fail-closed escalation probe. The **execution leg** (run on kernel WASM +
   on-tape fact journal) is deferred behind the U7 seam — see the bundle README
   and the U7 follow-up issue (#6).
-- Not yet built: U7 WASM codegen + U8 execution leg (kernel-runtime-blocked),
-  U9 adversarial pass.
+- **U9 adversarial pass landed** — 4 findings closed (T3, T4, T12, R3); verdict
+  at `U9-VERDICT.md`. **D31 global-IR refactor landed** — substrate/vocabulary
+  split, string-tagged capabilities, `TypeTag::Opaque`; vocabularies CMS + JS +
+  web. **U-SA Keel safety-assurance CI landed** — `braid.profile.json` binds
+  Keel's 20 atoms (gate `NotSlop`); the gate runs in CI and is deterministic
+  (serialized — `scripts/keel-floor.sh`). **v0 (U0–U10) is complete.**
+- **Post-v0 frontier (this session, all merged to `main`):**
+  - **U11** — `braid-elaborate-js`, the first real language frontend: JS *text*
+    compiles into an admitted capsule via the one verifier ("renders JS useless"
+    made operational, D31).
+  - **U12** — JS vocabulary v1→v2 (8→16 pure terms) + an operator-precedence
+    expression language (`+ - * < == && || !`, booleans, parens).
+  - **U13** — `braid-project`, the first multi-capsule build: manifest →
+    elaborate + admit all (fail-closed) → deterministic project CID.
+  - All three carry **mutation-proven anti-dredging guards** (no
+    composition/aggregation exfil, no silent CID drift, no test-hollowing).
+    See `units.md` U11–U15 and `DEBT_REGISTER.md`.
+- Not yet built: **U7** WASM codegen + the U8 execution leg (kernel-runtime-
+  blocked); **U14** first live consumer collapse (cross-repo); **U15**
+  Lean⇄verifier conformance.
 - Work tracker: GitHub Issues (authoritative). No issue, no work.
 - This workstream is parallel to — never ahead of — the A-series
   trust-boundary queue (`docs/logic-os-build-state.md`).

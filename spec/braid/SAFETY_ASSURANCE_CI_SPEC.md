@@ -1,7 +1,10 @@
 # Braid Safety-Assurance CI — Specification (D32)
 
-> **Status**: SPEC — not yet built. This is the design document; implementation
-> is a unit (`U-SA`) to be filed from this spec.
+> **Status**: **BUILT (U-SA landed).** This remains the design rationale; the
+> implementation is live — `braid.profile.json` binds Keel's atoms (gate
+> `NotSlop`), `keel/` is vendored, and `.github/workflows/ci.yml` runs the gate
+> (serialized for determinism via `scripts/keel-floor.sh`). The remaining
+> open item is the Lean⇄verifier conformance check (tracked as U15/D-SEMANTICS).
 > **Authority**: Director session 2026-06-23 ("adopt a CI framework that meets
 > the strictest standards semantically similar to IEC61508 and ISO26262 and
 > DO-178… designed like an ISO standard with the end goal: stop slop").
@@ -102,7 +105,7 @@ runs.
 | `idempotence` | `braid-ir::canon::encode` is a pure function (same `Value` ⇒ same bytes); `Capsule::cid()` deterministic | boolean | sim |
 | `concurrency_correctness` | N/A in v0 (no shared mutable state; the IR is immutable) — atom evaluates `unknown` with a documented justification, not `true` | boolean | sim |
 | `observability` | `braid-cli` exit codes (0/1/2 — the CI gate's one bit); `braid-render` manifest (the human-review object); `spec/braid/U9-VERDICT.md` (per-threat evidence) | graded | commit |
-| `testability_falsifiability` | `cargo test` (103 tests, mutation-verified where teeth exist — U9 `mutation ×2`); KAT vectors (pinned CIDs — a drift is RED, not "update and move on"); the CLI loop asserts exit codes | boolean | commit |
+| `testability_falsifiability` | `cargo test --workspace` (135 tests, mutation-verified where teeth exist — U9 `mutation ×2`, and the U12/U13 anti-dredging guards); KAT vectors + pinned CIDs (a drift is RED, not "update and move on"); the CLI loop asserts exit codes | boolean | commit |
 | `change_locality` | D31 substrate/vocabulary split (a vocab change is local to the vocab crate); `braid-ir` stable IR_VERSION pin (D11) | graded | commit |
 
 ### 4.2 The concepts Braid adopts
