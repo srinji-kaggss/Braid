@@ -166,22 +166,44 @@ impl ChangeEnvelope {
         Ok(hex::encode(hasher.finalize()))
     }
 
-    pub fn validate_commitment(&self, commitment: &DesignCommitment) -> Result<(), GovernanceError> {
+    pub fn validate_commitment(
+        &self,
+        commitment: &DesignCommitment,
+    ) -> Result<(), GovernanceError> {
         if commitment.change_id != self.change_id {
             return Err(GovernanceError::InvalidCommitment("change_id"));
         }
-        require_subset("requirements", &commitment.requirement_refs, &self.requirement_refs)
-            .map_err(|_| GovernanceError::InvalidCommitment("requirements"))?;
-        require_subset("invariants", &commitment.invariant_refs, &self.invariant_refs)
-            .map_err(|_| GovernanceError::InvalidCommitment("invariants"))?;
+        require_subset(
+            "requirements",
+            &commitment.requirement_refs,
+            &self.requirement_refs,
+        )
+        .map_err(|_| GovernanceError::InvalidCommitment("requirements"))?;
+        require_subset(
+            "invariants",
+            &commitment.invariant_refs,
+            &self.invariant_refs,
+        )
+        .map_err(|_| GovernanceError::InvalidCommitment("invariants"))?;
         require_subset("paths", &commitment.intended_paths, &self.allowed_paths)
             .map_err(|_| GovernanceError::InvalidCommitment("paths"))?;
-        require_subset("symbols", &commitment.intended_symbols, &self.allowed_symbols)
-            .map_err(|_| GovernanceError::InvalidCommitment("symbols"))?;
-        require_subset("effects", &commitment.intended_effects, &self.allowed_effects)
-            .map_err(|_| GovernanceError::InvalidCommitment("effects"))?;
+        require_subset(
+            "symbols",
+            &commitment.intended_symbols,
+            &self.allowed_symbols,
+        )
+        .map_err(|_| GovernanceError::InvalidCommitment("symbols"))?;
+        require_subset(
+            "effects",
+            &commitment.intended_effects,
+            &self.allowed_effects,
+        )
+        .map_err(|_| GovernanceError::InvalidCommitment("effects"))?;
 
-        if !commitment.evidence_plan.is_superset(&self.required_evidence) {
+        if !commitment
+            .evidence_plan
+            .is_superset(&self.required_evidence)
+        {
             return Err(GovernanceError::InvalidCommitment("evidence plan"));
         }
         if self.foundation_tier >= FoundationTier::T3TrustBoundary
@@ -256,7 +278,9 @@ impl GovernanceSession {
                     )));
                 }
                 if !envelope.allowed_paths.contains(path) {
-                    return Err(GovernanceError::Denied(format!("path not admitted: {path}")));
+                    return Err(GovernanceError::Denied(format!(
+                        "path not admitted: {path}"
+                    )));
                 }
                 self.usage.distinct_written_paths.insert(path.to_string());
                 if self.usage.distinct_written_paths.len() as u32
@@ -293,8 +317,7 @@ impl GovernanceSession {
                     )));
                 }
                 self.usage.added_dependencies.insert(name.to_string());
-                if self.usage.added_dependencies.len() as u32
-                    > envelope.budget.max_new_dependencies
+                if self.usage.added_dependencies.len() as u32 > envelope.budget.max_new_dependencies
                 {
                     return Err(GovernanceError::BudgetExceeded("max_new_dependencies"));
                 }
@@ -319,12 +342,8 @@ impl GovernanceSession {
                 if effectful {
                     self.usage.effectful_tool_calls =
                         self.usage.effectful_tool_calls.saturating_add(1);
-                    if self.usage.effectful_tool_calls
-                        > envelope.budget.max_effectful_tool_calls
-                    {
-                        return Err(GovernanceError::BudgetExceeded(
-                            "max_effectful_tool_calls",
-                        ));
+                    if self.usage.effectful_tool_calls > envelope.budget.max_effectful_tool_calls {
+                        return Err(GovernanceError::BudgetExceeded("max_effectful_tool_calls"));
                     }
                 }
                 if envelope.forbidden_operations.contains(name) {
@@ -422,7 +441,10 @@ mod tests {
     fn signature_detects_changed_governance() {
         let mut signed = signed_envelope();
         assert!(signed.verify().is_ok());
-        signed.envelope.allowed_effects.insert("network.egress".into());
+        signed
+            .envelope
+            .allowed_effects
+            .insert("network.egress".into());
         assert_eq!(signed.verify(), Err(GovernanceError::InvalidSignature));
     }
 
@@ -493,9 +515,7 @@ mod tests {
                 name: "write",
                 effectful: true,
             }),
-            Err(GovernanceError::BudgetExceeded(
-                "max_effectful_tool_calls"
-            ))
+            Err(GovernanceError::BudgetExceeded("max_effectful_tool_calls"))
         );
     }
 }
