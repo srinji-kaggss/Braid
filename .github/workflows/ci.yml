@@ -57,9 +57,16 @@ jobs:
           node-version: 22
       - name: Tier-1 evidence (cargo test + clippy)
         run: cargo test --workspace
+      - name: Clone keel at pinned commit (for keel-floor.sh)
+        run: |
+          git clone git@github.com-keel-ci-readonly:srinji-kaggss/keel.git --no-checkout "$RUNNER_TEMP/keel-src"
+          cd "$RUNNER_TEMP/keel-src" && git checkout 28df45ca9927a0324ff5a6fc21897996093dfde2
+          mkdir -p "$RUNNER_TEMP/keel-ci"
+          cp -r "$RUNNER_TEMP/keel-src/schema" "$RUNNER_TEMP/keel-ci/schema"
+          cp -r "$RUNNER_TEMP/keel-src/graveyard/src_js_legacy" "$RUNNER_TEMP/keel-ci/src"
       - name: Keel semantic floor
         env:
-          KEEL_ROOT: ./keel
+          KEEL_ROOT: ${{ runner.temp }}/keel-ci
         run: ./scripts/keel-floor.sh
       - uses: actions/upload-artifact@v4
         if: always()
