@@ -31,11 +31,8 @@ fn rfc_json_to_braid(v: &serde_json::Value) -> Option<Value> {
         J::Bool(b) => Value::Bool(*b),
         J::Number(n) => {
             // RFC ints are within i64; floats are out of Braid's universe.
-            if let Some(i) = n.as_i64() {
-                Value::Int(i)
-            } else {
-                return None; // float or out-of-range — outside Braid's subset
-            }
+            let i = n.as_i64()?; // float or out-of-range — outside Braid's subset
+            Value::Int(i)
         }
         J::String(s) => Value::Text(s.clone()),
         J::Array(items) => {
