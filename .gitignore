@@ -3,3 +3,6 @@
 Cargo.lock.orig
 .DS_Store
 .keel/
+
+# CodeGraph generated index — never track
+.codegraph/
