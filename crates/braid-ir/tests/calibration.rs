@@ -106,6 +106,111 @@ fn canonical_encoder_matches_rfc8949_deterministic_vectors() {
     );
 }
 
+/// RFC 8949 §4.2.1 deterministic map ordering: length-first, then bytewise.
+///
+/// Braid's `key_cmp` orders map keys by (len, bytes), NOT plain bytewise.
+/// This is the critical distinction from BTreeMap's ordering ("z" < "aa" in
+/// canonical, but "aa" < "z" in BTreeMap). The existing RFC vectors all use
+/// single-char keys where the two orderings agree. These vectors exercise the
+/// multi-length-key case where a length-first bug would produce different bytes.
+///
+/// Flight hour #3 (calibration/FLIGHT_HOURS.md queue item #1).
+#[test]
+fn map_ordering_matches_rfc8949_length_first_deterministic() {
+    // Map with keys of different lengths: BTreeMap would order "a","aa","z"
+    // (bytewise) but RFC 8949 deterministic orders "a","z","aa" (length-first).
+    let mut btm = BTreeMap::new();
+    btm.insert("z".to_string(), Value::Int(1));
+    btm.insert("aa".to_string(), Value::Int(2));
+    btm.insert("a".to_string(), Value::Int(3));
+    let v = Value::Map(btm);
+
+    // Expected RFC 8949 deterministic bytes: keys sorted length-first.
+    // a3 = map(3)
+    // 61 61 03 = key "a" (len 1), value 3
+    // 61 7a 01 = key "z" (len 1), value 1
+    // 62 6161 02 = key "aa" (len 2), value 2
+    let expected: Vec<u8> = vec![
+        0xa3, 0x61, b'a', 0x03, //
+        0x61, b'z', 0x01, //
+        0x62, b'a', b'a', 0x02,
+    ];
+    let produced = encode(&v);
+    assert_eq!(
+        produced, expected,
+        "encoder did not produce RFC 8949 length-first order"
+    );
+
+    // The wrong order (bytewise: "a","aa","z") must be REJECTED by the
+    // strict decoder — it is non-canonical.
+    let wrong: Vec<u8> = vec![
+        0xa3, 0x61, b'a', 0x03, //
+        0x62, b'a', b'a', 0x02, //
+        0x61, b'z', 0x01,
+    ];
+    assert!(
+        decode_strict(&wrong).is_err(),
+        "decoder accepted bytewise (non-length-first) key order — T3 malleability"
+    );
+
+    // Round-trip: decoder accepts the canonical bytes and re-encodes identical.
+    let decoded = decode_strict(&expected).expect("canonical bytes decode");
+    assert_eq!(encode(&decoded), expected, "round-trip not identity");
+}
+
+/// Nested multi-key map: the length-first ordering applies at every depth,
+/// not just the top level. A key-order difference in a sub-map is a different
+/// CID and a bijection-guard reject.
+#[test]
+fn nested_map_ordering_matches_rfc8949_length_first() {
+    // Outer map has two keys of different lengths; the longer one holds a
+    // sub-map whose keys also differ in length.
+    let mut inner = BTreeMap::new();
+    inner.insert("ccc".to_string(), Value::Int(9));
+    inner.insert("a".to_string(), Value::Int(7));
+
+    let mut outer = BTreeMap::new();
+    outer.insert("data".to_string(), Value::Map(inner));
+    outer.insert("x".to_string(), Value::Bool(true));
+
+    let v = Value::Map(outer);
+    let produced = encode(&v);
+
+    // Verify the structure: "x" (len 1) before "data" (len 4); inside "data",
+    // "a" (len 1) before "ccc" (len 3).
+    // a2 = map(2)
+    // 61 78 f5 = key "x", value true
+    // 64 64617461 = key "data" (len 4)
+    //   a2 = sub-map(2)
+    //   61 61 07 = key "a", value 7
+    //   63 636363 09 = key "ccc", value 9
+    let expected: Vec<u8> = vec![
+        0xa2, //
+        0x61, b'x', 0xf5, //
+        0x64, b'd', b'a', b't', b'a', //
+        0xa2, //
+        0x61, b'a', 0x07, //
+        0x63, b'c', b'c', b'c', 0x09,
+    ];
+    assert_eq!(
+        produced, expected,
+        "nested map ordering not RFC 8949 length-first at every level"
+    );
+
+    // Swap inner keys to bytewise order ("a" < "ccc" is correct by length too,
+    // so test the outer where "data" < "x" is WRONG — bytewise would put
+    // "data" before "x").
+    let wrong: Vec<u8> = vec![
+        0xa2, //
+        0x64, b'd', b'a', b't', b'a', 0xa2, 0x61, b'a', 0x07, 0x63, b'c', b'c', b'c', 0x09, //
+        0x61, b'x', 0xf5,
+    ];
+    assert!(
+        decode_strict(&wrong).is_err(),
+        "decoder accepted bytewise outer-key order for nested map"
+    );
+}
+
 /// Braid's CID is BLAKE3(domain ‖ len(payload) ‖ payload). The BLAKE3 KAT
 /// pins the hash of a 0-byte input to a known value; we verify Braid's hash
 /// matches the BLAKE3-team vector under a fixed domain, so a drift in blake3

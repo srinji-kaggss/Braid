@@ -33,6 +33,8 @@ Braid — consumed verbatim from the standard.
 |------|-----|---------|---------|----------|
 | 2026-06-23 | RFC 8949 deterministic CBOR — Braid encoder byte-match | 31 vectors | ✅ PASS — all 31 byte-identical; 4 skipped (nested floats/bytes outside Braid's universe) | `crates/braid-ir/tests/calibration.rs::canonical_encoder_matches_rfc8949_deterministic_vectors` |
 | 2026-06-23 | BLAKE3 KAT input_len=0 — blake3 crate matches reference | 1 vector | ✅ PASS — `af1349b9f5f9a1a6a0404dea36dcc949` | `crates/braid-ir/tests/calibration.rs::blake3_cid_matches_blake3_team_kat_zero_input` |
+| 2026-07-15 | RFC 8949 §4.2.1 map key ordering — length-first canonical order | 2 vector sets (top-level + nested) | ✅ PASS — Braid's encoder produces RFC 8949 deterministic bytes for multi-length keys; decoder rejects bytewise (non-length-first) order | `crates/braid-ir/tests/calibration.rs::map_ordering_matches_rfc8949_length_first_deterministic`, `nested_map_ordering_matches_rfc8949_length_first` |
+| 2026-07-15 | D-SA5 Lean⇄verifier stage conformance — Rust stage verdicts match Lean predicates | 1 corpus (8 reject classes + 1 admit) | ✅ PASS — 9/9 capsule verdicts agree; Lean axiom-free | `keel/src/adapters/lean.mjs` conformance check; corpus at `crates/braid-verify/tests/lean_conformance.rs` |
 
 ## What this proves (and does NOT prove)
 
@@ -58,13 +60,12 @@ Braid — consumed verbatim from the standard.
 
 ## Next flight hours (the queue)
 
-1. RFC 8949 map-ordering vectors (length-first canonical order — the A4.8 lesson
-   axis). Braid's `key_cmp` must match RFC's deterministic order on multi-key
-   maps, cross-checked.
-2. The verifier's stage semantics vs the Lean `ExcellentCode.Framework` predicates
-   (D-SA5). Lean is the proof oracle; the Rust verifier implements the rules; a
-   conformance check is the flight hour that closes "D22 says sound" → "machine-
-   checked that the Rust matches the Lean."
+1. ~~RFC 8949 map-ordering vectors (length-first canonical order — the A4.8 lesson
+   axis).~~ ✅ **Done (2026-07-15).** Braid's `key_cmp` matches RFC's deterministic
+   order on multi-key maps (top-level + nested), cross-checked.
+2. ~~The verifier's stage semantics vs the Lean `ExcellentCode.Framework` predicates
+   (D-SA5).~~ ✅ **Done (2026-07-15).** Lean conformance check wired; 9/9 corpus
+   verdicts agree between Rust and Lean; Lean build is axiom-free.
 3. A known-bad corpus: cross-check the verifier's rejects against a pre-validated
    vulnerability dataset (NIST Juliet / OWASP) once Braid has a real elaborator
    (D-ELAB). Today Braid rejects its own crafted bad capsules; external bad
