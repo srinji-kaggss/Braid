@@ -325,5 +325,107 @@ mod tests {
         assert_eq!(REMOTE_COMPUTE_NAME, "compute.remote");
         assert_eq!(TAPE_READ_NAME, "tape.read");
         assert_eq!(INTENT_EMIT_NAME, "intent.emit");
+        assert_eq!(SIGNAL_SUBSCRIBE_NAME, "signal.subscribe");
+        assert_eq!(VIEW_INJECT_NAME, "view.inject");
+        assert_eq!(MOTION_SCHEDULE_NAME, "motion.schedule");
+        assert_eq!(MOTION_OBSERVE_NAME, "motion.observe");
+        assert_eq!(MOTION_PATCH_NAME, "motion.patch");
+        assert_eq!(MOTION_PLUGIN_REGISTER_NAME, "motion.plugin.register");
+        assert_eq!(MOTION_REPLAY_NAME, "motion.replay");
+        assert_eq!(SHRED_NAME, "efface.shred");
+        assert_eq!(RTBF_NAME, "efface.rtbf");
+    }
+
+    #[test]
+    fn edit_section_capsule_has_no_irreversible_effects() {
+        let capsule = edit_section_capsule();
+        let reg = registry_v0();
+        for strand in &capsule.braid.strands {
+            let term = reg.get(&strand.term).unwrap();
+            assert_ne!(term.effect, EffectClass::Irreversible);
+            assert_ne!(term.effect, EffectClass::Egress);
+        }
+        assert_eq!(capsule.confirm, ConfirmPolicy::None);
+        assert_eq!(capsule.grants, vec![cap!(SIGNAL_EMIT_NAME)]);
+        assert_eq!(capsule.braid.strands.len(), 4);
+        assert_eq!(capsule.braid.outputs, vec![2, 3]);
+    }
+
+    #[test]
+    fn publish_capsule_contains_irreversible_effect() {
+        let capsule = publish_capsule(ConfirmPolicy::HumanConfirm);
+        let reg = registry_v0();
+        let publish_term = reg.get("cms.publish").unwrap();
+        assert_eq!(publish_term.effect, EffectClass::Irreversible);
+        assert!(capsule
+            .braid
+            .strands
+            .iter()
+            .any(|s| s.term == "cms.publish"));
+        assert_eq!(capsule.confirm, ConfirmPolicy::HumanConfirm);
+        assert!(capsule.grants.contains(&cap!(INTENT_EMIT_NAME)));
+    }
+
+    #[test]
+    fn laundering_capsule_routes_vault_through_egress() {
+        let capsule = laundering_capsule();
+        let reg = registry_v0();
+        let vault = reg.get("vault.read").unwrap();
+        let egress = reg.get("net.egress").unwrap();
+        assert_eq!(vault.source_exposure, Exposure::Vault);
+        assert_eq!(egress.effect, EffectClass::Egress);
+        assert!(capsule.braid.strands.iter().any(|s| s.term == "vault.read"));
+        assert!(capsule.braid.strands.iter().any(|s| s.term == "net.egress"));
+    }
+
+    #[test]
+    fn cms_publish_is_the_only_irreversible_term() {
+        let r = registry_v0();
+        for term in r.terms() {
+            if term.effect == EffectClass::Irreversible {
+                assert_eq!(term.id, "cms.publish");
+                assert!(term.egress_ceiling.is_some());
+            }
+        }
+    }
+
+    #[test]
+    fn net_egress_is_the_only_egress_term() {
+        let r = registry_v0();
+        for term in r.terms() {
+            if term.effect == EffectClass::Egress {
+                assert_eq!(term.id, "net.egress");
+                assert!(term.egress_ceiling.is_some());
+            }
+        }
+    }
+
+    #[test]
+    fn pure_terms_require_no_capability() {
+        let r = registry_v0();
+        for term in r.terms() {
+            if term.effect == EffectClass::Pure {
+                assert!(
+                    term.capability.is_none(),
+                    "pure term {} should not require a capability",
+                    term.id
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn capsule_cid_is_deterministic() {
+        let c1 = edit_section_capsule();
+        let c2 = edit_section_capsule();
+        assert_eq!(c1.cid(), c2.cid());
+    }
+
+    #[test]
+    fn vault_read_has_vault_exposure() {
+        let r = registry_v0();
+        let vault = r.get("vault.read").unwrap();
+        assert_eq!(vault.source_exposure, Exposure::Vault);
+        assert_eq!(vault.effect, EffectClass::Read);
     }
 }
