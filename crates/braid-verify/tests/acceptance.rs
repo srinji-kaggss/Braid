@@ -184,6 +184,19 @@ fn forward_reference_rejected() {
     );
 }
 
+/// Output index beyond the strand list — caught by Braid::validate() at the
+/// Structure stage. This is the mutation-red anchor for Structure: the verifier
+/// never reads `outputs`, so if validate() is bypassed the capsule ADMITS.
+#[test]
+fn output_out_of_range_rejected() {
+    let mut c = edit_section_capsule();
+    c.braid.outputs = vec![99];
+    expect_reject(
+        verify(&c.to_bytes(), &registry_v0(), &full_ambient()),
+        Stage::Structure,
+    );
+}
+
 #[test]
 fn egress_below_ceiling_with_confirm_admits() {
     // The door is gated, not bricked: Public bytes through the egress term,
