@@ -518,4 +518,216 @@ mod tests {
             Err(GovernanceError::BudgetExceeded("max_effectful_tool_calls"))
         );
     }
+
+    #[test]
+    fn write_path_denied_outside_allowed_set() {
+        let mut session = GovernanceSession::admit(signed_envelope()).unwrap();
+        assert!(session
+            .authorize(GenerationAction::WritePath("src/auth.rs"))
+            .is_ok());
+        assert_eq!(
+            session.authorize(GenerationAction::WritePath("src/sneak.rs")),
+            Err(GovernanceError::Denied(
+                "path not admitted: src/sneak.rs".into()
+            ))
+        );
+    }
+
+    #[test]
+    fn write_path_denied_on_read_only_evidence() {
+        let mut session = GovernanceSession::admit(signed_envelope()).unwrap();
+        assert_eq!(
+            session.authorize(GenerationAction::WritePath("spec/auth.md")),
+            Err(GovernanceError::Denied(
+                "evidence path is read-only: spec/auth.md".into()
+            ))
+        );
+    }
+
+    fn envelope_with_file_budget(n: u32) -> SignedChangeEnvelope {
+        let mut signed = signed_envelope();
+        signed.envelope.budget.max_files_changed = n;
+        signed.envelope.allowed_paths = set(&["a.rs", "b.rs", "c.rs"]);
+        let signing_key = SigningKey::from_bytes(&[7u8; 32]);
+        let digest = signed.envelope.digest_sha256().unwrap();
+        let signature = signing_key.sign(digest.as_bytes());
+        signed.signature_hex = hex::encode(signature.to_bytes());
+        signed
+    }
+
+    #[test]
+    fn max_files_changed_budget_enforced() {
+        let mut session = GovernanceSession::admit(envelope_with_file_budget(2)).unwrap();
+        assert!(session
+            .authorize(GenerationAction::WritePath("a.rs"))
+            .is_ok());
+        assert!(session
+            .authorize(GenerationAction::WritePath("b.rs"))
+            .is_ok());
+        assert_eq!(
+            session.authorize(GenerationAction::WritePath("c.rs")),
+            Err(GovernanceError::BudgetExceeded("max_files_changed"))
+        );
+    }
+
+    #[test]
+    fn touch_symbol_denied_outside_allowed_set() {
+        let mut session = GovernanceSession::admit(signed_envelope()).unwrap();
+        assert!(session
+            .authorize(GenerationAction::TouchSymbol("redeem"))
+            .is_ok());
+        assert_eq!(
+            session.authorize(GenerationAction::TouchSymbol("sneak_fn")),
+            Err(GovernanceError::Denied(
+                "symbol not admitted: sneak_fn".into()
+            ))
+        );
+    }
+
+    #[test]
+    fn use_capability_denied_outside_allowed_set() {
+        let mut session = GovernanceSession::admit(signed_envelope()).unwrap();
+        assert!(session
+            .authorize(GenerationAction::UseCapability("fs.read"))
+            .is_ok());
+        assert_eq!(
+            session.authorize(GenerationAction::UseCapability("network.egress")),
+            Err(GovernanceError::Denied(
+                "capability not admitted: network.egress".into()
+            ))
+        );
+    }
+
+    #[test]
+    fn add_dependency_denied_when_forbidden() {
+        let mut session = GovernanceSession::admit(signed_envelope()).unwrap();
+        assert_eq!(
+            session.authorize(GenerationAction::AddDependency("tokio")),
+            Err(GovernanceError::Denied(
+                "new dependencies forbidden: tokio".into()
+            ))
+        );
+    }
+
+    #[test]
+    fn forbidden_tool_operation_denied() {
+        let mut session = GovernanceSession::admit(signed_envelope()).unwrap();
+        assert_eq!(
+            session.authorize(GenerationAction::InvokeTool {
+                name: "network",
+                effectful: false,
+            }),
+            Err(GovernanceError::Denied(
+                "tool operation forbidden: network".into()
+            ))
+        );
+    }
+
+    #[test]
+    fn max_tool_calls_budget_enforced() {
+        let mut session = GovernanceSession::admit(signed_envelope()).unwrap();
+        for i in 0..4 {
+            assert!(session
+                .authorize(GenerationAction::InvokeTool {
+                    name: &format!("tool_{i}"),
+                    effectful: false,
+                })
+                .is_ok());
+        }
+        assert_eq!(
+            session.authorize(GenerationAction::InvokeTool {
+                name: "tool_4",
+                effectful: false,
+            }),
+            Err(GovernanceError::BudgetExceeded("max_tool_calls"))
+        );
+    }
+
+    #[test]
+    fn commitment_change_id_must_match() {
+        let signed = signed_envelope();
+        let commitment = DesignCommitment {
+            change_id: "CHG-WRONG".into(),
+            requirement_refs: set(&["REQ-AUTH-17"]),
+            invariant_refs: set(&["INV-SINGLE-USE"]),
+            intended_paths: set(&["src/auth.rs"]),
+            intended_symbols: set(&["redeem"]),
+            intended_effects: set(&["ledger.atomic-write"]),
+            evidence_plan: set(&["property:double-redemption"]),
+            unresolved_assumptions: BTreeSet::new(),
+        };
+        assert_eq!(
+            signed.envelope.validate_commitment(&commitment),
+            Err(GovernanceError::InvalidCommitment("change_id"))
+        );
+    }
+
+    #[test]
+    fn commitment_paths_must_be_within_envelope() {
+        let signed = signed_envelope();
+        let commitment = DesignCommitment {
+            change_id: "CHG-1".into(),
+            requirement_refs: set(&["REQ-AUTH-17"]),
+            invariant_refs: set(&["INV-SINGLE-USE"]),
+            intended_paths: set(&["src/auth.rs", "src/sneak.rs"]),
+            intended_symbols: set(&["redeem"]),
+            intended_effects: set(&["ledger.atomic-write"]),
+            evidence_plan: set(&["property:double-redemption"]),
+            unresolved_assumptions: BTreeSet::new(),
+        };
+        assert_eq!(
+            signed.envelope.validate_commitment(&commitment),
+            Err(GovernanceError::InvalidCommitment("paths"))
+        );
+    }
+
+    #[test]
+    fn envelope_validation_rejects_bad_version() {
+        let mut signed = signed_envelope();
+        signed.envelope.version = 99;
+        assert_eq!(
+            signed.envelope.validate(),
+            Err(GovernanceError::UnsupportedVersion(99))
+        );
+    }
+
+    #[test]
+    fn envelope_validation_rejects_empty_intent() {
+        let mut signed = signed_envelope();
+        signed.envelope.intent = "  ".into();
+        assert_eq!(
+            signed.envelope.validate(),
+            Err(GovernanceError::MissingField("intent"))
+        );
+    }
+
+    #[test]
+    fn envelope_validation_rejects_bad_sha256() {
+        let mut signed = signed_envelope();
+        signed.envelope.source_baseline_sha256 = "not-hex".into();
+        assert_eq!(
+            signed.envelope.validate(),
+            Err(GovernanceError::InvalidSha256("source_baseline_sha256"))
+        );
+    }
+
+    #[test]
+    fn digest_is_deterministic() {
+        let signed = signed_envelope();
+        let d1 = signed.envelope.digest_sha256().unwrap();
+        let d2 = signed.envelope.digest_sha256().unwrap();
+        assert_eq!(d1, d2);
+        assert_eq!(d1.len(), 64);
+    }
+
+    #[test]
+    fn read_evidence_path_denied_outside_allowed_set() {
+        let mut session = GovernanceSession::admit(signed_envelope()).unwrap();
+        assert_eq!(
+            session.authorize(GenerationAction::ReadEvidencePath("spec/other.md")),
+            Err(GovernanceError::Denied(
+                "evidence path not admitted: spec/other.md".into()
+            ))
+        );
+    }
 }

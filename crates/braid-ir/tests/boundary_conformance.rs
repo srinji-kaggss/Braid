@@ -10,7 +10,7 @@ fn crates_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..")
 }
 
-const BRAID_CRATES: &[&str] = &["braid-ir", "braid-verify", "braid-render"];
+const BRAID_CRATES: &[&str] = &["braid-ir", "braid-verify", "braid-render", "braid-sdk"];
 
 /// Runtime dependency allowlist per crate (Cargo.toml `[dependencies]`).
 /// `braid-capability` is the vendored kernel capability contract — the single
@@ -20,6 +20,7 @@ fn allowed_deps(krate: &str) -> &'static [&'static str] {
         "braid-ir" => &["blake3", "braid-capability"],
         "braid-verify" => &["blake3", "braid-ir", "braid-capability"],
         "braid-render" => &["braid-ir", "braid-capability"],
+        "braid-sdk" => &["braid-ir", "braid-capability"],
         _ => unreachable!(),
     }
 }
@@ -35,6 +36,7 @@ const ALLOWED_DEV: &[&str] = &[
     "serde_json",
     "braid-ir",
     "braid-render",
+    "braid-verify",
     "braid-vocab-cms",
 ];
 
