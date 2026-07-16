@@ -730,4 +730,242 @@ mod tests {
             ))
         );
     }
+
+    #[test]
+    fn t3_commitment_with_unresolved_assumptions_rejected() {
+        let mut signed = signed_envelope();
+        signed.envelope.foundation_tier = FoundationTier::T3TrustBoundary;
+        let signing_key = SigningKey::from_bytes(&[7u8; 32]);
+        let digest = signed.envelope.digest_sha256().unwrap();
+        let signature = signing_key.sign(digest.as_bytes());
+        signed.signature_hex = hex::encode(signature.to_bytes());
+
+        let commitment = DesignCommitment {
+            change_id: "CHG-1".into(),
+            requirement_refs: set(&["REQ-AUTH-17"]),
+            invariant_refs: set(&["INV-SINGLE-USE"]),
+            intended_paths: set(&["src/auth.rs"]),
+            intended_symbols: set(&["redeem"]),
+            intended_effects: set(&["ledger.atomic-write"]),
+            evidence_plan: set(&["property:double-redemption"]),
+            unresolved_assumptions: set(&["network topology is stable"]),
+        };
+        assert_eq!(
+            signed.envelope.validate_commitment(&commitment),
+            Err(GovernanceError::InvalidCommitment(
+                "unresolved assumptions require re-admission for T3/T4"
+            ))
+        );
+    }
+
+    #[test]
+    fn t4_commitment_with_unresolved_assumptions_rejected() {
+        let signed = signed_envelope();
+        let commitment = DesignCommitment {
+            change_id: "CHG-1".into(),
+            requirement_refs: set(&["REQ-AUTH-17"]),
+            invariant_refs: set(&["INV-SINGLE-USE"]),
+            intended_paths: set(&["src/auth.rs"]),
+            intended_symbols: set(&["redeem"]),
+            intended_effects: set(&["ledger.atomic-write"]),
+            evidence_plan: set(&["property:double-redemption"]),
+            unresolved_assumptions: set(&["assumption"]),
+        };
+        assert_eq!(
+            signed.envelope.validate_commitment(&commitment),
+            Err(GovernanceError::InvalidCommitment(
+                "unresolved assumptions require re-admission for T3/T4"
+            ))
+        );
+    }
+
+    fn envelope_allowing_deps(n: u32) -> SignedChangeEnvelope {
+        let mut signed = signed_envelope();
+        signed.envelope.forbidden_operations = set(&[]);
+        signed.envelope.budget.max_new_dependencies = n;
+        let signing_key = SigningKey::from_bytes(&[7u8; 32]);
+        let digest = signed.envelope.digest_sha256().unwrap();
+        let signature = signing_key.sign(digest.as_bytes());
+        signed.signature_hex = hex::encode(signature.to_bytes());
+        signed
+    }
+
+    #[test]
+    fn add_dependency_budget_enforced_when_not_forbidden() {
+        let mut session = GovernanceSession::admit(envelope_allowing_deps(1)).unwrap();
+        assert!(session
+            .authorize(GenerationAction::AddDependency("serde"))
+            .is_ok());
+        assert_eq!(
+            session.authorize(GenerationAction::AddDependency("tokio")),
+            Err(GovernanceError::BudgetExceeded("max_new_dependencies"))
+        );
+    }
+
+    #[test]
+    fn effectful_calls_also_count_toward_total_tool_budget() {
+        let mut session = GovernanceSession::admit(signed_envelope()).unwrap();
+        assert!(session
+            .authorize(GenerationAction::InvokeTool {
+                name: "write",
+                effectful: true,
+            })
+            .is_ok());
+        assert!(session
+            .authorize(GenerationAction::InvokeTool {
+                name: "read1",
+                effectful: false,
+            })
+            .is_ok());
+        assert!(session
+            .authorize(GenerationAction::InvokeTool {
+                name: "read2",
+                effectful: false,
+            })
+            .is_ok());
+        assert!(session
+            .authorize(GenerationAction::InvokeTool {
+                name: "read3",
+                effectful: false,
+            })
+            .is_ok());
+        assert_eq!(
+            session.authorize(GenerationAction::InvokeTool {
+                name: "read4",
+                effectful: false,
+            }),
+            Err(GovernanceError::BudgetExceeded("max_tool_calls"))
+        );
+    }
+
+    #[test]
+    fn invalid_hex_in_verifying_key_rejected() {
+        let mut signed = signed_envelope();
+        signed.verifying_key_hex = "zz".repeat(32);
+        assert_eq!(
+            signed.verify(),
+            Err(GovernanceError::InvalidHex("verifying_key_hex"))
+        );
+    }
+
+    #[test]
+    fn wrong_length_verifying_key_rejected() {
+        let mut signed = signed_envelope();
+        signed.verifying_key_hex = "aa".repeat(16);
+        assert_eq!(
+            signed.verify(),
+            Err(GovernanceError::InvalidHex("verifying_key_hex"))
+        );
+    }
+
+    #[test]
+    fn invalid_hex_in_signature_rejected() {
+        let mut signed = signed_envelope();
+        signed.signature_hex = "zz".repeat(64);
+        assert_eq!(
+            signed.verify(),
+            Err(GovernanceError::InvalidHex("signature_hex"))
+        );
+    }
+
+    #[test]
+    fn wrong_length_signature_rejected() {
+        let mut signed = signed_envelope();
+        signed.signature_hex = "aa".repeat(32);
+        assert_eq!(
+            signed.verify(),
+            Err(GovernanceError::InvalidHex("signature_hex"))
+        );
+    }
+
+    #[test]
+    fn from_json_and_verify_round_trips() {
+        let signed = signed_envelope();
+        let json = serde_json::to_vec(&signed).unwrap();
+        let recovered = SignedChangeEnvelope::from_json_and_verify(&json).unwrap();
+        assert_eq!(recovered.envelope.change_id, signed.envelope.change_id);
+    }
+
+    #[test]
+    fn from_json_and_verify_rejects_bad_json() {
+        let result = SignedChangeEnvelope::from_json_and_verify(b"not json");
+        assert!(matches!(result, Err(GovernanceError::Serialization(_))));
+    }
+
+    #[test]
+    fn commitment_symbols_outside_envelope_rejected() {
+        let signed = signed_envelope();
+        let commitment = DesignCommitment {
+            change_id: "CHG-1".into(),
+            requirement_refs: set(&["REQ-AUTH-17"]),
+            invariant_refs: set(&["INV-SINGLE-USE"]),
+            intended_paths: set(&["src/auth.rs"]),
+            intended_symbols: set(&["redeem", "sneak_fn"]),
+            intended_effects: set(&["ledger.atomic-write"]),
+            evidence_plan: set(&["property:double-redemption"]),
+            unresolved_assumptions: BTreeSet::new(),
+        };
+        assert_eq!(
+            signed.envelope.validate_commitment(&commitment),
+            Err(GovernanceError::InvalidCommitment("symbols"))
+        );
+    }
+
+    #[test]
+    fn commitment_effects_outside_envelope_rejected() {
+        let signed = signed_envelope();
+        let commitment = DesignCommitment {
+            change_id: "CHG-1".into(),
+            requirement_refs: set(&["REQ-AUTH-17"]),
+            invariant_refs: set(&["INV-SINGLE-USE"]),
+            intended_paths: set(&["src/auth.rs"]),
+            intended_symbols: set(&["redeem"]),
+            intended_effects: set(&["ledger.atomic-write", "network.egress"]),
+            evidence_plan: set(&["property:double-redemption"]),
+            unresolved_assumptions: BTreeSet::new(),
+        };
+        assert_eq!(
+            signed.envelope.validate_commitment(&commitment),
+            Err(GovernanceError::InvalidCommitment("effects"))
+        );
+    }
+
+    #[test]
+    fn session_usage_tracks_all_counters() {
+        let mut session = GovernanceSession::admit(signed_envelope()).unwrap();
+        session
+            .authorize(GenerationAction::WritePath("src/auth.rs"))
+            .unwrap();
+        session
+            .authorize(GenerationAction::InvokeTool {
+                name: "read",
+                effectful: false,
+            })
+            .unwrap();
+        session
+            .authorize(GenerationAction::InvokeTool {
+                name: "write",
+                effectful: true,
+            })
+            .unwrap();
+        let u = session.usage();
+        assert_eq!(u.distinct_written_paths.len(), 1);
+        assert_eq!(u.tool_calls, 2);
+        assert_eq!(u.effectful_tool_calls, 1);
+        assert!(u.added_dependencies.is_empty());
+    }
+
+    #[test]
+    fn expires_at_is_not_yet_enforced() {
+        let mut signed = signed_envelope();
+        signed.envelope.expires_at = "2020-01-01T00:00:00Z".into();
+        let signing_key = SigningKey::from_bytes(&[7u8; 32]);
+        let digest = signed.envelope.digest_sha256().unwrap();
+        let signature = signing_key.sign(digest.as_bytes());
+        signed.signature_hex = hex::encode(signature.to_bytes());
+        // Known gap: expires_at is validated for non-emptiness but never
+        // compared to a clock. This test pins the current behavior so a
+        // future enforcement change is a conscious event.
+        assert!(GovernanceSession::admit(signed).is_ok());
+    }
 }

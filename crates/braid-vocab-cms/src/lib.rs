@@ -294,6 +294,23 @@ pub fn laundering_capsule() -> Capsule {
     }
 }
 
+/// Pinned registry CID for vocabulary v1. A term-set change moves this; the
+/// bump MUST be paired with a `VOCAB_VERSION` bump and this re-pin (D11).
+pub const PINNED_REGISTRY_CID_V1: &str =
+    "afaa7dcc9ab2f7d1530da72306c7d821c573f8aa9eda2b5c6e463f121f634acd";
+
+/// The closed set of authority-bearing terms. A new capability-bearing term
+/// that is not in this list is an escape hatch (T1/T5).
+pub fn dangerous_terms(r: &TermRegistry) -> Vec<String> {
+    let mut v: Vec<String> = r
+        .terms()
+        .filter(|t| t.capability.is_some())
+        .map(|t| t.id.clone())
+        .collect();
+    v.sort();
+    v
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -427,5 +444,33 @@ mod tests {
         let vault = r.get("vault.read").unwrap();
         assert_eq!(vault.source_exposure, Exposure::Vault);
         assert_eq!(vault.effect, EffectClass::Read);
+    }
+
+    #[test]
+    fn registry_cid_is_pinned_to_vocab_v1() {
+        let r = registry_v0();
+        assert_eq!(r.vocab_version, 1);
+        assert_eq!(
+            r.cid().to_hex(),
+            PINNED_REGISTRY_CID_V1,
+            "the CMS registry CID moved without a recorded re-pin"
+        );
+    }
+
+    #[test]
+    fn expansion_added_no_escape_hatch() {
+        let r = registry_v0();
+        assert_eq!(
+            dangerous_terms(&r),
+            vec![
+                "cms.edit_section".to_string(),
+                "cms.publish".to_string(),
+                "net.egress".to_string(),
+                "proj.listing".to_string(),
+                "vault.read".to_string(),
+            ],
+            "a term change altered the authority surface — that must be a \
+             conscious, reviewed event, not a silent escape hatch"
+        );
     }
 }

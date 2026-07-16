@@ -24,6 +24,7 @@
 #![no_std]
 extern crate alloc;
 
+use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use braid_capability::Capability;
@@ -85,6 +86,23 @@ fn t(
         egress_ceiling,
         cost,
     }
+}
+
+/// Pinned registry CID for vocabulary v1. A term-set change moves this; the
+/// bump MUST be paired with a `VOCAB_VERSION` bump and this re-pin (D11).
+pub const PINNED_REGISTRY_CID_V1: &str =
+    "49dc2af7a8c0836169bd26cdf0142e79a8fd060e34e79b23acac949125bdb14d";
+
+/// The closed set of authority-bearing terms. A new capability-bearing term
+/// that is not in this list is an escape hatch (T1/T5).
+pub fn dangerous_terms(r: &TermRegistry) -> Vec<String> {
+    let mut v: Vec<String> = r
+        .terms()
+        .filter(|t| t.capability.is_some())
+        .map(|t| t.id.clone())
+        .collect();
+    v.sort();
+    v
 }
 
 /// Build the v0 web action registry. Infallible by construction — the specs
@@ -200,6 +218,7 @@ pub fn registry_v0() -> TermRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::string::ToString;
 
     #[test]
     fn registry_v0_is_the_closed_action_vocabulary() {
@@ -269,5 +288,85 @@ mod tests {
         let r2 = TermRegistry::from_canon(&v).expect("decodes");
         assert_eq!(r, r2);
         assert_eq!(r.cid(), r2.cid());
+    }
+
+    #[test]
+    fn registry_cid_is_pinned_to_vocab_v1() {
+        let r = registry_v0();
+        assert_eq!(r.vocab_version, 1);
+        assert_eq!(
+            r.cid().to_hex(),
+            PINNED_REGISTRY_CID_V1,
+            "the web registry CID moved without a recorded re-pin"
+        );
+    }
+
+    #[test]
+    fn expansion_added_no_escape_hatch() {
+        let r = registry_v0();
+        assert_eq!(
+            dangerous_terms(&r),
+            vec![
+                "web.click".to_string(),
+                "web.download".to_string(),
+                "web.execute_js".to_string(),
+                "web.execute_wasm".to_string(),
+                "web.navigate".to_string(),
+                "web.observe".to_string(),
+                "web.scroll".to_string(),
+                "web.type".to_string(),
+            ],
+            "a term change altered the authority surface — that must be a \
+             conscious, reviewed event, not a silent escape hatch"
+        );
+    }
+
+    #[test]
+    fn navigate_is_read_with_navigate_capability() {
+        let r = registry_v0();
+        let nav = r.get("web.navigate").unwrap();
+        assert_eq!(nav.effect, EffectClass::Read);
+        assert_eq!(nav.capability.as_ref().unwrap().as_str(), NAVIGATE_NAME);
+        assert_eq!(nav.source_exposure, Exposure::Public);
+    }
+
+    #[test]
+    fn interact_terms_are_reversible_write() {
+        let r = registry_v0();
+        for id in ["web.click", "web.type", "web.scroll"] {
+            let term = r.get(id).unwrap();
+            assert_eq!(term.effect, EffectClass::ReversibleWrite);
+            assert_eq!(term.capability.as_ref().unwrap().as_str(), INTERACT_NAME);
+            assert_eq!(term.source_exposure, Exposure::Internal);
+        }
+    }
+
+    #[test]
+    fn download_has_egress_ceiling() {
+        let r = registry_v0();
+        let dl = r.get("web.download").unwrap();
+        assert_eq!(dl.effect, EffectClass::Irreversible);
+        assert_eq!(dl.egress_ceiling, Some(Exposure::Internal));
+        assert_eq!(dl.capability.as_ref().unwrap().as_str(), FS_WRITE_NAME);
+    }
+
+    #[test]
+    fn type_tag_constructors_produce_opaque_tags() {
+        let e = element();
+        let o = observation();
+        match &e {
+            TypeTag::Opaque(name, params) => {
+                assert_eq!(name, "web.element");
+                assert!(params.is_empty());
+            }
+            _ => panic!("element() must produce Opaque"),
+        }
+        match &o {
+            TypeTag::Opaque(name, params) => {
+                assert_eq!(name, "web.observation");
+                assert!(params.is_empty());
+            }
+            _ => panic!("observation() must produce Opaque"),
+        }
     }
 }
