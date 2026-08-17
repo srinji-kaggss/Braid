@@ -1,0 +1,10 @@
+{
+  "name": "moo",
+  "archetype": "workspace-crate",
+  "owner": "Director",
+  "gate_version": "tier-2",
+  "ci_status": "green",
+  "entry_docs": ["AGENTS.md", "README.md", ".wwfd/local-ci.sh"],
+  "canonical_commands": ["cargo test"],
+  "local_ci": true
+}

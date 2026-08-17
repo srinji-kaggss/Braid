@@ -145,6 +145,58 @@ pub fn verify(bytes: &[u8], registry: &TermRegistry, ambient: &[Capability]) -> 
         );
     }
 
+    // Stage 6b — effect ordering (the "natural order" contract, PRD §4.1
+    // postures). Irreversible/Egress strands must be totally ordered by data
+    // flow: two destructive effects with no dependency edge between them have
+    // an undefined relative order, so the capsule is unconstructable as
+    // written — wire an explicit dependency or split the capsule.
+    fn reaches(strands: &[braid_ir::braid::Strand], from: usize, to: usize) -> bool {
+        if from == to {
+            return true;
+        }
+        let mut seen = vec![false; strands.len()];
+        let mut stack = vec![from];
+        while let Some(i) = stack.pop() {
+            for &n in &strands[i].inputs {
+                let n = n as usize;
+                if n == to {
+                    return true;
+                }
+                if n < seen.len() && !seen[n] {
+                    seen[n] = true;
+                    stack.push(n);
+                }
+            }
+        }
+        false
+    }
+    let effectful: Vec<usize> = capsule
+        .braid
+        .strands
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| {
+            matches!(
+                registry.get(&s.term).expect("checked in stage 3").effect,
+                EffectClass::Irreversible | EffectClass::Egress
+            )
+        })
+        .map(|(i, _)| i)
+        .collect();
+    for (pos, &a) in effectful.iter().enumerate() {
+        for &b in &effectful[pos + 1..] {
+            if !reaches(&capsule.braid.strands, a.max(b), a.min(b)) {
+                return reject(
+                    Stage::Effect,
+                    format!(
+                        "unordered irreversible/egress strands {a} and {b}: \
+                         relative order undefined — wire an explicit dependency"
+                    ),
+                );
+            }
+        }
+    }
+
     // Stage 7 — taint: PATH-LEVEL monotone fold (T5). //why path-level and not
     // per-hop: the kernel shipped the per-hop version and it was laundered
     // hop-by-hop (#361 → fixed path-level in #431); Braid starts where that

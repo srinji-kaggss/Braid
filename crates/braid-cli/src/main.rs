@@ -1,6 +1,6 @@
 //! # braid — the human-reconstructable CLI loop (ADR-088 G6/L7, U6 #2)
 //!
-//! `encode | decode | verify | render | diff` — the same admission loop the
+//! `encode | decode | verify | render | diff | store put | catalog | summary` — the same admission loop the
 //! Rust SDK drives, reachable by a human with no AI and no Rust toolchain
 //! (scenario #12, threat T13). The CLI is NOT a second verifier: `encode`
 //! routes author input through the `braid-sdk` Builder + the canonical
@@ -42,6 +42,8 @@ use braid_sdk::Builder;
 use braid_verify::{verify, Verdict};
 use braid_vocab_cms::registry_v0;
 use serde::{Deserialize, Serialize};
+
+mod store;
 
 // ── JSON-of-IR author form (D19). `deny_unknown_fields` mirrors the IR's
 //    require_only_keys anti-smuggling discipline: an unrecognized key is a
@@ -99,6 +101,9 @@ fn main() -> ExitCode {
         "verify" => cmd_verify(rest),
         "render" => cmd_render(rest),
         "diff" => cmd_diff(rest),
+        "store" => crate::store::cmd_store(rest),
+        "catalog" => crate::store::cmd_catalog(rest),
+        "summary" => crate::store::cmd_summary(rest),
         "-h" | "--help" | "help" => {
             println!("{USAGE}");
             return ExitCode::SUCCESS;
@@ -111,6 +116,10 @@ fn main() -> ExitCode {
         // and shell `&&` chains treat it as a failure, distinct from operator
         // error (exit 2).
         Err(e) if e == POLICY_NEGATIVE => ExitCode::from(1),
+        Err(e) if e.starts_with(crate::store::FAIL_CLOSED) => {
+            eprintln!("error: {}", &e[crate::store::FAIL_CLOSED.len()..]);
+            ExitCode::from(1)
+        }
         Err(msg) => {
             eprintln!("error: {msg}");
             ExitCode::from(2)
@@ -132,8 +141,12 @@ USAGE:
     braid verify <capsule.braid> [--grant <cap>] run the admission pipeline (exit 1 on Reject)
     braid render <capsule.braid>                 the human-review manifest
     braid diff <old.braid> <new.braid>           manifest delta (exit 1 on any Widening)
+    braid store put <repo-manifest.json> [--store <dir>] [--replace]
+                                                  validate + install one repo manifest
+    braid catalog [--store <dir>]                 the org map (declared inventory == store)
+    braid summary <repo> [--store <dir>]          one repo's full summary
 
-EXIT CODES: 0 ok · 1 policy-negative (Reject / Widening) · 2 operator error
+EXIT CODES: 0 ok · 1 policy-negative / fail-closed denial · 2 operator error
 
 `verify --grant` may repeat; it sets the ambient authority the principal holds.
 Default ambient = the capsule's own declared grants (the happy-path check).";

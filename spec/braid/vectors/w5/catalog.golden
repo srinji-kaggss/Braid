@@ -1,0 +1,101 @@
+name:         braid
+archetype:    workspace-crate
+owner:        Director
+gate_version: none
+ci_status:    green
+entry_docs:   AGENTS.md, README.md, .wwfd/local-ci.sh
+commands:     cargo test --workspace, cargo build --workspace
+local_ci:     no
+cid:          aa9481d2b2435bc627a4c66a11ff121576b702f1b66e168df9df39a334f852db
+name:         forge-harness
+archetype:    workspace-crate
+owner:        Director
+gate_version: none
+ci_status:    green
+entry_docs:   AGENTS.md, README.md
+commands:     cargo test --workspace
+local_ci:     no
+cid:          a9635cd21caa011877ce97f9a5ae71fe501ea45ce9803df9c0dc1249fb9ac3d4
+name:         keel
+archetype:    infra-gate
+owner:        Director
+gate_version: tier-2
+ci_status:    green
+entry_docs:   AGENTS.md, README.md, .wwfd/local-ci.sh
+commands:     cargo test
+local_ci:     yes
+cid:          1fbbb7925afa83d57bbcea819790229e16aa8267cff7c47fc1fbc1e1b3bda722
+name:         logicalworks
+archetype:    workspace-crate
+owner:        Director
+gate_version: none
+ci_status:    none
+entry_docs:   AGENTS.md, README.md
+commands:     cargo test
+local_ci:     no
+cid:          401e66d373ace5627dc1ced4460a4698955f715dce1855700993a244f8d84286
+name:         moo
+archetype:    workspace-crate
+owner:        Director
+gate_version: tier-2
+ci_status:    green
+entry_docs:   AGENTS.md, README.md, .wwfd/local-ci.sh
+commands:     cargo test
+local_ci:     yes
+cid:          bb8e2f526573934d8f724aef66867336b1cf484156b9f6493ff1e970d87052fd
+name:         mxmail
+archetype:    single-crate-app
+owner:        Director
+gate_version: tier-2
+ci_status:    green
+entry_docs:   AGENTS.md, README.md, .wwfd/local-ci.sh
+commands:     cargo test
+local_ci:     yes
+cid:          ed724e349039dcd06809d677effe7d760d9f2a6d56ebf1bfc1e7500c0716016a
+name:         nova-container-runtime
+archetype:    workspace-crate
+owner:        Director
+gate_version: none
+ci_status:    none
+entry_docs:   README.md
+commands:     cargo test --workspace
+local_ci:     no
+cid:          8f8d1357ccf0f879a3a01e7dc8a8c1c7392e5b25e9199e721403e640b8b760a3
+name:         rust-ai-stack
+archetype:    workspace-crate
+owner:        Director
+gate_version: none
+ci_status:    none
+entry_docs:   README.md
+commands:     cargo test --workspace
+local_ci:     no
+cid:          4e6b7ad8a4069038aa22767e5fdcb7955b54f83965f300a6069dbbcce5be1629
+name:         sentinel
+archetype:    workspace-crate
+owner:        Director
+gate_version: none
+ci_status:    none
+entry_docs:   README.md
+commands:     cargo test
+local_ci:     no
+cid:          4785779982da61ae806374e0bc3b433e496771f2d7f448f1481d617666bff999
+name:         wwfd
+archetype:    infra-gate
+owner:        Director
+gate_version: tier-2
+ci_status:    green
+entry_docs:   AGENTS.md, README.md, .wwfd/local-ci.sh
+commands:     wwfd boot, wwfd list
+local_ci:     yes
+cid:          3efe06dcb14b6ee2531f7481314dfe41ba298a5aff0dbe22205f1a0a69ecbc39
+---
+braid	workspace-crate	Director	none	green	AGENTS.md,README.md,.wwfd/local-ci.sh	cargo test --workspace,cargo build --workspace	no	aa9481d2
+forge-harness	workspace-crate	Director	none	green	AGENTS.md,README.md	cargo test --workspace	no	a9635cd2
+keel	infra-gate	Director	tier-2	green	AGENTS.md,README.md,.wwfd/local-ci.sh	cargo test	yes	1fbbb792
+logicalworks	workspace-crate	Director	none	none	AGENTS.md,README.md	cargo test	no	401e66d3
+moo	workspace-crate	Director	tier-2	green	AGENTS.md,README.md,.wwfd/local-ci.sh	cargo test	yes	bb8e2f52
+mxmail	single-crate-app	Director	tier-2	green	AGENTS.md,README.md,.wwfd/local-ci.sh	cargo test	yes	ed724e34
+nova-container-runtime	workspace-crate	Director	none	none	README.md	cargo test --workspace	no	8f8d1357
+rust-ai-stack	workspace-crate	Director	none	none	README.md	cargo test --workspace	no	4e6b7ad8
+sentinel	workspace-crate	Director	none	none	README.md	cargo test	no	47857799
+wwfd	infra-gate	Director	tier-2	green	AGENTS.md,README.md,.wwfd/local-ci.sh	wwfd boot,wwfd list	yes	3efe06dc

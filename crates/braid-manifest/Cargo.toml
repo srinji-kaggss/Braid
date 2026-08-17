@@ -1,0 +1,20 @@
+[package]
+name = "braid-manifest"
+version = "0.1.0"
+edition = "2021"
+description = "Repo-manifest artifacts (W5): the org map as a content-addressed, fail-closed sibling format. Same canonical-encoding + BLAKE3-CID discipline as capsules; graduates to capsule form when the D8-locked Strand-literal unit lands."
+repository = "https://github.com/srinji-kaggss/Braid"
+homepage = "https://github.com/srinji-kaggss/Braid"
+license = "MIT"
+
+[lib]
+name = "braid_manifest"
+path = "src/lib.rs"
+
+# Reuses the substrate's canonical CBOR codec + CID discipline (D8/D11).
+# Adds zero authority: repo manifests are inventory metadata — no
+# capabilities, no effects, nothing for braid-verify to admit.
+[dependencies]
+braid-ir = { workspace = true }
+serde = { workspace = true }
+serde_json = "1.0.140"

@@ -24,6 +24,9 @@ braid decode <capsule.braid>               # bytes -> JSON-of-IR (the inverse of
 braid verify <capsule.braid> [--grant CAP] # run the admission pipeline
 braid render <capsule.braid>               # the human-review manifest
 braid diff   <old.braid> <new.braid>       # manifest delta; fails on any Widening
+braid store put <repo-manifest.json> [--store DIR] [--replace]   # validate + install
+braid catalog [--store DIR]                # the org map (inventory == store)
+braid summary <repo> [--store DIR]         # one repo's full summary
 ```
 
 `render` and `diff` are human-review projections of **admitted** artifacts.
@@ -127,6 +130,80 @@ enforced:
 braid verify publish.braid --grant signal.emit
 #   REJECT [Capability] grant `intent.emit` exceeds ambient authority   (exit 1)
 ```
+
+## Repo manifests & the org map (W5)
+
+`braid store put` / `braid catalog` / `braid summary` manage the org map: one
+repo-manifest artifact per repo plus the declared inventory.
+
+> **Sibling-format decision (Director, 2026-08-16):** the plan says
+> "repo-manifest capsule", but strand payloads are valueless and literal
+> payloads are D8-locked substrate work, so manifests ship as a sibling
+> validated format with capsule-grade discipline (canonical CBOR, BLAKE3 CID
+> under `lw.braid.repo-manifest.v1`, strict decode, validate at every
+> boundary). They graduate to capsule form when the Strand-literal unit
+> lands; `braid-manifest::validate` is the migration surface. braid-verify
+> remains the sole admission authority for capsules — manifests carry no
+> capabilities, nothing is verified twice, and no second verifier exists.
+
+### The manifest (8 fields, all required — no UNKNOWN is representable)
+
+| field | type | contract |
+|---|---|---|
+| `name` | string | safe storage key: `[A-Za-z0-9._-]+`, no leading `.` |
+| `archetype` | enum | `workspace-crate` \| `single-crate-app` \| `infra-gate` \| `docs` |
+| `owner` | string | non-empty; no tab/newline/comma |
+| `gate_version` | string | non-empty; no tab/newline/comma (`none` when no gate) |
+| `ci_status` | enum | `green` \| `red` \| `none` |
+| `entry_docs` | list | non-empty; entries non-empty; no TSV separators |
+| `canonical_commands` | list | same contract |
+| `local_ci` | bool | `.wwfd/local-ci.sh` present? |
+
+```json
+{ "name": "braid", "archetype": "workspace-crate", "owner": "Director",
+  "gate_version": "none", "ci_status": "green",
+  "entry_docs": ["AGENTS.md", "README.md", ".wwfd/local-ci.sh"],
+  "canonical_commands": ["cargo test --workspace"], "local_ci": false }
+```
+
+### The store and the inventory (the org database)
+
+- Store root: `~/.local/share/braid/store` (override with `--store`; tests use
+  temp stores). `braid store put <manifest.json>` validates, installs
+  `<name>.manifest` (canonical bytes), prints the CID, and creates the store
+  on first run.
+- The **inventory** (`<store>/inventory.json`) is the ONE database: a JSON
+  object mapping repo name → pinned manifest CID (`null` = declared, not yet
+  admitted). The pins make the store tamper-evident: `catalog`/`summary`
+  re-hash every artifact on read and deny on any pin mismatch, missing repo,
+  undeclared repo, or unpinned declaration. No inventory ⇒ `catalog` fails
+  closed (completeness is unprovable without the declared set).
+- Changing a repo's metadata: `braid store put … --replace` (denies without
+  `--replace`, naming the existing CID), then record the new CID in the
+  inventory. Until re-pinned, `catalog` denies — an org-metadata change is a
+  recorded event in the org database, never silent drift.
+
+### Reading the map
+
+```bash
+braid catalog                 # every repo: human blocks + `---` + machine lines
+braid summary <repo>          # one repo, full detail + the SAME machine line
+```
+
+The machine line is a stable 9-field TSV contract (name, archetype, owner,
+gate_version, ci_status, entry_docs, canonical_commands, local_ci, cid8) —
+comma-joined lists round-trip losslessly because commas are banned in
+authored strings; `cid8` is the first 8 hex chars of the BLAKE3 CID.
+`summary`'s line is byte-identical to `catalog`'s line for that repo — one
+parser for both commands. Output is deterministic and golden-pinned
+(`spec/braid/vectors/w5/catalog.golden`). Fixture manifests in
+`spec/braid/vectors/w5/` stand in for real per-repo data entry
+(`sh spec/braid/vectors/w5/seed.sh` seeds the default store).
+
+**Exit codes (whole binary):** `0` ok · `1` policy-negative / fail-closed
+denial (Reject, Widening, unknown repo, duplicate, tampered/stale pin,
+inventory mismatch, unpinned declaration, out-of-contract manifest) · `2`
+operator error (usage, missing/unreadable path, malformed input).
 
 ## Reference fixtures & the CI loop
 

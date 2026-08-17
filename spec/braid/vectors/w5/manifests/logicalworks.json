@@ -1,0 +1,10 @@
+{
+  "name": "logicalworks",
+  "archetype": "workspace-crate",
+  "owner": "Director",
+  "gate_version": "none",
+  "ci_status": "none",
+  "entry_docs": ["AGENTS.md", "README.md"],
+  "canonical_commands": ["cargo test"],
+  "local_ci": false
+}

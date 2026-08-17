@@ -35,6 +35,10 @@ use braid_ir::{Capsule, Cid};
 use braid_verify::Verdict;
 use serde::Deserialize;
 
+/// Re-exported so the CLI and tooling name the emission type without a direct
+/// dependency on the elaborator crate.
+pub use braid_vocab_rust::RustCrate;
+
 /// Domain separator for the project CID — BLAKE3 under `lw.braid.*`, the same
 /// hashing discipline as the substrate's capsule/registry CIDs (D8/D11). A
 /// project CID is a *build-tool* artifact (reproducibility anchor), not a
@@ -161,6 +165,29 @@ pub fn build(project: &Project) -> Result<BuildReport, ProjectError> {
 /// Convenience: parse + build in one call.
 pub fn build_from_json(json: &str) -> Result<BuildReport, ProjectError> {
     build(&parse_project(json)?)
+}
+
+/// Build a project, then elaborate every admitted capsule into a
+/// dependency-free Rust crate (W1 — the "write once, import everywhere"
+/// pipeline's emission half). Each capsule was verified against the vocab-js
+/// registry under the empty ambient set, so `elaborate` re-verifies it against
+/// the same registry and cannot observe a new rejection: an elaboration error
+/// here is a defect, mapped fail-closed.
+pub fn build_rust(project: &Project) -> Result<Vec<(String, RustCrate)>, ProjectError> {
+    let report = build(project)?;
+    let registry = braid_vocab_js::registry_v0();
+    report
+        .entries
+        .iter()
+        .map(|e| {
+            braid_vocab_rust::elaborate(&registry, &e.capsule)
+                .map(|c| (e.name.clone(), c))
+                .map_err(|err| ProjectError::CapsuleRejected {
+                    name: e.name.clone(),
+                    reason: format!("rust elaboration: {err:?}"),
+                })
+        })
+        .collect()
 }
 
 /// The project CID: order-independent over the `(name, capsule_cid)` set. Names

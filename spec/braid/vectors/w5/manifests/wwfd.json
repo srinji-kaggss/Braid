@@ -1,0 +1,10 @@
+{
+  "name": "wwfd",
+  "archetype": "infra-gate",
+  "owner": "Director",
+  "gate_version": "tier-2",
+  "ci_status": "green",
+  "entry_docs": ["AGENTS.md", "README.md", ".wwfd/local-ci.sh"],
+  "canonical_commands": ["wwfd boot", "wwfd list"],
+  "local_ci": true
+}

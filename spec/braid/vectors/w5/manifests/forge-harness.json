@@ -1,0 +1,10 @@
+{
+  "name": "forge-harness",
+  "archetype": "workspace-crate",
+  "owner": "Director",
+  "gate_version": "none",
+  "ci_status": "green",
+  "entry_docs": ["AGENTS.md", "README.md"],
+  "canonical_commands": ["cargo test --workspace"],
+  "local_ci": false
+}
