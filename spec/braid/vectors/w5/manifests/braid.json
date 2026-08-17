@@ -1,0 +1,10 @@
+{
+  "name": "braid",
+  "archetype": "workspace-crate",
+  "owner": "Director",
+  "gate_version": "none",
+  "ci_status": "green",
+  "entry_docs": ["AGENTS.md", "README.md", ".wwfd/local-ci.sh"],
+  "canonical_commands": ["cargo test --workspace", "cargo build --workspace"],
+  "local_ci": false
+}

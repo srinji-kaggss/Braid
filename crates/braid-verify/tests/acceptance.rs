@@ -235,6 +235,176 @@ fn egress_below_ceiling_with_confirm_admits() {
     );
 }
 
+/// W3 math contract: the dimension/unit mechanism IS the closed type
+/// universe — a vocabulary declares dimensional types as `Opaque` labels and
+/// the Types stage rejects any wiring between distinct dimensions, making
+/// "duration + bytes" unconstructable. This test pins that mechanism.
+#[test]
+fn dimension_mismatch_rejected() {
+    use braid_ir::braid::{Braid, Strand};
+    use braid_ir::{Capsule, EffectClass, Exposure, TermRegistry, TermSpec, TypeTag, IR_VERSION};
+    let mut reg = TermRegistry::new(1);
+    for (id, dim) in [("dim.dur", "dur.ms"), ("dim.bytes", "bytes")] {
+        reg.insert(TermSpec {
+            id: id.into(),
+            inputs: vec![],
+            output: TypeTag::Opaque(dim.into(), vec![]),
+            capability: None,
+            effect: EffectClass::Pure,
+            source_exposure: Exposure::Public,
+            egress_ceiling: None,
+            cost: 1,
+        })
+        .unwrap();
+    }
+    reg.insert(TermSpec {
+        id: "dim.consume_dur".into(),
+        inputs: vec![TypeTag::Opaque("dur.ms".into(), vec![])],
+        output: TypeTag::Bool,
+        capability: None,
+        effect: EffectClass::Pure,
+        source_exposure: Exposure::Public,
+        egress_ceiling: None,
+        cost: 1,
+    })
+    .unwrap();
+    let c = Capsule {
+        ir_version: IR_VERSION,
+        vocab_version: reg.vocab_version,
+        registry_cid: reg.cid(),
+        intent: "duration consumer fed bytes".into(),
+        grants: vec![],
+        braid: Braid {
+            strands: vec![
+                Strand {
+                    term: "dim.bytes".into(),
+                    inputs: vec![],
+                },
+                Strand {
+                    term: "dim.consume_dur".into(),
+                    inputs: vec![0],
+                },
+            ],
+            outputs: vec![1],
+        },
+        budget: 10,
+        confirm: ConfirmPolicy::None,
+        evidence: vec![],
+    };
+    expect_reject(verify(&c.to_bytes(), &reg, &[]), Stage::Types);
+}
+
+/// W3 ordering contract: two Irreversible strands with no data-flow edge
+/// between them have an undefined relative order → Effect-stage Reject.
+#[test]
+fn unordered_irreversible_pair_rejected() {
+    use braid_capability::Capability;
+    use braid_ir::braid::{Braid, Strand};
+    use braid_ir::{Capsule, EffectClass, Exposure, TermRegistry, TermSpec, TypeTag, IR_VERSION};
+    let mut reg = TermRegistry::new(1);
+    for (id, out) in [("irr.a", "a"), ("irr.b", "b")] {
+        reg.insert(TermSpec {
+            id: id.into(),
+            inputs: vec![],
+            output: TypeTag::Opaque(out.into(), vec![]),
+            capability: Some(Capability::new("test.irreversible")),
+            effect: EffectClass::Irreversible,
+            source_exposure: Exposure::Public,
+            egress_ceiling: Some(Exposure::Public),
+            cost: 1,
+        })
+        .unwrap();
+    }
+    let c = Capsule {
+        ir_version: IR_VERSION,
+        vocab_version: reg.vocab_version,
+        registry_cid: reg.cid(),
+        intent: "two unordered destructive effects".into(),
+        grants: vec![Capability::new("test.irreversible")],
+        braid: Braid {
+            strands: vec![
+                Strand {
+                    term: "irr.a".into(),
+                    inputs: vec![],
+                },
+                Strand {
+                    term: "irr.b".into(),
+                    inputs: vec![],
+                },
+            ],
+            outputs: vec![1],
+        },
+        budget: 10,
+        confirm: ConfirmPolicy::HumanConfirm,
+        evidence: vec![],
+    };
+    expect_reject(
+        verify(&c.to_bytes(), &reg, &[Capability::new("test.irreversible")]),
+        Stage::Effect,
+    );
+}
+
+/// W3 ordering contract, admitted half: the same two effects with an explicit
+/// data dependency are totally ordered and admit.
+#[test]
+fn ordered_irreversible_pair_admits() {
+    use braid_capability::Capability;
+    use braid_ir::braid::{Braid, Strand};
+    use braid_ir::{Capsule, EffectClass, Exposure, TermRegistry, TermSpec, TypeTag, IR_VERSION};
+    let mut reg = TermRegistry::new(1);
+    reg.insert(TermSpec {
+        id: "irr.a".into(),
+        inputs: vec![],
+        output: TypeTag::Opaque("a".into(), vec![]),
+        capability: Some(Capability::new("test.irreversible")),
+        effect: EffectClass::Irreversible,
+        source_exposure: Exposure::Public,
+        egress_ceiling: Some(Exposure::Public),
+        cost: 1,
+    })
+    .unwrap();
+    reg.insert(TermSpec {
+        id: "irr.b".into(),
+        inputs: vec![TypeTag::Opaque("a".into(), vec![])],
+        output: TypeTag::Opaque("b".into(), vec![]),
+        capability: Some(Capability::new("test.irreversible")),
+        effect: EffectClass::Irreversible,
+        source_exposure: Exposure::Public,
+        egress_ceiling: Some(Exposure::Public),
+        cost: 1,
+    })
+    .unwrap();
+    let c = Capsule {
+        ir_version: IR_VERSION,
+        vocab_version: reg.vocab_version,
+        registry_cid: reg.cid(),
+        intent: "ordered destructive chain".into(),
+        grants: vec![Capability::new("test.irreversible")],
+        braid: Braid {
+            strands: vec![
+                Strand {
+                    term: "irr.a".into(),
+                    inputs: vec![],
+                },
+                Strand {
+                    term: "irr.b".into(),
+                    inputs: vec![0],
+                },
+            ],
+            outputs: vec![1],
+        },
+        budget: 10,
+        confirm: ConfirmPolicy::HumanConfirm,
+        evidence: vec![],
+    };
+    assert_eq!(
+        verify(&c.to_bytes(), &reg, &[Capability::new("test.irreversible")]),
+        Verdict::Admit {
+            capsule_cid: c.cid()
+        }
+    );
+}
+
 /// U9 finding regression: a capsule with a key smuggled into the nested braid
 /// map must be REJECTED at the canonical-form stage — not admitted with the
 /// clean CID. (Was a High-severity sub-map malleability hole.)

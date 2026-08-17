@@ -1,0 +1,10 @@
+{
+  "name": "bad-archetype-repo",
+  "archetype": "banana",
+  "owner": "Director",
+  "gate_version": "none",
+  "ci_status": "green",
+  "entry_docs": ["README.md"],
+  "canonical_commands": ["cargo test"],
+  "local_ci": false
+}

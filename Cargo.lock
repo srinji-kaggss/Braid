@@ -90,6 +90,7 @@ version = "0.1.0"
 dependencies = [
  "braid-capability",
  "braid-ir",
+ "braid-manifest",
  "braid-render",
  "braid-sdk",
  "braid-verify",
@@ -136,12 +137,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "braid-manifest"
+version = "0.1.0"
+dependencies = [
+ "braid-ir",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "braid-project"
 version = "0.1.0"
 dependencies = [
  "braid-elaborate-js",
  "braid-ir",
  "braid-verify",
+ "braid-vocab-js",
+ "braid-vocab-rust",
  "serde",
  "serde_json",
 ]
@@ -193,6 +205,15 @@ dependencies = [
  "braid-ir",
  "braid-sdk",
  "braid-verify",
+]
+
+[[package]]
+name = "braid-vocab-rust"
+version = "0.1.0"
+dependencies = [
+ "braid-ir",
+ "braid-verify",
+ "braid-vocab-cms",
 ]
 
 [[package]]

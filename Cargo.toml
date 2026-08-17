@@ -12,6 +12,8 @@ members = [
     "crates/braid-elaborate-js",
     "crates/braid-project",
     "crates/braid-governance",
+    "crates/braid-vocab-rust",
+    "crates/braid-manifest",
 ]
 resolver = "2"
 
@@ -43,6 +45,7 @@ braid-vocab-js = { path = "crates/braid-vocab-js" }
 braid-verify = { path = "crates/braid-verify" }
 braid-render = { path = "crates/braid-render" }
 braid-sdk = { path = "crates/braid-sdk" }
+braid-manifest = { path = "crates/braid-manifest" }
 
 [profile.release]
 opt-level = 3

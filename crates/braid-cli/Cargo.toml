@@ -24,6 +24,7 @@ braid-render = { workspace = true }
 braid-sdk = { path = "../braid-sdk" }
 braid-capability = { workspace = true }
 braid-vocab-cms = { workspace = true }
+braid-manifest = { workspace = true }
 serde = { workspace = true }
 serde_json = "1.0.140"
 
