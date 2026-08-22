@@ -76,7 +76,7 @@ pub fn js_number() -> TypeTag {
     TypeTag::Opaque("js.number".into(), Vec::new())
 }
 
-/// `TypeTag::Opaque("js.boolean", [])`.
+/// Constructs a [`TypeTag`] for JavaScript boolean primitives.
 pub fn js_boolean() -> TypeTag {
     TypeTag::Opaque("js.boolean".into(), Vec::new())
 }
@@ -93,9 +93,8 @@ pub fn js_function(args_ret: Vec<TypeTag>) -> TypeTag {
     TypeTag::Opaque("js.function".into(), args_ret)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn t(
-    id: &str,
+struct TermDecl {
+    id: &'static str,
     inputs: Vec<TypeTag>,
     output: TypeTag,
     capability: Option<Capability>,
@@ -103,203 +102,234 @@ fn t(
     source_exposure: Exposure,
     egress_ceiling: Option<Exposure>,
     cost: u64,
-) -> TermSpec {
+}
+
+fn t(decl: TermDecl) -> TermSpec {
     TermSpec {
-        id: id.into(),
-        inputs,
-        output,
-        capability,
-        effect,
-        source_exposure,
-        egress_ceiling,
-        cost,
+        id: decl.id.into(),
+        inputs: decl.inputs,
+        output: decl.output,
+        capability: decl.capability,
+        effect: decl.effect,
+        source_exposure: decl.source_exposure,
+        egress_ceiling: decl.egress_ceiling,
+        cost: decl.cost,
     }
+}
+
+fn value_specs() -> Vec<TermSpec> {
+    use EffectClass::*;
+    use Exposure::*;
+
+    vec![
+        t(TermDecl {
+            id: "js.lit.string",
+            inputs: vec![],
+            output: js_string(),
+            capability: None,
+            effect: Pure,
+            source_exposure: Public,
+            egress_ceiling: None,
+            cost: 1,
+        }),
+        t(TermDecl {
+            id: "js.lit.number",
+            inputs: vec![],
+            output: js_number(),
+            capability: None,
+            effect: Pure,
+            source_exposure: Public,
+            egress_ceiling: None,
+            cost: 1,
+        }),
+        t(TermDecl {
+            id: "js.lit.boolean",
+            inputs: vec![],
+            output: js_boolean(),
+            capability: None,
+            effect: Pure,
+            source_exposure: Public,
+            egress_ceiling: None,
+            cost: 1,
+        }),
+    ]
+}
+
+fn arithmetic_specs() -> Vec<TermSpec> {
+    use EffectClass::*;
+    use Exposure::*;
+
+    vec![
+        t(TermDecl {
+            id: "js.add",
+            inputs: vec![js_number(), js_number()],
+            output: js_number(),
+            capability: None,
+            effect: Pure,
+            source_exposure: Public,
+            egress_ceiling: None,
+            cost: 1,
+        }),
+        t(TermDecl {
+            id: "js.concat",
+            inputs: vec![js_string(), js_string()],
+            output: js_string(),
+            capability: None,
+            effect: Pure,
+            source_exposure: Public,
+            egress_ceiling: None,
+            cost: 1,
+        }),
+        t(TermDecl {
+            id: "js.sub",
+            inputs: vec![js_number(), js_number()],
+            output: js_number(),
+            capability: None,
+            effect: Pure,
+            source_exposure: Public,
+            egress_ceiling: None,
+            cost: 1,
+        }),
+        t(TermDecl {
+            id: "js.mul",
+            inputs: vec![js_number(), js_number()],
+            output: js_number(),
+            capability: None,
+            effect: Pure,
+            source_exposure: Public,
+            egress_ceiling: None,
+            cost: 1,
+        }),
+    ]
+}
+
+fn comparison_specs() -> Vec<TermSpec> {
+    use EffectClass::*;
+    use Exposure::*;
+
+    vec![
+        t(TermDecl {
+            id: "js.lt",
+            inputs: vec![js_number(), js_number()],
+            output: js_boolean(),
+            capability: None,
+            effect: Pure,
+            source_exposure: Public,
+            egress_ceiling: None,
+            cost: 1,
+        }),
+        t(TermDecl {
+            id: "js.eq.num",
+            inputs: vec![js_number(), js_number()],
+            output: js_boolean(),
+            capability: None,
+            effect: Pure,
+            source_exposure: Public,
+            egress_ceiling: None,
+            cost: 1,
+        }),
+        t(TermDecl {
+            id: "js.eq.str",
+            inputs: vec![js_string(), js_string()],
+            output: js_boolean(),
+            capability: None,
+            effect: Pure,
+            source_exposure: Public,
+            egress_ceiling: None,
+            cost: 1,
+        }),
+    ]
+}
+
+fn logic_specs() -> Vec<TermSpec> {
+    use EffectClass::*;
+    use Exposure::*;
+
+    vec![
+        t(TermDecl {
+            id: "js.and",
+            inputs: vec![js_boolean(), js_boolean()],
+            output: js_boolean(),
+            capability: None,
+            effect: Pure,
+            source_exposure: Public,
+            egress_ceiling: None,
+            cost: 1,
+        }),
+        t(TermDecl {
+            id: "js.or",
+            inputs: vec![js_boolean(), js_boolean()],
+            output: js_boolean(),
+            capability: None,
+            effect: Pure,
+            source_exposure: Public,
+            egress_ceiling: None,
+            cost: 1,
+        }),
+        t(TermDecl {
+            id: "js.not",
+            inputs: vec![js_boolean()],
+            output: js_boolean(),
+            capability: None,
+            effect: Pure,
+            source_exposure: Public,
+            egress_ceiling: None,
+            cost: 1,
+        }),
+    ]
+}
+
+fn pure_specs() -> Vec<TermSpec> {
+    let mut all_pure = value_specs();
+    all_pure.extend(arithmetic_specs());
+    all_pure.extend(comparison_specs());
+    all_pure.extend(logic_specs());
+    all_pure
+}
+
+fn action_specs() -> Vec<TermSpec> {
+    use EffectClass::*;
+    use Exposure::*;
+
+    vec![
+        t(TermDecl {
+            id: "js.dom.querySelector",
+            inputs: vec![js_string()],
+            output: js_object(vec![js_string(), js_boolean()]),
+            capability: Some(Capability::new(JS_DOM_READ_NAME)),
+            effect: Read,
+            source_exposure: Internal,
+            egress_ceiling: None,
+            cost: 5,
+        }),
+        t(TermDecl {
+            id: "js.eval",
+            inputs: vec![js_string()],
+            output: TypeTag::Opaque("js.any".into(), Vec::new()),
+            capability: Some(Capability::new(JS_EVAL_NAME)),
+            effect: Irreversible,
+            source_exposure: Internal,
+            egress_ceiling: Some(Internal),
+            cost: 13,
+        }),
+        t(TermDecl {
+            id: "js.fetch",
+            inputs: vec![js_string()],
+            output: js_string(),
+            capability: Some(Capability::new(JS_FETCH_NAME)),
+            effect: Egress,
+            source_exposure: Internal,
+            egress_ceiling: Some(Internal),
+            cost: 21,
+        }),
+    ]
 }
 
 /// Build the v0 JS registry. Infallible by construction — validated by
 /// `TermRegistry::insert` and pinned by the unit test.
 pub fn registry_v0() -> TermRegistry {
-    use EffectClass::*;
-    use Exposure::*;
-
-    let specs = vec![
-        // ── pure value construction (the chainable alphabet) ──
-        t(
-            "js.lit.string",
-            vec![],
-            js_string(),
-            None,
-            Pure,
-            Public,
-            None,
-            1,
-        ),
-        t(
-            "js.lit.number",
-            vec![],
-            js_number(),
-            None,
-            Pure,
-            Public,
-            None,
-            1,
-        ),
-        t(
-            "js.lit.boolean",
-            vec![],
-            js_boolean(),
-            None,
-            Pure,
-            Public,
-            None,
-            1,
-        ),
-        // ── pure arithmetic (fixed-point; no floats — D8) ──
-        t(
-            "js.add",
-            vec![js_number(), js_number()],
-            js_number(),
-            None,
-            Pure,
-            Public,
-            None,
-            1,
-        ),
-        t(
-            "js.concat",
-            vec![js_string(), js_string()],
-            js_string(),
-            None,
-            Pure,
-            Public,
-            None,
-            1,
-        ),
-        // ── U12 expansion: more pure arithmetic (fixed-point; no floats — D8) ──
-        t(
-            "js.sub",
-            vec![js_number(), js_number()],
-            js_number(),
-            None,
-            Pure,
-            Public,
-            None,
-            1,
-        ),
-        t(
-            "js.mul",
-            vec![js_number(), js_number()],
-            js_number(),
-            None,
-            Pure,
-            Public,
-            None,
-            1,
-        ),
-        // ── U12 expansion: comparison / equality → boolean (typed overloads) ──
-        t(
-            "js.lt",
-            vec![js_number(), js_number()],
-            js_boolean(),
-            None,
-            Pure,
-            Public,
-            None,
-            1,
-        ),
-        t(
-            "js.eq.num",
-            vec![js_number(), js_number()],
-            js_boolean(),
-            None,
-            Pure,
-            Public,
-            None,
-            1,
-        ),
-        t(
-            "js.eq.str",
-            vec![js_string(), js_string()],
-            js_boolean(),
-            None,
-            Pure,
-            Public,
-            None,
-            1,
-        ),
-        // ── U12 expansion: boolean logic ──
-        t(
-            "js.and",
-            vec![js_boolean(), js_boolean()],
-            js_boolean(),
-            None,
-            Pure,
-            Public,
-            None,
-            1,
-        ),
-        t(
-            "js.or",
-            vec![js_boolean(), js_boolean()],
-            js_boolean(),
-            None,
-            Pure,
-            Public,
-            None,
-            1,
-        ),
-        t(
-            "js.not",
-            vec![js_boolean()],
-            js_boolean(),
-            None,
-            Pure,
-            Public,
-            None,
-            1,
-        ),
-        // ── DOM reads (gated, read-only) ──
-        t(
-            "js.dom.querySelector",
-            vec![js_string()],
-            js_object(vec![js_string(), js_boolean()]),
-            Some(Capability::new(JS_DOM_READ_NAME)),
-            Read,
-            Internal,
-            None,
-            5,
-        ),
-        // ── the single eval escalation probe (irreversible + confirm) ──
-        // //why js.eval is the deliberate dangerous term: it is the JS
-        // equivalent of cms.publish — the one effectful term that earns the
-        // verifier's attention first. A real JS elaborator would rarely emit
-        // this (it elaborates AWAY from eval); its presence is the escalation
-        // signal, same as the CMS no-confirm publish probe.
-        t(
-            "js.eval",
-            vec![js_string()],
-            TypeTag::Opaque("js.any".into(), Vec::new()),
-            Some(Capability::new(JS_EVAL_NAME)),
-            Irreversible,
-            Internal,
-            Some(Internal),
-            13,
-        ),
-        // ── the egress door (audited network) ──
-        t(
-            "js.fetch",
-            vec![js_string()],
-            js_string(),
-            Some(Capability::new(JS_FETCH_NAME)),
-            Egress,
-            Internal,
-            Some(Internal),
-            21,
-        ),
-    ];
-
     let mut reg = TermRegistry::new(VOCAB_VERSION);
-    for spec in specs {
+    for spec in pure_specs().into_iter().chain(action_specs()) {
         reg.insert(spec)
             .expect("braid-vocab-js specs are statically valid");
     }

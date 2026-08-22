@@ -24,9 +24,8 @@ impl Wake for ThreadWaker {
     }
 
     fn wake_by_ref(self: &Arc<Self>) {
-        if !self.notified.swap(true, Ordering::Release) {
-            self.thread.unpark();
-        }
+        self.notified.store(true, Ordering::Release);
+        self.thread.unpark();
     }
 }
 
@@ -60,6 +59,7 @@ pub fn block_on<F: Future>(future: F) -> F::Output {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
     use std::time::Duration;
 
     #[test]
@@ -71,43 +71,51 @@ mod tests {
     #[test]
     fn yields_and_resumes() {
         async fn step() -> String {
-            let a = async { "hello" }.await;
-            let b = async { "world" }.await;
-            format!("{a} {b}")
+            let first_part = async { "hello" }.await;
+            let second_part = async { "world" }.await;
+            format!("{first_part} {second_part}")
         }
 
         assert_eq!(block_on(step()), "hello world");
     }
 
+    struct ChannelFuture {
+        rx: std::sync::mpsc::Receiver<i32>,
+        waker_slot: Arc<Mutex<Option<Waker>>>,
+    }
+
+    impl Future for ChannelFuture {
+        type Output = i32;
+        fn poll(self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+            match self.rx.try_recv() {
+                Ok(val) => Poll::Ready(val),
+                Err(std::sync::mpsc::TryRecvError::Empty) => {
+                    *self.waker_slot.lock().unwrap() = Some(cx.waker().clone());
+                    Poll::Pending
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => panic!("disconnected"),
+            }
+        }
+    }
+
     #[test]
     fn threaded_waker_unparks() {
         let (tx, rx) = std::sync::mpsc::channel();
+        let handle: Arc<Mutex<Option<Waker>>> = Arc::new(Mutex::new(None));
+        let handle_clone = handle.clone();
+
         thread::spawn(move || {
-            thread::sleep(Duration::from_millis(10));
+            thread::sleep(Duration::from_millis(5));
             tx.send(100).unwrap();
+            let mut slot = handle_clone.lock().unwrap();
+            if let Some(waker) = slot.take() {
+                waker.wake();
+            }
         });
 
-        let res = block_on(async {
-            // A simple polling future waiting for channel
-            struct ChannelFuture(std::sync::mpsc::Receiver<i32>);
-            impl Future for ChannelFuture {
-                type Output = i32;
-                fn poll(self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-                    match self.0.try_recv() {
-                        Ok(val) => Poll::Ready(val),
-                        Err(std::sync::mpsc::TryRecvError::Empty) => {
-                            let waker = cx.waker().clone();
-                            thread::spawn(move || {
-                                thread::sleep(Duration::from_millis(5));
-                                waker.wake();
-                            });
-                            Poll::Pending
-                        }
-                        Err(std::sync::mpsc::TryRecvError::Disconnected) => panic!("disconnected"),
-                    }
-                }
-            }
-            ChannelFuture(rx).await
+        let res = block_on(ChannelFuture {
+            rx,
+            waker_slot: handle,
         });
 
         assert_eq!(res, 100);

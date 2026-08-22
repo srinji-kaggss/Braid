@@ -2,13 +2,10 @@ use braid_capability::Capability;
 use braid_ir::braid::{Braid, Strand};
 use braid_ir::term::{EffectClass, Exposure, TermRegistry, TermSpec, TypeTag};
 use braid_ir::{Capsule, ConfirmPolicy, Value, IR_VERSION};
-use braid_run::{execute, ExecutionError, Host};
+use braid_run::{execute_capsule, ExecutionError, Host};
 use braid_verify::verify;
 
-fn setup_test_registry() -> TermRegistry {
-    let mut reg = TermRegistry::new(1);
-
-    // 1. Literal Int generator (Pure)
+fn insert_math_specs(reg: &mut TermRegistry) {
     reg.insert(TermSpec {
         id: "math.add".into(),
         inputs: vec![TypeTag::Int, TypeTag::Int],
@@ -21,7 +18,6 @@ fn setup_test_registry() -> TermRegistry {
     })
     .unwrap();
 
-    // 2. Math Mul (Pure)
     reg.insert(TermSpec {
         id: "math.mul".into(),
         inputs: vec![TypeTag::Int, TypeTag::Int],
@@ -34,7 +30,6 @@ fn setup_test_registry() -> TermRegistry {
     })
     .unwrap();
 
-    // 3. Math Lit (Pure, cost 1)
     reg.insert(TermSpec {
         id: "math.lit".into(),
         inputs: vec![],
@@ -46,8 +41,9 @@ fn setup_test_registry() -> TermRegistry {
         cost: 1,
     })
     .unwrap();
+}
 
-    // 4. File Write (Stateful, requires capability)
+fn insert_fs_specs(reg: &mut TermRegistry) {
     reg.insert(TermSpec {
         id: "fs.write".into(),
         inputs: vec![TypeTag::Int],
@@ -59,12 +55,46 @@ fn setup_test_registry() -> TermRegistry {
         cost: 5,
     })
     .unwrap();
+}
 
+fn setup_test_registry() -> TermRegistry {
+    let mut reg = TermRegistry::new(1);
+    insert_math_specs(&mut reg);
+    insert_fs_specs(&mut reg);
     reg
 }
 
 struct CustomHost {
     pub writes: Vec<i64>,
+}
+
+fn host_binary_op(
+    inputs: &[Value],
+    op: fn(i64, i64) -> i64,
+) -> Result<Value, ExecutionError> {
+    if let (Some(Value::Int(a)), Some(Value::Int(b))) = (inputs.first(), inputs.get(1)) {
+        Ok(Value::Int(op(*a, *b)))
+    } else {
+        Err(ExecutionError::HostError {
+            message: "expected two Ints".into(),
+            at: "CustomHost::host_binary_op",
+        })
+    }
+}
+
+fn host_fs_write(
+    inputs: &[Value],
+    writes: &mut Vec<i64>,
+) -> Result<Value, ExecutionError> {
+    if let Some(Value::Int(v)) = inputs.first() {
+        writes.push(*v);
+        Ok(Value::Bool(true))
+    } else {
+        Err(ExecutionError::HostError {
+            message: "expected Int to write".into(),
+            at: "CustomHost::host_fs_write",
+        })
+    }
 }
 
 impl Host for CustomHost {
@@ -76,29 +106,13 @@ impl Host for CustomHost {
     ) -> Result<Value, ExecutionError> {
         match term_id {
             "math.lit" => Ok(Value::Int(10)),
-            "math.add" => {
-                if let (Some(Value::Int(a)), Some(Value::Int(b))) = (inputs.first(), inputs.get(1)) {
-                    Ok(Value::Int(a + b))
-                } else {
-                    Err(ExecutionError::HostError("expected two Ints".into()))
-                }
-            }
-            "math.mul" => {
-                if let (Some(Value::Int(a)), Some(Value::Int(b))) = (inputs.first(), inputs.get(1)) {
-                    Ok(Value::Int(a * b))
-                } else {
-                    Err(ExecutionError::HostError("expected two Ints".into()))
-                }
-            }
-            "fs.write" => {
-                if let Some(Value::Int(v)) = inputs.first() {
-                    self.writes.push(*v);
-                    Ok(Value::Bool(true))
-                } else {
-                    Err(ExecutionError::HostError("expected Int to write".into()))
-                }
-            }
-            _ => Err(ExecutionError::UnknownTerm(term_id.into())),
+            "math.add" => host_binary_op(inputs, |a, b| a + b),
+            "math.mul" => host_binary_op(inputs, |a, b| a * b),
+            "fs.write" => host_fs_write(inputs, &mut self.writes),
+            _ => Err(ExecutionError::UnknownTerm {
+                term: term_id.into(),
+                at: "CustomHost::call",
+            }),
         }
     }
 }
@@ -147,7 +161,7 @@ fn pure_dag_execution_and_journal() {
 
     // 2. Execute.
     let mut host = CustomHost { writes: vec![] };
-    let journal = execute(&capsule, &reg, &mut host).expect("execution succeeds");
+    let journal = execute_capsule(&capsule, &reg, &mut host).expect("execution succeeds");
 
     // 3. Inspect outputs & journal.
     assert_eq!(journal.outputs, vec![Value::Int(200)]);
@@ -186,10 +200,13 @@ fn capability_gated_execution_fails_if_grant_missing() {
     };
 
     let mut host = CustomHost { writes: vec![] };
-    let err = execute(&capsule, &reg, &mut host).unwrap_err();
+    let err = execute_capsule(&capsule, &reg, &mut host).unwrap_err();
     assert_eq!(
         err,
-        ExecutionError::MissingCapability(Capability::new("fs.write"))
+        ExecutionError::MissingCapability {
+            capability: Capability::new("fs.write"),
+            at: "execute_capsule::capability",
+        }
     );
 }
 
@@ -226,12 +243,13 @@ fn budget_exhaustion_terminates_execution() {
     };
 
     let mut host = CustomHost { writes: vec![] };
-    let err = execute(&capsule, &reg, &mut host).unwrap_err();
+    let err = execute_capsule(&capsule, &reg, &mut host).unwrap_err();
     assert_eq!(
         err,
         ExecutionError::BudgetExhausted {
             budget: 4,
             consumed: 5,
+            at: "execute_capsule::budget",
         }
     );
 }
@@ -265,7 +283,7 @@ fn confirmation_policy_enforcement() {
     };
 
     let mut host = CustomHost { writes: vec![] };
-    let err = execute(&capsule, &reg, &mut host).unwrap_err();
+    let err = execute_capsule(&capsule, &reg, &mut host).unwrap_err();
     assert!(matches!(err, ExecutionError::UnconfirmedEffect { .. }));
 }
 
@@ -324,7 +342,7 @@ fn header_mismatch_rejected() {
     capsule.ir_version = 999;
     let mut host = CustomHost { writes: vec![] };
     assert!(matches!(
-        execute(&capsule, &reg, &mut host),
-        Err(ExecutionError::InvalidCapsuleHeader(_))
+        execute_capsule(&capsule, &reg, &mut host),
+        Err(ExecutionError::InvalidCapsuleHeader { .. })
     ));
 }

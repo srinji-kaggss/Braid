@@ -34,8 +34,132 @@ pub fn walk_dir(root: impl AsRef<Path>, options: &WalkOptions) -> io::Result<Vec
     let canonical_root = root_path.canonicalize().ok();
     let mut out = Vec::new();
     let mut visited = Vec::new();
-    walk_recursive(root_path, &canonical_root, 0, options, &mut out, &mut visited)?;
+    walk_recursive(
+        root_path,
+        &canonical_root,
+        0,
+        options,
+        &mut out,
+        &mut visited,
+    )?;
     Ok(out)
+}
+
+fn track_canonical_visit(dir: &Path, visited_canonical: &mut Vec<PathBuf>) -> bool {
+    if let Ok(canonical) = dir.canonicalize() {
+        if visited_canonical.contains(&canonical) {
+            return false;
+        }
+        visited_canonical.push(canonical);
+    }
+    true
+}
+
+fn read_sorted_entries(dir: &Path, sort_alphabetically: bool) -> io::Result<Vec<DirEntry>> {
+    let mut entries: Vec<DirEntry> = fs::read_dir(dir)?.filter_map(Result::ok).collect();
+    if sort_alphabetically {
+        entries.sort_by_key(|entry| entry.file_name());
+    }
+    Ok(entries)
+}
+
+fn resolve_symlink_path(dir: &Path, path: &Path) -> Option<PathBuf> {
+    let target = fs::read_link(path).ok()?;
+    if target.is_relative() {
+        Some(dir.join(target))
+    } else {
+        Some(target)
+    }
+}
+
+fn check_sandbox(resolved: &Path, canonical_root: &Option<PathBuf>) -> Option<PathBuf> {
+    let canon = resolved.canonicalize().ok()?;
+    if let Some(canon_root) = canonical_root {
+        if !canon.starts_with(canon_root) {
+            return None;
+        }
+    }
+    if canon.is_dir() {
+        Some(canon)
+    } else {
+        None
+    }
+}
+
+fn resolve_symlink_target(
+    dir: &Path,
+    path: &Path,
+    canonical_root: &Option<PathBuf>,
+) -> Option<PathBuf> {
+    let resolved = resolve_symlink_path(dir, path)?;
+    check_sandbox(&resolved, canonical_root)
+}
+
+fn handle_directory_entry(
+    path: &Path,
+    canonical_root: &Option<PathBuf>,
+    depth: usize,
+    options: &WalkOptions,
+    out: &mut Vec<PathBuf>,
+    visited: &mut Vec<PathBuf>,
+) -> io::Result<()> {
+    walk_recursive(path, canonical_root, depth, options, out, visited)
+}
+
+fn handle_symlink_entry(
+    dir: &Path,
+    path: &Path,
+    canonical_root: &Option<PathBuf>,
+    depth: usize,
+    options: &WalkOptions,
+    out: &mut Vec<PathBuf>,
+    visited: &mut Vec<PathBuf>,
+) -> io::Result<()> {
+    if options.follow_symlinks {
+        if let Some(target_dir) = resolve_symlink_target(dir, path, canonical_root) {
+            walk_recursive(&target_dir, canonical_root, depth, options, out, visited)?;
+        }
+    }
+    Ok(())
+}
+
+fn process_entry(
+    entry: DirEntry,
+    dir: &Path,
+    canonical_root: &Option<PathBuf>,
+    current_depth: usize,
+    options: &WalkOptions,
+    out: &mut Vec<PathBuf>,
+    visited_canonical: &mut Vec<PathBuf>,
+) -> io::Result<()> {
+    let path = entry.path();
+    let Ok(file_type) = entry.file_type() else {
+        return Ok(());
+    };
+    out.push(path.clone());
+
+    let next_depth = current_depth + 1;
+    if file_type.is_dir() {
+        handle_directory_entry(
+            &path,
+            canonical_root,
+            next_depth,
+            options,
+            out,
+            visited_canonical,
+        )?;
+    } else if file_type.is_symlink() {
+        handle_symlink_entry(
+            dir,
+            &path,
+            canonical_root,
+            next_depth,
+            options,
+            out,
+            visited_canonical,
+        )?;
+    }
+    Ok(())
 }
 
 fn walk_recursive(
@@ -49,50 +173,21 @@ fn walk_recursive(
     if current_depth > options.max_depth {
         return Ok(());
     }
-
-    if let Ok(canonical) = dir.canonicalize() {
-        if visited_canonical.contains(&canonical) {
-            // Symlink loop detected — prevent infinite recursion.
-            return Ok(());
-        }
-        visited_canonical.push(canonical);
+    if !track_canonical_visit(dir, visited_canonical) {
+        return Ok(());
     }
-
-    let mut entries: Vec<DirEntry> = fs::read_dir(dir)?.filter_map(Result::ok).collect();
-    if options.sort_alphabetically {
-        entries.sort_by_key(|e| e.file_name());
-    }
-
+    let entries = read_sorted_entries(dir, options.sort_alphabetically)?;
     for entry in entries {
-        let path = entry.path();
-        if let Ok(file_type) = entry.file_type() {
-            out.push(path.clone());
-
-            if file_type.is_dir() {
-                walk_recursive(&path, canonical_root, current_depth + 1, options, out, visited_canonical)?;
-            } else if file_type.is_symlink() && options.follow_symlinks {
-                if let Ok(target) = fs::read_link(&path) {
-                    let resolved = if target.is_relative() {
-                        dir.join(target)
-                    } else {
-                        target
-                    };
-                    if let Ok(resolved_canon) = resolved.canonicalize() {
-                        // Sandbox check: symlink must not escape the walk root.
-                        if let Some(ref canon_root) = canonical_root {
-                            if !resolved_canon.starts_with(canon_root) {
-                                continue;
-                            }
-                        }
-                        if resolved_canon.is_dir() {
-                            walk_recursive(&resolved, canonical_root, current_depth + 1, options, out, visited_canonical)?;
-                        }
-                    }
-                }
-            }
-        }
+        process_entry(
+            entry,
+            dir,
+            canonical_root,
+            current_depth,
+            options,
+            out,
+            visited_canonical,
+        )?;
     }
-
     Ok(())
 }
 
@@ -104,16 +199,11 @@ mod tests {
 
     #[test]
     fn walks_directory_deterministically() {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let options = WalkOptions {
-            max_depth: 2,
-            follow_symlinks: false,
-            sort_alphabetically: true,
-        };
-
-        let paths = walk_dir(&root, &options).expect("walk successful");
-        assert!(!paths.is_empty());
-        assert!(paths.iter().any(|p| p.ends_with("Cargo.toml")));
-        assert!(paths.iter().any(|p| p.ends_with("src")));
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let src_dir = manifest_dir.join("src");
+        let entries1 = walk_dir(&src_dir, &WalkOptions::default()).expect("walks src");
+        let entries2 = walk_dir(&src_dir, &WalkOptions::default()).expect("walks src");
+        assert!(!entries1.is_empty());
+        assert_eq!(entries1, entries2);
     }
 }

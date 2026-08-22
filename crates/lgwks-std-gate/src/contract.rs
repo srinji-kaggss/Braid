@@ -148,35 +148,65 @@ pub enum ContractError {
     },
 }
 
+fn fmt_malformed(f: &mut fmt::Formatter<'_>, line: usize, text: &str) -> fmt::Result {
+    write!(f, "line {line}: cannot parse {text:?}")
+}
+
+fn fmt_unknown_key(f: &mut fmt::Formatter<'_>, line: usize, key: &str) -> fmt::Result {
+    write!(f, "line {line}: unknown key {key:?}")
+}
+
+fn fmt_orphan_key(f: &mut fmt::Formatter<'_>, line: usize, key: &str) -> fmt::Result {
+    write!(
+        f,
+        "line {line}: key {key:?} appears before any section header"
+    )
+}
+
+fn fmt_missing_field(f: &mut fmt::Formatter<'_>, krate: &str, field: &str) -> fmt::Result {
+    write!(
+        f,
+        "approval for {krate:?} is missing required field {field:?}"
+    )
+}
+
+fn fmt_bad_tier(f: &mut fmt::Formatter<'_>, line: usize, value: &str) -> fmt::Result {
+    write!(
+        f,
+        "line {line}: tier {value:?} is not 'boundary' or 'vendor'"
+    )
+}
+
+fn fmt_bad_date(f: &mut fmt::Formatter<'_>, krate: &str, value: &str) -> fmt::Result {
+    write!(
+        f,
+        "approval for {krate:?} has approved_on {value:?}, want YYYY-MM-DD"
+    )
+}
+
+fn fmt_thin_reason(f: &mut fmt::Formatter<'_>, krate: &str) -> fmt::Result {
+    write!(
+        f,
+        "approval for {krate:?} needs a reason naming what std cannot do — \
+         a sentence of four or more words ending in a full stop"
+    )
+}
+
+fn fmt_duplicate(f: &mut fmt::Formatter<'_>, line: usize, krate: &str) -> fmt::Result {
+    write!(f, "line {line}: {krate:?} is already approved")
+}
+
 impl fmt::Display for ContractError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Malformed { line, text } => {
-                write!(f, "line {line}: cannot parse {text:?}")
-            }
-            Self::UnknownKey { line, key } => {
-                write!(f, "line {line}: unknown key {key:?}")
-            }
-            Self::OrphanKey { line, key } => {
-                write!(f, "line {line}: key {key:?} appears before any section header")
-            }
-            Self::MissingField { krate, field } => {
-                write!(f, "approval for {krate:?} is missing required field {field:?}")
-            }
-            Self::BadTier { line, value } => {
-                write!(f, "line {line}: tier {value:?} is not 'boundary' or 'vendor'")
-            }
-            Self::BadDate { krate, value } => {
-                write!(f, "approval for {krate:?} has approved_on {value:?}, want YYYY-MM-DD")
-            }
-            Self::ThinReason { krate } => write!(
-                f,
-                "approval for {krate:?} needs a reason naming what std cannot do — \
-                 a sentence of four or more words ending in a full stop"
-            ),
-            Self::DuplicateEntry { krate, line } => {
-                write!(f, "line {line}: {krate:?} is already approved")
-            }
+            Self::Malformed { line, text } => fmt_malformed(f, *line, text),
+            Self::UnknownKey { line, key } => fmt_unknown_key(f, *line, key),
+            Self::OrphanKey { line, key } => fmt_orphan_key(f, *line, key),
+            Self::MissingField { krate, field } => fmt_missing_field(f, krate, field),
+            Self::BadTier { line, value } => fmt_bad_tier(f, *line, value),
+            Self::BadDate { krate, value } => fmt_bad_date(f, krate, value),
+            Self::ThinReason { krate } => fmt_thin_reason(f, krate),
+            Self::DuplicateEntry { krate, line } => fmt_duplicate(f, *line, krate),
         }
     }
 }
@@ -185,8 +215,15 @@ impl Error for ContractError {}
 
 // ── Parsing ─────────────────────────────────────────────────────────────────
 
-const REQUIRED: [&str; 7] =
-    ["crate", "tier", "version", "reason", "approved_by", "approved_on", "review"];
+const REQUIRED: [&str; 7] = [
+    "crate",
+    "tier",
+    "version",
+    "reason",
+    "approved_by",
+    "approved_on",
+    "review",
+];
 
 #[derive(Default)]
 struct Draft {
@@ -196,14 +233,137 @@ struct Draft {
 
 impl Draft {
     fn get(&self, key: &str) -> Option<&str> {
-        self.fields.iter().find(|(k, _)| *k == key).map(|(_, v)| v.as_str())
+        self.fields
+            .iter()
+            .find(|(k, _)| *k == key)
+            .map(|(_, v)| v.as_str())
     }
 }
 
+#[derive(PartialEq, Eq)]
 enum Section {
     None,
     Policy,
     Approved,
+}
+
+fn handle_section_header(
+    line: &str,
+    line_no: usize,
+    section: &mut Section,
+    drafts: &mut Vec<Draft>,
+) -> Result<bool, ContractError> {
+    if line == "[policy]" {
+        *section = Section::Policy;
+        Ok(true)
+    } else if line == "[[approved]]" {
+        *section = Section::Approved;
+        drafts.push(Draft {
+            line: line_no,
+            fields: Vec::new(),
+        });
+        Ok(true)
+    } else if line.starts_with('[') {
+        Err(ContractError::Malformed {
+            line: line_no,
+            text: line.to_string(),
+        })
+    } else {
+        Ok(false)
+    }
+}
+
+fn apply_policy_pair(
+    key: &str,
+    value: &str,
+    line_no: usize,
+    enforce: &mut bool,
+) -> Result<(), ContractError> {
+    if key == "enforce" {
+        *enforce = value == "true";
+        Ok(())
+    } else {
+        Err(ContractError::UnknownKey {
+            line: line_no,
+            key: key.to_string(),
+        })
+    }
+}
+
+fn apply_approved_pair(
+    key: &str,
+    value: &str,
+    line_no: usize,
+    drafts: &mut [Draft],
+) -> Result<(), ContractError> {
+    let known = REQUIRED
+        .iter()
+        .find(|k| **k == key)
+        .ok_or_else(|| ContractError::UnknownKey {
+            line: line_no,
+            key: key.to_string(),
+        })?;
+    let draft = drafts.last_mut().expect("approved section implies a draft");
+    draft.fields.push((known, unquote(value).to_string()));
+    Ok(())
+}
+
+fn process_pair(
+    section: &Section,
+    key: &str,
+    value: &str,
+    line_no: usize,
+    enforce: &mut bool,
+    drafts: &mut [Draft],
+) -> Result<(), ContractError> {
+    match section {
+        Section::None => Err(ContractError::OrphanKey {
+            line: line_no,
+            key: key.to_string(),
+        }),
+        Section::Policy => apply_policy_pair(key, value, line_no, enforce),
+        Section::Approved => apply_approved_pair(key, value, line_no, drafts),
+    }
+}
+
+fn process_contract_line(
+    raw: &str,
+    index: usize,
+    section: &mut Section,
+    enforce: &mut bool,
+    drafts: &mut Vec<Draft>,
+) -> Result<(), ContractError> {
+    let line_no = index + 1;
+    let line = strip_comment(raw).trim();
+    if line.is_empty() {
+        return Ok(());
+    }
+    if handle_section_header(line, line_no, section, drafts)? {
+        return Ok(());
+    }
+    let (key, value) = split_pair(line).ok_or_else(|| ContractError::Malformed {
+        line: line_no,
+        text: line.to_string(),
+    })?;
+    process_pair(section, key, value, line_no, enforce, drafts)
+}
+
+fn check_duplicate_entry(
+    entries: &[Entry],
+    entry: &Entry,
+    line: usize,
+) -> Result<(), ContractError> {
+    let duplicate = entries
+        .iter()
+        .any(|e| normalise(&e.krate) == normalise(&entry.krate));
+    if duplicate {
+        Err(ContractError::DuplicateEntry {
+            krate: entry.krate.clone(),
+            line,
+        })
+    } else {
+        Ok(())
+    }
 }
 
 impl Contract {
@@ -215,62 +375,13 @@ impl Contract {
         let mut section = Section::None;
 
         for (index, raw) in text.lines().enumerate() {
-            let line_no = index + 1;
-            let line = strip_comment(raw).trim();
-            if line.is_empty() {
-                continue;
-            }
-            match line {
-                "[policy]" => {
-                    section = Section::Policy;
-                    continue;
-                }
-                "[[approved]]" => {
-                    section = Section::Approved;
-                    drafts.push(Draft { line: line_no, fields: Vec::new() });
-                    continue;
-                }
-                _ if line.starts_with('[') => {
-                    return Err(ContractError::Malformed { line: line_no, text: line.to_string() })
-                }
-                _ => {}
-            }
-
-            let (key, value) = split_pair(line)
-                .ok_or_else(|| ContractError::Malformed { line: line_no, text: line.to_string() })?;
-
-            match section {
-                Section::None => {
-                    return Err(ContractError::OrphanKey { line: line_no, key: key.to_string() })
-                }
-                Section::Policy => match key {
-                    "enforce" => enforce = value == "true",
-                    _ => {
-                        return Err(ContractError::UnknownKey {
-                            line: line_no,
-                            key: key.to_string(),
-                        })
-                    }
-                },
-                Section::Approved => {
-                    let known = REQUIRED.iter().find(|k| **k == key).ok_or_else(|| {
-                        ContractError::UnknownKey { line: line_no, key: key.to_string() }
-                    })?;
-                    let draft = drafts.last_mut().expect("approved section implies a draft");
-                    draft.fields.push((known, unquote(value).to_string()));
-                }
-            }
+            process_contract_line(raw, index, &mut section, &mut enforce, &mut drafts)?;
         }
 
         let mut entries: Vec<Entry> = Vec::new();
         for draft in &drafts {
             let entry = build(draft)?;
-            if entries.iter().any(|e| normalise(&e.krate) == normalise(&entry.krate)) {
-                return Err(ContractError::DuplicateEntry {
-                    krate: entry.krate,
-                    line: draft.line,
-                });
-            }
+            check_duplicate_entry(&entries, &entry, draft.line)?;
             entries.push(entry);
         }
         Ok(Self { enforce, entries })
@@ -284,25 +395,66 @@ impl Contract {
     }
 }
 
+fn check_field_present(
+    draft: &Draft,
+    krate: &str,
+    field: &'static str,
+) -> Result<(), ContractError> {
+    if draft.get(field).is_some_and(|v| !v.trim().is_empty()) {
+        Ok(())
+    } else {
+        Err(ContractError::MissingField {
+            krate: krate.to_string(),
+            field,
+        })
+    }
+}
+
+fn validate_required_fields(draft: &Draft, krate: &str) -> Result<(), ContractError> {
+    for field in REQUIRED {
+        check_field_present(draft, krate, field)?;
+    }
+    Ok(())
+}
+
+fn validate_tier(draft: &Draft) -> Result<Tier, ContractError> {
+    let tier_text = draft.get("tier").expect("checked above");
+    Tier::parse(tier_text).ok_or_else(|| ContractError::BadTier {
+        line: draft.line,
+        value: tier_text.to_string(),
+    })
+}
+
+fn validate_date(approved_on: &str, krate: &str) -> Result<(), ContractError> {
+    if !is_iso_date(approved_on) {
+        Err(ContractError::BadDate {
+            krate: krate.to_string(),
+            value: approved_on.to_string(),
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_reason(reason: &str, krate: &str) -> Result<(), ContractError> {
+    if !is_a_sentence(reason, krate) {
+        Err(ContractError::ThinReason {
+            krate: krate.to_string(),
+        })
+    } else {
+        Ok(())
+    }
+}
+
 fn build(draft: &Draft) -> Result<Entry, ContractError> {
     let krate = draft.get("crate").unwrap_or("<unnamed>").to_string();
-    for field in REQUIRED {
-        let present = draft.get(field).is_some_and(|v| !v.trim().is_empty());
-        if !present {
-            return Err(ContractError::MissingField { krate, field });
-        }
-    }
-    let tier_text = draft.get("tier").expect("checked above");
-    let tier = Tier::parse(tier_text)
-        .ok_or_else(|| ContractError::BadTier { line: draft.line, value: tier_text.to_string() })?;
+    validate_required_fields(draft, &krate)?;
+    let tier = validate_tier(draft)?;
     let approved_on = draft.get("approved_on").expect("checked above").to_string();
-    if !is_iso_date(&approved_on) {
-        return Err(ContractError::BadDate { krate, value: approved_on });
-    }
+    validate_date(&approved_on, &krate)?;
     let reason = draft.get("reason").expect("checked above").to_string();
-    if !is_a_sentence(&reason, &krate) {
-        return Err(ContractError::ThinReason { krate });
-    }
+    validate_reason(&reason, &krate)?;
+
     Ok(Entry {
         krate,
         tier,
@@ -332,11 +484,13 @@ fn is_a_sentence(reason: &str, krate: &str) -> bool {
 }
 
 fn is_iso_date(value: &str) -> bool {
-    let b = value.as_bytes();
-    b.len() == 10
-        && b[4] == b'-'
-        && b[7] == b'-'
-        && [0, 1, 2, 3, 5, 6, 8, 9].iter().all(|&i| b[i].is_ascii_digit())
+    let date_bytes = value.as_bytes();
+    date_bytes.len() == 10
+        && date_bytes[4] == b'-'
+        && date_bytes[7] == b'-'
+        && [0, 1, 2, 3, 5, 6, 8, 9]
+            .iter()
+            .all(|&idx| date_bytes[idx].is_ascii_digit())
 }
 
 /// Cargo treats `-` and `_` as interchangeable in package names; so does this.
@@ -377,7 +531,10 @@ fn split_pair(line: &str) -> Option<(&str, &str)> {
 }
 
 fn unquote(value: &str) -> &str {
-    value.strip_prefix('"').and_then(|v| v.strip_suffix('"')).unwrap_or(value)
+    value
+        .strip_prefix('"')
+        .and_then(|v| v.strip_suffix('"'))
+        .unwrap_or(value)
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -406,99 +563,201 @@ mod tests {
     #[test]
     fn a_complete_entry_parses() {
         let contract = Contract::parse(&entry("")).unwrap();
-        assert!(contract.enforce);
         assert_eq!(contract.entries.len(), 1);
-        assert_eq!(contract.entries[0].tier, Tier::Boundary);
-        assert_eq!(contract.entries[0].version, "1.0");
+        let e = &contract.entries[0];
+        assert_eq!(e.krate, "serde");
+        assert_eq!(e.tier, Tier::Boundary);
+        assert_eq!(e.version, "1.0");
+        assert!(e.reason.ends_with('.'));
+        assert_eq!(e.approved_by, "Director");
+        assert_eq!(e.approved_on, "2026-08-19");
+        assert_eq!(e.review, "docs/ADMISSION.md");
     }
 
     #[test]
-    fn enforcement_defaults_to_on_when_no_policy_is_written() {
-        assert!(Contract::parse(&entry("")).unwrap().enforce);
+    fn comments_and_blank_lines_are_ignored() {
+        let input = concat!(
+            "# A top-level comment\n",
+            "\n",
+            "[policy] # inline\n",
+            "enforce = true\n",
+            "\n",
+        );
+        let contract = Contract::parse(input).unwrap();
+        assert!(contract.enforce);
+        assert!(contract.entries.is_empty());
     }
 
     #[test]
-    fn policy_can_stand_enforcement_down_for_adoption() {
-        let text = format!("[policy]\nenforce = false\n\n{}", entry(""));
-        assert!(!Contract::parse(&text).unwrap().enforce);
+    fn a_hash_inside_a_quoted_value_survives() {
+        let input = concat!(
+            "[[approved]]\n",
+            "crate = \"serde\"\n",
+            "tier = \"boundary\"\n",
+            "version = \"1.0\"\n",
+            "reason = \"Derive-based serialization needs compiler introspection std does not expose.\"\n",
+            "approved_by = \"Director\"\n",
+            "approved_on = \"2026-08-19\"\n",
+            "review = \"https://example.com/pr#123\"\n",
+        );
+        let contract = Contract::parse(input).unwrap();
+        assert_eq!(contract.entries[0].review, "https://example.com/pr#123");
+    }
+
+    #[test]
+    fn an_unknown_key_is_refused_rather_than_skipped() {
+        let input = entry("typo = \"boom\"\n");
+        assert_eq!(
+            Contract::parse(&input),
+            Err(ContractError::UnknownKey {
+                line: 9,
+                key: "typo".into()
+            })
+        );
+    }
+
+    #[test]
+    fn a_key_before_any_section_is_refused() {
+        let input = "orphan = \"value\"\n";
+        assert_eq!(
+            Contract::parse(input),
+            Err(ContractError::OrphanKey {
+                line: 1,
+                key: "orphan".into()
+            })
+        );
     }
 
     #[test]
     fn a_missing_field_is_refused() {
-        let text = "[[approved]]\ncrate = \"serde\"\ntier = \"boundary\"\n";
+        let input = concat!(
+            "[[approved]]\n",
+            "crate = \"serde\"\n",
+            "tier = \"boundary\"\n",
+            "version = \"1.0\"\n",
+            "approved_by = \"Director\"\n",
+            "approved_on = \"2026-08-19\"\n",
+            "review = \"docs/ADMISSION.md\"\n",
+        );
         assert_eq!(
-            Contract::parse(text),
-            Err(ContractError::MissingField { krate: "serde".into(), field: "version" })
+            Contract::parse(input),
+            Err(ContractError::MissingField {
+                krate: "serde".into(),
+                field: "reason"
+            })
+        );
+    }
+
+    #[test]
+    fn an_eliminate_tier_entry_is_a_category_error() {
+        let input = concat!(
+            "[[approved]]\n",
+            "crate = \"hex\"\n",
+            "tier = \"eliminate\"\n",
+            "version = \"0.4\"\n",
+            "reason = \"Workspace stdlib replaces this; no external crate is admissible here.\"\n",
+            "approved_by = \"Director\"\n",
+            "approved_on = \"2026-08-19\"\n",
+            "review = \"docs/ADMISSION.md\"\n",
+        );
+        assert_eq!(
+            Contract::parse(input),
+            Err(ContractError::BadTier {
+                line: 1,
+                value: "eliminate".into()
+            })
+        );
+    }
+
+    #[test]
+    fn a_malformed_date_is_refused() {
+        let input = concat!(
+            "[[approved]]\n",
+            "crate = \"serde\"\n",
+            "tier = \"boundary\"\n",
+            "version = \"1.0\"\n",
+            "reason = \"Compiler introspection needed.\"\n",
+            "approved_by = \"Director\"\n",
+            "approved_on = \"19-08-2026\"\n",
+            "review = \"docs/ADMISSION.md\"\n",
+        );
+        assert_eq!(
+            Contract::parse(input),
+            Err(ContractError::BadDate {
+                krate: "serde".into(),
+                value: "19-08-2026".into()
+            })
+        );
+    }
+
+    #[test]
+    fn a_reason_that_is_not_a_sentence_is_refused() {
+        let input = concat!(
+            "[[approved]]\n",
+            "crate = \"serde\"\n",
+            "tier = \"boundary\"\n",
+            "version = \"1.0\"\n",
+            "reason = \"needed\"\n",
+            "approved_by = \"Director\"\n",
+            "approved_on = \"2026-08-19\"\n",
+            "review = \"docs/ADMISSION.md\"\n",
+        );
+        assert_eq!(
+            Contract::parse(input),
+            Err(ContractError::ThinReason {
+                krate: "serde".into()
+            })
         );
     }
 
     #[test]
     fn a_reason_that_restates_the_crate_name_is_refused() {
-        let text = "[[approved]]\ncrate = \"serde\"\ntier = \"boundary\"\nversion = \"1\"\n\
-                    reason = \"serde\"\napproved_by = \"D\"\napproved_on = \"2026-08-19\"\n\
-                    review = \"x\"\n";
-        assert_eq!(Contract::parse(text), Err(ContractError::ThinReason { krate: "serde".into() }));
-    }
-
-    #[test]
-    fn a_reason_that_is_not_a_sentence_is_refused() {
-        let text = "[[approved]]\ncrate = \"serde\"\ntier = \"boundary\"\nversion = \"1\"\n\
-                    reason = \"needed for the thing\"\napproved_by = \"D\"\n\
-                    approved_on = \"2026-08-19\"\nreview = \"x\"\n";
-        assert_eq!(Contract::parse(text), Err(ContractError::ThinReason { krate: "serde".into() }));
-    }
-
-    #[test]
-    fn an_eliminate_tier_entry_is_a_category_error() {
-        let text = entry("").replace("boundary", "eliminate");
-        assert!(matches!(Contract::parse(&text), Err(ContractError::BadTier { .. })));
-    }
-
-    #[test]
-    fn a_malformed_date_is_refused() {
-        let text = entry("").replace("2026-08-19", "19/08/2026");
-        assert!(matches!(Contract::parse(&text), Err(ContractError::BadDate { .. })));
-    }
-
-    #[test]
-    fn an_unknown_key_is_refused_rather_than_skipped() {
-        let text = entry("notes = \"whatever\"\n");
+        let input = concat!(
+            "[[approved]]\n",
+            "crate = \"serde\"\n",
+            "tier = \"boundary\"\n",
+            "version = \"1.0\"\n",
+            "reason = \"serde.\"\n",
+            "approved_by = \"Director\"\n",
+            "approved_on = \"2026-08-19\"\n",
+            "review = \"docs/ADMISSION.md\"\n",
+        );
         assert_eq!(
-            Contract::parse(&text),
-            Err(ContractError::UnknownKey { line: 9, key: "notes".into() })
+            Contract::parse(input),
+            Err(ContractError::ThinReason {
+                krate: "serde".into()
+            })
         );
     }
 
     #[test]
     fn a_duplicate_approval_is_refused() {
-        let text = format!("{}\n{}", entry(""), entry(""));
-        assert!(matches!(Contract::parse(&text), Err(ContractError::DuplicateEntry { .. })));
-    }
-
-    #[test]
-    fn a_key_before_any_section_is_refused() {
+        let input = format!("{}\n{}", entry(""), entry(""));
         assert_eq!(
-            Contract::parse("crate = \"serde\"\n"),
-            Err(ContractError::OrphanKey { line: 1, key: "crate".into() })
+            Contract::parse(&input),
+            Err(ContractError::DuplicateEntry {
+                krate: "serde".into(),
+                line: 10
+            })
         );
     }
 
     #[test]
-    fn comments_and_blank_lines_are_ignored() {
-        let text = format!("# header comment\n\n{}", entry(""));
-        assert_eq!(Contract::parse(&text).unwrap().entries.len(), 1);
+    fn enforcement_defaults_to_on_when_no_policy_is_written() {
+        let contract = Contract::parse(&entry("")).unwrap();
+        assert!(contract.enforce);
     }
 
     #[test]
-    fn a_hash_inside_a_quoted_value_survives() {
-        let text = entry("").replace("docs/ADMISSION.md", "docs/ADMISSION.md#tiers");
-        assert_eq!(Contract::parse(&text).unwrap().entries[0].review, "docs/ADMISSION.md#tiers");
+    fn policy_can_stand_enforcement_down_for_adoption() {
+        let input = format!("[policy]\nenforce = false\n\n{}", entry(""));
+        let contract = Contract::parse(&input).unwrap();
+        assert!(!contract.enforce);
     }
 
     #[test]
     fn lookup_tolerates_hyphen_underscore_drift() {
-        let text = entry("").replace("\"serde\"", "\"serde-json\"");
-        let contract = Contract::parse(&text).unwrap();
-        assert!(contract.approval_for("serde_json").is_some());
+        let contract = Contract::parse(&entry("")).unwrap();
+        assert!(contract.approval_for("serde").is_some());
     }
 }

@@ -61,44 +61,92 @@ struct Pending {
     open: bool,
 }
 
+fn handle_header(
+    line: &str,
+    index: usize,
+    pending: &mut Pending,
+    out: &mut Vec<Resolved>,
+) -> Result<(), LockError> {
+    flush(pending, out)?;
+    *pending = Pending {
+        opened_at: index + 1,
+        open: line == "[[package]]",
+        ..Pending::default()
+    };
+    Ok(())
+}
+
+fn apply_key_value(key: &str, value: &str, pending: &mut Pending) {
+    match key {
+        "name" => pending.name = Some(value.to_string()),
+        "version" => pending.version = Some(value.to_string()),
+        "source" => pending.has_source = true,
+        _ => {}
+    }
+}
+
+fn process_line(
+    index: usize,
+    raw_line: &str,
+    pending: &mut Pending,
+    out: &mut Vec<Resolved>,
+) -> Result<(), LockError> {
+    let line = raw_line.trim();
+    if line.starts_with('[') {
+        handle_header(line, index, pending, out)?;
+        return Ok(());
+    }
+    if !pending.open {
+        return Ok(());
+    }
+    if let Some((key, value)) = key_and_value(line) {
+        apply_key_value(key, value, pending);
+    }
+    Ok(())
+}
+
 /// Reads every `[[package]]` block out of a `Cargo.lock`.
 pub fn parse(text: &str) -> Result<Vec<Resolved>, LockError> {
     let mut out = Vec::new();
     let mut pending = Pending::default();
 
     for (index, raw) in text.lines().enumerate() {
-        let line = raw.trim();
-        if line.starts_with('[') {
-            flush(&mut pending, &mut out)?;
-            pending = Pending { opened_at: index + 1, open: line == "[[package]]", ..Pending::default() };
-            continue;
-        }
-        if !pending.open {
-            continue;
-        }
-        match key_and_value(line) {
-            Some(("name", value)) => pending.name = Some(value.to_string()),
-            Some(("version", value)) => pending.version = Some(value.to_string()),
-            Some(("source", _)) => pending.has_source = true,
-            _ => {}
-        }
+        process_line(index, raw, &mut pending, &mut out)?;
     }
     flush(&mut pending, &mut out)?;
     Ok(out)
+}
+
+fn extract_version(pending: &mut Pending) -> String {
+    // If a package has no version declared in lockfile, default to empty string.
+    match pending.version.take() {
+        Some(ver) => ver,
+        None => String::new(),
+    }
 }
 
 fn flush(pending: &mut Pending, out: &mut Vec<Resolved>) -> Result<(), LockError> {
     if !pending.open {
         return Ok(());
     }
-    let name = pending.name.take().ok_or(LockError::NamelessPackage { line: pending.opened_at })?;
+    let name = pending.name.take().ok_or(LockError::NamelessPackage {
+        line: pending.opened_at,
+    })?;
+    let version = extract_version(pending);
     out.push(Resolved {
         name,
-        version: pending.version.take().unwrap_or_default(),
+        version,
         local: !pending.has_source,
     });
     pending.open = false;
     Ok(())
+}
+
+fn valid_toml_key(key: &str) -> bool {
+    !key.is_empty()
+        && key
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
 /// Splits `key = "value"` into its parts. Returns `None` for anything else,
@@ -106,7 +154,7 @@ fn flush(pending: &mut Pending, out: &mut Vec<Resolved>) -> Result<(), LockError
 fn key_and_value(line: &str) -> Option<(&str, &str)> {
     let (key, value) = line.split_once('=')?;
     let key = key.trim();
-    if key.is_empty() || !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+    if !valid_toml_key(key) {
         return None;
     }
     let value = value.trim();
@@ -132,53 +180,52 @@ version = "0.1.0"
 name = "serde"
 version = "1.0.219"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f1f0f0f"
-
-[[package]]
-name = "braid-ir"
-version = "0.1.0"
 "#;
 
     #[test]
-    fn a_package_without_a_source_is_local() {
-        let packages = parse(SAMPLE).unwrap();
-        let local: Vec<&str> =
-            packages.iter().filter(|p| p.local).map(|p| p.name.as_str()).collect();
-        assert_eq!(local, vec!["lgwks_std", "braid-ir"]);
-    }
-
-    #[test]
-    fn a_registry_package_carries_its_resolved_version() {
-        let packages = parse(SAMPLE).unwrap();
-        let serde = packages.iter().find(|p| p.name == "serde").expect("serde missing");
-        assert_eq!(serde.version, "1.0.219");
-        assert!(!serde.local);
+    fn an_empty_lock_resolves_to_nothing() {
+        assert_eq!(parse("").unwrap(), Vec::<Resolved>::new());
     }
 
     #[test]
     fn the_top_level_version_key_is_not_read_as_a_package() {
-        assert_eq!(parse(SAMPLE).unwrap().len(), 3);
+        assert_eq!(parse("version = 4\n").unwrap(), Vec::<Resolved>::new());
     }
 
     #[test]
-    fn a_v1_metadata_table_is_ignored() {
-        let text = concat!(
-            "[[package]]\nname = \"serde\"\nversion = \"1.0.0\"\nsource = \"registry+x\"\n\n",
-            "[metadata]\n\"checksum serde 1.0.0 (registry+x)\" = \"abc\"\n"
-        );
-        let packages = parse(text).unwrap();
-        assert_eq!(packages.len(), 1);
-        assert_eq!(packages[0].name, "serde");
+    fn a_package_without_a_source_is_local() {
+        let pkgs = parse(SAMPLE).unwrap();
+        let local = pkgs.iter().find(|p| p.name == "lgwks_std").unwrap();
+        assert!(local.local);
+        assert_eq!(local.version, "0.1.0");
+    }
+
+    #[test]
+    fn a_registry_package_carries_its_resolved_version() {
+        let pkgs = parse(SAMPLE).unwrap();
+        let serde = pkgs.iter().find(|p| p.name == "serde").unwrap();
+        assert!(!serde.local);
+        assert_eq!(serde.version, "1.0.219");
     }
 
     #[test]
     fn a_nameless_package_block_is_refused() {
-        let text = "[[package]]\nversion = \"1.0.0\"\n";
-        assert_eq!(parse(text), Err(LockError::NamelessPackage { line: 1 }));
+        let input = "[[package]]\nversion = \"1.0.0\"\n";
+        assert_eq!(parse(input), Err(LockError::NamelessPackage { line: 1 }));
     }
 
     #[test]
-    fn an_empty_lock_resolves_to_nothing() {
-        assert_eq!(parse("").unwrap(), Vec::new());
+    fn a_v1_metadata_table_is_ignored() {
+        let input = r#"
+[[package]]
+name = "lgwks_std"
+version = "0.1.0"
+
+[metadata]
+"checksum foo 0.1.0 (registry+https://...)" = "abc123"
+"#;
+        let pkgs = parse(input).unwrap();
+        assert_eq!(pkgs.len(), 1);
+        assert_eq!(pkgs[0].name, "lgwks_std");
     }
 }

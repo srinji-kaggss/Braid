@@ -206,7 +206,9 @@ fn version_admits(approved: &str, resolved: &str) -> bool {
         return true;
     }
     resolved == approved
-        || resolved.strip_prefix(approved).is_some_and(|rest| rest.starts_with('.'))
+        || resolved
+            .strip_prefix(approved)
+            .is_some_and(|rest| rest.starts_with('.'))
 }
 
 // ── Filesystem entry points ─────────────────────────────────────────────────
@@ -220,12 +222,24 @@ pub fn repository_root(start: &Path) -> Result<PathBuf, GateError> {
         }
         cursor = dir.parent();
     }
-    Err(GateError::LockNotFound { from: start.to_path_buf() })
+    Err(GateError::LockNotFound {
+        from: start.to_path_buf(),
+    })
+}
+
+fn ensure_contract_file(path: &Path) -> Result<(), GateError> {
+    if !path.is_file() {
+        Err(GateError::ContractNotFound {
+            path: path.to_path_buf(),
+        })
+    } else {
+        Ok(())
+    }
 }
 
 /// Audits the repository rooted at `root`, reading its lock file and register.
-pub fn check(root: &Path) -> Result<(Contract, Vec<Refusal>), GateError> {
-    check_against(root, &root.join(CONTRACT_PATH))
+pub fn check_dependencies(root: &Path) -> Result<(Contract, Vec<Refusal>), GateError> {
+    check_dependencies_against(root, &root.join(CONTRACT_PATH))
 }
 
 /// Audits `root` against a register held elsewhere. This exists for the `check
@@ -233,12 +247,13 @@ pub fn check(root: &Path) -> Result<(Contract, Vec<Refusal>), GateError> {
 /// register of its own. [`enforce`] never calls it: a build always reads the
 /// register committed beside the code it is building, so no build can be
 /// pointed at a more permissive contract than the one in its own tree.
-pub fn check_against(root: &Path, contract_path: &Path) -> Result<(Contract, Vec<Refusal>), GateError> {
+pub fn check_dependencies_against(
+    root: &Path,
+    contract_path: &Path,
+) -> Result<(Contract, Vec<Refusal>), GateError> {
     let lock_path = root.join("Cargo.lock");
     let contract_path = contract_path.to_path_buf();
-    if !contract_path.is_file() {
-        return Err(GateError::ContractNotFound { path: contract_path });
-    }
+    ensure_contract_file(&contract_path)?;
     let register = Contract::parse(&read(&contract_path)?).map_err(GateError::Contract)?;
     let resolved = lock::parse(&read(&lock_path)?).map_err(GateError::Lock)?;
     let refusals = audit(&resolved, &register);
@@ -246,37 +261,35 @@ pub fn check_against(root: &Path, contract_path: &Path) -> Result<(Contract, Vec
 }
 
 fn read(path: &Path) -> Result<String, GateError> {
-    std::fs::read_to_string(path)
-        .map_err(|cause| GateError::Unreadable { path: path.to_path_buf(), cause })
+    std::fs::read_to_string(path).map_err(|cause| GateError::Unreadable {
+        path: path.to_path_buf(),
+        cause,
+    })
 }
 
 // ── build.rs entry point ────────────────────────────────────────────────────
 
-/// Fails the consumer's build when its resolved graph carries a dependency the
-/// human-approved register does not admit. Call from `build.rs`; see the module
-/// header for the three-line wiring.
-///
-/// # Panics
-///
-/// Panics when the audit refuses, when the register is missing or unparseable,
-/// or when the lock file cannot be read. That panic is the mechanism: it is how
-/// a build script turns INV-DEP-REGISTERED into a compile error.
-pub fn enforce() {
+fn resolve_enforce_root() -> PathBuf {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
         .expect("CARGO_MANIFEST_DIR is set by cargo for every build script");
-    let root = match repository_root(Path::new(&manifest_dir)) {
+    match repository_root(Path::new(&manifest_dir)) {
         Ok(root) => root,
         Err(e) => fail(&[e.to_string()]),
-    };
+    }
+}
 
-    println!("cargo::rerun-if-changed={}", root.join("Cargo.lock").display());
-    println!("cargo::rerun-if-changed={}", root.join(CONTRACT_PATH).display());
+fn emit_cargo_rerun(root: &Path) {
+    println!(
+        "cargo::rerun-if-changed={}",
+        root.join("Cargo.lock").display()
+    );
+    println!(
+        "cargo::rerun-if-changed={}",
+        root.join(CONTRACT_PATH).display()
+    );
+}
 
-    let (register, refusals) = match check(&root) {
-        Ok(outcome) => outcome,
-        Err(e) => fail(&[e.to_string()]),
-    };
-
+fn handle_enforce_refusals(register: &Contract, refusals: &[Refusal]) {
     if refusals.is_empty() {
         return;
     }
@@ -289,6 +302,26 @@ pub fn enforce() {
     }
 }
 
+/// Fails the consumer's build when its resolved graph carries a dependency the
+/// human-approved register does not admit. Call from `build.rs`; see the module
+/// header for the three-line wiring.
+///
+/// # Panics
+///
+/// Panics when the audit refuses, when the register is missing or unparseable,
+/// or when the lock file cannot be read. That panic is the mechanism: it is how
+/// a build script turns INV-DEP-REGISTERED into a compile error.
+pub fn enforce() {
+    let root = resolve_enforce_root();
+    emit_cargo_rerun(&root);
+
+    let (register, refusals) = match check_dependencies(&root) {
+        Ok(outcome) => outcome,
+        Err(e) => fail(&[e.to_string()]),
+    };
+    handle_enforce_refusals(&register, &refusals);
+}
+
 fn fail(lines: &[String]) -> ! {
     for line in lines {
         println!("cargo::error=INV-DEP-REGISTERED: {line}");
@@ -297,7 +330,10 @@ fn fail(lines: &[String]) -> ! {
         "cargo::error=add an approval to {CONTRACT_PATH}, or reach for a lower rung — \
          `lgwks-gate request <crate> <version>` prints the block to fill in"
     );
-    panic!("INV-DEP-REGISTERED: {} unapproved dependencies", lines.len());
+    panic!(
+        "INV-DEP-REGISTERED: {} unapproved dependencies",
+        lines.len()
+    );
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -319,7 +355,11 @@ mod tests {
     );
 
     fn resolved(name: &str, version: &str, local: bool) -> Resolved {
-        Resolved { name: name.into(), version: version.into(), local }
+        Resolved {
+            name: name.into(),
+            version: version.into(),
+            local,
+        }
     }
 
     #[test]
@@ -333,7 +373,10 @@ mod tests {
         let register = Contract::parse(REGISTER).unwrap();
         assert_eq!(
             audit(&[resolved("tokio", "1.40.0", false)], &register),
-            vec![Refusal::Unregistered { krate: "tokio".into(), version: "1.40.0".into() }]
+            vec![Refusal::Unregistered {
+                krate: "tokio".into(),
+                version: "1.40.0".into()
+            }]
         );
     }
 
@@ -389,7 +432,11 @@ mod tests {
     /// so the check is mechanical rather than a promise in a comment.
     #[test]
     fn admits_no_dependency_of_its_own() {
-        let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().parent().unwrap();
+        let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap();
         for member in ["crates/lgwks-std", "crates/lgwks-std-gate"] {
             let manifest = std::fs::read_to_string(workspace.join(member).join("Cargo.toml"))
                 .expect("member manifest missing");
@@ -403,7 +450,10 @@ mod tests {
                 .take_while(|l| !l.starts_with('['))
                 .filter(|l| !l.is_empty() && !l.starts_with('#'))
                 .collect();
-            assert!(declared.is_empty(), "{member} declares dependencies: {declared:?}");
+            assert!(
+                declared.is_empty(),
+                "{member} declares dependencies: {declared:?}"
+            );
         }
     }
 

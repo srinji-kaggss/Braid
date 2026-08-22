@@ -63,28 +63,60 @@ pub struct CapsuleSource {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProjectError {
     /// A manifest with no capsules.
-    Empty,
+    Empty {
+        /// Source location of the error.
+        at: &'static str,
+    },
     /// Two capsules share a name (no shadowing).
-    DuplicateName(String),
+    DuplicateName {
+        /// The duplicated name.
+        name: String,
+        /// Source location of the error.
+        at: &'static str,
+    },
     /// The manifest JSON did not parse.
-    Parse(String),
+    Parse {
+        /// Parse failure description.
+        message: String,
+        /// Source location of the error.
+        at: &'static str,
+    },
     /// A capsule's source failed to elaborate (carries the frontend error).
-    CapsuleElaboration { name: String, error: ElabError },
+    CapsuleElaboration {
+        /// Capsule name that failed.
+        name: String,
+        /// The underlying frontend error.
+        error: ElabError,
+        /// Source location of the error.
+        at: &'static str,
+    },
     /// A capsule elaborated but the verifier rejected it.
-    CapsuleRejected { name: String, reason: String },
+    CapsuleRejected {
+        /// Capsule name that was rejected.
+        name: String,
+        /// Rejection reason from the verifier.
+        reason: String,
+        /// Source location of the error.
+        at: &'static str,
+    },
 }
 
 impl core::fmt::Display for ProjectError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            ProjectError::Empty => f.write_str("project has no capsules"),
-            ProjectError::DuplicateName(n) => write!(f, "duplicate capsule name `{n}`"),
-            ProjectError::Parse(m) => write!(f, "manifest parse error: {m}"),
-            ProjectError::CapsuleElaboration { name, error } => {
-                write!(f, "capsule `{name}`: {error}")
+            Self::Empty { at } => write!(f, "project has no capsules at {at}"),
+            Self::DuplicateName { name, at } => {
+                write!(f, "duplicate capsule name `{name}` at {at}")
             }
-            ProjectError::CapsuleRejected { name, reason } => {
-                write!(f, "capsule `{name}` rejected by the verifier: {reason}")
+            Self::Parse { message, at } => write!(f, "manifest parse error at {at}: {message}"),
+            Self::CapsuleElaboration { name, error, at } => {
+                write!(f, "capsule `{name}` failed elaboration at {at}: {error}")
+            }
+            Self::CapsuleRejected { name, reason, at } => {
+                write!(
+                    f,
+                    "capsule `{name}` rejected by verifier at {at}: {reason}"
+                )
             }
         }
     }
@@ -108,50 +140,85 @@ pub struct BuildReport {
     pub entries: Vec<CapsuleEntry>,
 }
 
-/// Parse a project manifest from JSON.
+/// Deserializes a [`Project`] schema structure from a JSON string slice.
 pub fn parse_project(json: &str) -> Result<Project, ProjectError> {
-    serde_json::from_str(json).map_err(|e| ProjectError::Parse(e.to_string()))
+    serde_json::from_str(json).map_err(|json_err| ProjectError::Parse {
+        message: json_err.to_string(),
+        at: "parse_project",
+    })
+}
+
+fn check_project_non_empty(capsules: &[CapsuleSource]) -> Result<(), ProjectError> {
+    if capsules.is_empty() {
+        Err(ProjectError::Empty { at: "build" })
+    } else {
+        Ok(())
+    }
+}
+
+fn check_name_unique<'a>(
+    seen: &mut BTreeSet<&'a str>,
+    name: &'a str,
+) -> Result<(), ProjectError> {
+    if !seen.insert(name) {
+        Err(ProjectError::DuplicateName {
+            name: name.to_string(),
+            at: "build::shadowing",
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn check_no_duplicate_names(capsules: &[CapsuleSource]) -> Result<(), ProjectError> {
+    let mut seen: BTreeSet<&str> = BTreeSet::new();
+    for item in capsules {
+        check_name_unique(&mut seen, item.name.as_str())?;
+    }
+    Ok(())
+}
+
+fn verify_capsule_verdict(
+    name: &str,
+    verdict: &Verdict,
+) -> Result<(), ProjectError> {
+    match verdict {
+        Verdict::Admit { .. } => Ok(()),
+        Verdict::Reject { stage, reason } => Err(ProjectError::CapsuleRejected {
+            name: name.to_string(),
+            reason: format!("{stage:?}: {reason}"),
+            at: "build::verify",
+        }),
+    }
+}
+
+fn build_single_capsule(c: &CapsuleSource) -> Result<CapsuleEntry, ProjectError> {
+    let elaborated =
+        elaborate_and_admit(&c.source).map_err(|error| ProjectError::CapsuleElaboration {
+            name: c.name.clone(),
+            error,
+            at: "build::elaborate",
+        })?;
+    verify_capsule_verdict(&c.name, &elaborated.verdict)?;
+    let cid = elaborated.capsule.cid();
+    Ok(CapsuleEntry {
+        name: c.name.clone(),
+        capsule: elaborated.capsule,
+        cid,
+    })
 }
 
 /// Build a project: elaborate + admit every capsule, fail-closed on the first
 /// failure, then compute the project CID. Each capsule is verified
 /// independently under the empty ambient set — the project pools no authority.
 pub fn build(project: &Project) -> Result<BuildReport, ProjectError> {
-    if project.capsules.is_empty() {
-        return Err(ProjectError::Empty);
-    }
-
-    // No shadowing: a duplicate name could hide a second capsule behind one the
-    // reviewer already approved.
-    let mut seen: BTreeSet<&str> = BTreeSet::new();
-    for c in &project.capsules {
-        if !seen.insert(c.name.as_str()) {
-            return Err(ProjectError::DuplicateName(c.name.clone()));
-        }
-    }
+    check_project_non_empty(&project.capsules)?;
+    check_no_duplicate_names(&project.capsules)?;
 
     let mut entries = Vec::with_capacity(project.capsules.len());
-    for c in &project.capsules {
-        let e =
-            elaborate_and_admit(&c.source).map_err(|error| ProjectError::CapsuleElaboration {
-                name: c.name.clone(),
-                error,
-            })?;
-        match &e.verdict {
-            Verdict::Admit { .. } => {}
-            Verdict::Reject { stage, reason } => {
-                return Err(ProjectError::CapsuleRejected {
-                    name: c.name.clone(),
-                    reason: format!("{stage:?}: {reason}"),
-                });
-            }
-        }
-        let cid = e.capsule.cid();
-        entries.push(CapsuleEntry {
-            name: c.name.clone(),
-            capsule: e.capsule,
-            cid,
-        });
+    for item in &project.capsules {
+        let entry = build_single_capsule(item)?;
+        entries.push(entry);
     }
 
     let project_cid = compute_project_cid(&entries);
@@ -162,44 +229,120 @@ pub fn build(project: &Project) -> Result<BuildReport, ProjectError> {
     })
 }
 
-/// Convenience: parse + build in one call.
+/// Builds a project from a raw JSON manifest string slice.
 pub fn build_from_json(json: &str) -> Result<BuildReport, ProjectError> {
-    build(&parse_project(json)?)
+    let project = parse_project(json)?;
+    build(&project)
 }
 
-/// Build a project, then elaborate every admitted capsule into a
-/// dependency-free Rust crate (W1 — the "write once, import everywhere"
-/// pipeline's emission half). Each capsule was verified against the vocab-js
-/// registry under the empty ambient set, so `elaborate` re-verifies it against
-/// the same registry and cannot observe a new rejection: an elaboration error
-/// here is a defect, mapped fail-closed.
+fn elaborate_entry_to_rust(
+    registry: &braid_ir::TermRegistry,
+    entry: &CapsuleEntry,
+) -> Result<(String, RustCrate), ProjectError> {
+    let rust_crate =
+        braid_vocab_rust::elaborate(registry, &entry.capsule).map_err(|elab_err| {
+            ProjectError::CapsuleElaboration {
+                name: entry.name.clone(),
+                error: ElabError::Build(elab_err.to_string()),
+                at: "build_rust",
+            }
+        })?;
+    Ok((entry.name.clone(), rust_crate))
+}
+
+/// Elaborates every capsule in the project to a [`RustCrate`].
 pub fn build_rust(project: &Project) -> Result<Vec<(String, RustCrate)>, ProjectError> {
     let report = build(project)?;
     let registry = braid_vocab_js::registry_v0();
-    report
-        .entries
-        .iter()
-        .map(|e| {
-            braid_vocab_rust::elaborate(&registry, &e.capsule)
-                .map(|c| (e.name.clone(), c))
-                .map_err(|err| ProjectError::CapsuleRejected {
-                    name: e.name.clone(),
-                    reason: format!("rust elaboration: {err:?}"),
-                })
-        })
-        .collect()
+    let mut out = Vec::with_capacity(report.entries.len());
+    for entry in &report.entries {
+        let pair = elaborate_entry_to_rust(&registry, entry)?;
+        out.push(pair);
+    }
+    Ok(out)
 }
 
-/// The project CID: order-independent over the `(name, capsule_cid)` set. Names
-/// are unique (guarded), each row is unambiguously framed (NUL between name and
-/// CID), the set is sorted, then hashed under the project domain. Reordering
-/// capsules in the manifest does not change it; changing any capsule's source
-/// (hence its CID) or its name does.
+fn format_entry_row(entry: &CapsuleEntry) -> String {
+    format!("{}\u{0}{}", entry.name, entry.cid.to_hex())
+}
+
+/// The project CID: order-independent over the `(name, capsule_cid)` set.
 fn compute_project_cid(entries: &[CapsuleEntry]) -> Cid {
-    let mut rows: Vec<String> = entries
-        .iter()
-        .map(|e| format!("{}\u{0}{}", e.name, e.cid.to_hex()))
-        .collect();
+    let mut rows: Vec<String> = entries.iter().map(format_entry_row).collect();
     rows.sort();
-    Cid::compute(PROJECT_DOMAIN, rows.join("\n").as_bytes())
+    let joined = rows.join("\n");
+    Cid::compute(PROJECT_DOMAIN, joined.as_bytes())
+}
+
+// ── Tests ───────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const VALID_MANIFEST: &str = r#"{
+        "name": "demo",
+        "capsules": [
+            { "name": "a", "source": "1 + 2" },
+            { "name": "b", "source": "\"hi\" + \"!\"" }
+        ]
+    }"#;
+
+    #[test]
+    fn valid_project_builds_and_hashes() {
+        let p = parse_project(VALID_MANIFEST).unwrap();
+        let report = build(&p).unwrap();
+        assert_eq!(report.name, "demo");
+        assert_eq!(report.entries.len(), 2);
+        assert_eq!(report.entries[0].name, "a");
+        assert_eq!(report.entries[1].name, "b");
+    }
+
+    #[test]
+    fn empty_project_refused() {
+        let p = parse_project(r#"{ "name": "e", "capsules": [] }"#).unwrap();
+        assert!(matches!(build(&p), Err(ProjectError::Empty { .. })));
+    }
+
+    #[test]
+    fn duplicate_capsule_name_refused() {
+        let json = r#"{
+            "name": "dup",
+            "capsules": [
+                { "name": "a", "source": "1" },
+                { "name": "a", "source": "2" }
+            ]
+        }"#;
+        let p = parse_project(json).unwrap();
+        assert!(matches!(build(&p), Err(ProjectError::DuplicateName { .. })));
+    }
+
+    #[test]
+    fn invalid_capsule_fails_whole_build() {
+        let json = r#"{
+            "name": "bad",
+            "capsules": [
+                { "name": "good", "source": "1 + 2" },
+                { "name": "broken", "source": "this is not javascript" }
+            ]
+        }"#;
+        let p = parse_project(json).unwrap();
+        assert!(matches!(
+            build(&p),
+            Err(ProjectError::CapsuleElaboration { .. })
+        ));
+    }
+
+    #[test]
+    fn declaration_order_does_not_affect_project_cid() {
+        let p1 = parse_project(
+            r#"{ "name": "x", "capsules": [ { "name": "a", "source": "1" }, { "name": "b", "source": "2" } ] }"#,
+        )
+        .unwrap();
+        let p2 = parse_project(
+            r#"{ "name": "x", "capsules": [ { "name": "b", "source": "2" }, { "name": "a", "source": "1" } ] }"#,
+        )
+        .unwrap();
+        assert_eq!(build(&p1).unwrap().project_cid, build(&p2).unwrap().project_cid);
+    }
 }

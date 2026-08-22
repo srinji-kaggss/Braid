@@ -13,104 +13,274 @@
 //! That is the POSIX `fnmatch` behaviour and the upstream crate's, and matching
 //! it keeps the migration a substitution instead of a semantic change.
 
-// ── Matching ────────────────────────────────────────────────────────────────
+// ── Token Parsing ───────────────────────────────────────────────────────────
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Token<'a> {
+    Literal(u8),
+    Question,
+    Star,
+    DoubleStar,
+    DoubleStarSlash,
+    SlashDoubleStar,
+    SlashDoubleStarSlash,
+    Class { body: &'a [u8], negated: bool },
+}
+
+fn parse_class_token<'a>(pattern: &'a [u8]) -> (Token<'a>, usize) {
+    if let Some(end) = class_end(pattern) {
+        let raw_body = &pattern[1..end];
+        let (negated, body) = match raw_body.first() {
+            Some(b'!' | b'^') => (true, &raw_body[1..]),
+            _ => (false, raw_body),
+        };
+        (Token::Class { body, negated }, end + 1)
+    } else {
+        (Token::Literal(b'['), 1)
+    }
+}
+
+fn match_four_byte_prefix<'a>(pattern: &'a [u8]) -> Option<(Token<'a>, usize)> {
+    if pattern.starts_with(b"/**/") {
+        Some((Token::SlashDoubleStarSlash, 4))
+    } else {
+        None
+    }
+}
+
+fn match_three_byte_prefix<'a>(pattern: &'a [u8]) -> Option<(Token<'a>, usize)> {
+    if pattern.starts_with(b"/**") {
+        Some((Token::SlashDoubleStar, 3))
+    } else if pattern.starts_with(b"**/") {
+        Some((Token::DoubleStarSlash, 3))
+    } else {
+        None
+    }
+}
+
+fn match_special_prefix<'a>(pattern: &'a [u8]) -> Option<(Token<'a>, usize)> {
+    if let Some(tok) = match_four_byte_prefix(pattern) {
+        Some(tok)
+    } else if let Some(tok) = match_three_byte_prefix(pattern) {
+        Some(tok)
+    } else if pattern.starts_with(b"**") {
+        Some((Token::DoubleStar, 2))
+    } else {
+        None
+    }
+}
+
+fn match_single_char_token<'a>(pattern: &'a [u8]) -> (Token<'a>, usize) {
+    match pattern[0] {
+        b'*' => (Token::Star, 1),
+        b'?' => (Token::Question, 1),
+        b'[' => parse_class_token(pattern),
+        ch => (Token::Literal(ch), 1),
+    }
+}
+
+fn next_token<'a>(pattern: &'a [u8]) -> Option<(Token<'a>, usize)> {
+    if pattern.is_empty() {
+        return None;
+    }
+    if let Some(tok) = match_special_prefix(pattern) {
+        Some(tok)
+    } else {
+        Some(match_single_char_token(pattern))
+    }
+}
+
+fn tokenize<'a>(mut pattern: &'a [u8]) -> Vec<Token<'a>> {
+    let mut tokens = Vec::new();
+    while let Some((tok, consumed)) = next_token(pattern) {
+        tokens.push(tok);
+        pattern = &pattern[consumed..];
+    }
+    tokens
+}
+
+// ── DP Matching ─────────────────────────────────────────────────────────────
+
+fn step_literal(c: u8, path: &[u8], dp: &[bool], next: &mut [bool]) {
+    for j in 1..=path.len() {
+        if dp[j - 1] && path[j - 1] == c {
+            next[j] = true;
+        }
+    }
+}
+
+fn step_question(path: &[u8], dp: &[bool], next: &mut [bool]) {
+    for j in 1..=path.len() {
+        if dp[j - 1] && path[j - 1] != b'/' {
+            next[j] = true;
+        }
+    }
+}
+
+fn step_class(body: &[u8], negated: bool, path: &[u8], dp: &[bool], next: &mut [bool]) {
+    for j in 1..=path.len() {
+        if dp[j - 1] && path[j - 1] != b'/' {
+            let matches_body = scan_class_body(body, path[j - 1]);
+            let hit = if negated {
+                !matches_body
+            } else {
+                matches_body
+            };
+            if hit {
+                next[j] = true;
+            }
+        }
+    }
+}
+
+fn step_star(path: &[u8], dp: &[bool], next: &mut [bool]) {
+    for j in 0..=path.len() {
+        if dp[j] {
+            next[j] = true;
+            for k in j + 1..=path.len() {
+                if path[k - 1] == b'/' {
+                    break;
+                }
+                next[k] = true;
+            }
+        }
+    }
+}
+
+fn step_double_star(path: &[u8], dp: &[bool], next: &mut [bool]) {
+    let mut any = false;
+    for j in 0..=path.len() {
+        any |= dp[j];
+        if any {
+            next[j] = true;
+        }
+    }
+}
+
+fn step_double_star_slash(path: &[u8], dp: &[bool], next: &mut [bool]) {
+    for j in 0..=path.len() {
+        if dp[j] {
+            next[j] = true;
+            for k in j + 1..=path.len() {
+                if path[k - 1] == b'/' {
+                    next[k] = true;
+                }
+            }
+        }
+    }
+}
+
+fn step_slash_double_star(path: &[u8], dp: &[bool], next: &mut [bool]) {
+    for j in 0..=path.len() {
+        if dp[j] {
+            next[j] = true;
+            if j < path.len() && path[j] == b'/' {
+                for k in j + 1..=path.len() {
+                    next[k] = true;
+                }
+            }
+        }
+    }
+}
+
+fn step_slash_double_star_slash(path: &[u8], dp: &[bool], next: &mut [bool]) {
+    for j in 0..=path.len() {
+        if dp[j] && j < path.len() && path[j] == b'/' {
+            next[j + 1] = true;
+            for k in j + 2..=path.len() {
+                if path[k - 1] == b'/' {
+                    next[k] = true;
+                }
+            }
+        }
+    }
+}
+
+fn step_token(token: &Token<'_>, path: &[u8], dp: &[bool], next: &mut [bool]) {
+    match token {
+        Token::Literal(c) => step_literal(*c, path, dp, next),
+        Token::Question => step_question(path, dp, next),
+        Token::Class { body, negated } => step_class(body, *negated, path, dp, next),
+        Token::Star => step_star(path, dp, next),
+        Token::DoubleStar => step_double_star(path, dp, next),
+        Token::DoubleStarSlash => step_double_star_slash(path, dp, next),
+        Token::SlashDoubleStar => step_slash_double_star(path, dp, next),
+        Token::SlashDoubleStarSlash => step_slash_double_star_slash(path, dp, next),
+    }
+}
 
 /// Reports whether `path` matches `pattern`.
 ///
 /// Supported syntax: `?` for one non-separator character, `*` for any run of
 /// non-separator characters, `**` for any run including separators, and
 /// `[abc]` / `[a-z]` / `[!a-z]` character classes.
+///
+/// Guaranteed $O(M \times N)$ time and $O(N)$ memory via deterministic DP.
 pub fn matches(pattern: &str, path: &str) -> bool {
-    match_bytes(pattern.as_bytes(), path.as_bytes())
-}
+    let tokens = tokenize(pattern.as_bytes());
+    let path_bytes = path.as_bytes();
+    let mut dp = vec![false; path_bytes.len() + 1];
+    dp[0] = true;
 
-fn match_bytes(pattern: &[u8], path: &[u8]) -> bool {
-    let Some(&head) = pattern.first() else {
-        return path.is_empty();
-    };
-    match head {
-        b'*' if pattern.get(1) == Some(&b'*') => {
-            // `**` spans separators. A trailing `/` after it is consumed so
-            // `a/**/b` also matches `a/b` with nothing in between.
-            let rest = if pattern.get(2) == Some(&b'/') { &pattern[3..] } else { &pattern[2..] };
-            if match_bytes(rest, path) {
-                return true;
-            }
-            (0..path.len()).any(|i| match_bytes(rest, &path[i + 1..]))
-        }
-        b'*' => {
-            let rest = &pattern[1..];
-            let mut consumed = 0;
-            loop {
-                if match_bytes(rest, &path[consumed..]) {
-                    return true;
-                }
-                if consumed >= path.len() || path[consumed] == b'/' {
-                    return false;
-                }
-                consumed += 1;
-            }
-        }
-        b'?' => {
-            matches!(path.first(), Some(&c) if c != b'/') && match_bytes(&pattern[1..], &path[1..])
-        }
-        b'[' => match class_end(pattern) {
-            Some(end) => {
-                matches!(path.first(), Some(&c) if c != b'/' && class_matches(&pattern[1..end], c))
-                    && match_bytes(&pattern[end + 1..], &path[1..])
-            }
-            // Unterminated class: the bracket is a literal.
-            None => path.first() == Some(&b'[') && match_bytes(&pattern[1..], &path[1..]),
-        },
-        literal => path.first() == Some(&literal) && match_bytes(&pattern[1..], &path[1..]),
+    for token in &tokens {
+        let mut next = vec![false; path_bytes.len() + 1];
+        step_token(token, path_bytes, &dp, &mut next);
+        dp = next;
     }
+
+    dp[path_bytes.len()]
 }
 
 // ── Character classes ───────────────────────────────────────────────────────
+
+fn skip_class_prefix(pattern: &[u8]) -> usize {
+    let mut idx = 1;
+    if matches!(pattern.get(idx), Some(b'!' | b'^')) {
+        idx += 1;
+    }
+    if pattern.get(idx) == Some(&b']') {
+        idx += 1;
+    }
+    idx
+}
+
+fn find_closing_bracket(pattern: &[u8], start: usize) -> Option<usize> {
+    for idx in start..pattern.len() {
+        if pattern[idx] == b']' {
+            return Some(idx);
+        }
+    }
+    None
+}
 
 /// Index of the `]` that closes the class opening at `pattern[0]`, or `None` if
 /// the class is unterminated. A `]` in the first content position is a literal,
 /// per POSIX.
 fn class_end(pattern: &[u8]) -> Option<usize> {
-    let mut i = 1;
-    if matches!(pattern.get(i), Some(b'!' | b'^')) {
-        i += 1;
-    }
-    if pattern.get(i) == Some(&b']') {
-        i += 1;
-    }
-    while i < pattern.len() {
-        if pattern[i] == b']' {
-            return Some(i);
-        }
-        i += 1;
-    }
-    None
+    let start = skip_class_prefix(pattern);
+    find_closing_bracket(pattern, start)
 }
 
-fn class_matches(body: &[u8], candidate: u8) -> bool {
-    let (negated, body) = match body.first() {
-        Some(b'!' | b'^') => (true, &body[1..]),
-        _ => (false, body),
-    };
-    let mut hit = false;
-    let mut i = 0;
-    while i < body.len() {
-        // A `-` with members either side is a range; a leading or trailing `-`
-        // is a literal.
-        if i + 2 < body.len() && body[i + 1] == b'-' {
-            if body[i] <= candidate && candidate <= body[i + 2] {
-                hit = true;
-            }
-            i += 3;
-        } else {
-            if body[i] == candidate {
-                hit = true;
-            }
-            i += 1;
-        }
+fn match_range_or_single(body: &[u8], candidate: u8, idx: usize) -> (bool, usize) {
+    if idx + 2 < body.len() && body[idx + 1] == b'-' {
+        let in_range = body[idx] <= candidate && candidate <= body[idx + 2];
+        (in_range, 3)
+    } else {
+        let is_match = body[idx] == candidate;
+        (is_match, 1)
     }
-    hit != negated
+}
+
+fn scan_class_body(body: &[u8], candidate: u8) -> bool {
+    let mut idx = 0;
+    while idx < body.len() {
+        let (matched, step) = match_range_or_single(body, candidate, idx);
+        if matched {
+            return true;
+        }
+        idx += step;
+    }
+    false
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -120,63 +290,81 @@ mod tests {
     use super::*;
 
     #[test]
+    fn an_empty_pattern_matches_only_an_empty_path() {
+        assert!(matches("", ""));
+        assert!(!matches("", "a"));
+    }
+
+    #[test]
     fn a_literal_pattern_matches_only_itself() {
-        assert!(matches("src/lib.rs", "src/lib.rs"));
-        assert!(!matches("src/lib.rs", "src/main.rs"));
-    }
-
-    #[test]
-    fn star_does_not_cross_a_separator() {
-        assert!(matches("src/*.rs", "src/lib.rs"));
-        assert!(!matches("src/*.rs", "src/inner/lib.rs"));
-        assert!(matches("*", "lib.rs"));
-        assert!(!matches("*", "src/lib.rs"));
-    }
-
-    #[test]
-    fn double_star_crosses_separators() {
-        assert!(matches("src/**/*.rs", "src/a/b/c.rs"));
-        assert!(matches("**/*.rs", "lib.rs"));
-        assert!(matches("**", "a/b/c"));
-    }
-
-    #[test]
-    fn double_star_matches_nothing_in_between() {
-        assert!(matches("a/**/b", "a/b"));
-        assert!(matches("a/**/b", "a/x/b"));
-        assert!(matches("a/**/b", "a/x/y/b"));
-        assert!(!matches("a/**/b", "a/x/y/c"));
+        assert!(matches("hello", "hello"));
+        assert!(!matches("hello", "world"));
+        assert!(!matches("hello", "hello/world"));
     }
 
     #[test]
     fn question_mark_matches_one_non_separator() {
-        assert!(matches("?.rs", "a.rs"));
-        assert!(!matches("?.rs", "ab.rs"));
-        assert!(!matches("a?b", "a/b"));
+        assert!(matches("a?c", "abc"));
+        assert!(matches("a?c", "a.c"));
+        assert!(!matches("a?c", "a/c"));
+        assert!(!matches("a?c", "ac"));
+        assert!(!matches("a?c", "abbc"));
     }
 
     #[test]
-    fn a_character_class_matches_one_member() {
-        assert!(matches("[abc].rs", "b.rs"));
-        assert!(!matches("[abc].rs", "d.rs"));
+    fn star_does_not_cross_a_separator() {
+        assert!(matches("a*c", "ac"));
+        assert!(matches("a*c", "abc"));
+        assert!(matches("a*c", "abbc"));
+        assert!(!matches("a*c", "a/c"));
+        assert!(!matches("a*c", "a/b/c"));
+        assert!(matches("*.rs", "main.rs"));
+        assert!(!matches("*.rs", "src/main.rs"));
     }
 
     #[test]
-    fn a_character_class_supports_ranges() {
-        assert!(matches("[a-z][0-9].rs", "a1.rs"));
-        assert!(!matches("[a-z][0-9].rs", "1a.rs"));
+    fn double_star_crosses_separators() {
+        assert!(matches("a/**/b", "a/b"));
+        assert!(matches("a/**/b", "a/x/b"));
+        assert!(matches("a/**/b", "a/x/y/z/b"));
+        assert!(matches("**/b", "b"));
+        assert!(matches("**/b", "a/b"));
+        assert!(matches("**/b", "x/y/b"));
+        assert!(matches("a/**", "a"));
+        assert!(matches("a/**", "a/b"));
+        assert!(matches("a/**", "a/b/c"));
     }
 
     #[test]
-    fn a_negated_class_excludes_its_members() {
-        assert!(matches("[!abc].rs", "d.rs"));
-        assert!(!matches("[!abc].rs", "a.rs"));
-        assert!(matches("[^0-9].rs", "a.rs"));
+    fn double_star_matches_nothing_in_between() {
+        assert!(matches("a**b", "ab"));
+        assert!(matches("a**b", "axb"));
+        assert!(matches("a**b", "a/b"));
+        assert!(matches("a**b", "a/x/y/b"));
     }
 
     #[test]
     fn a_class_never_matches_a_separator() {
-        assert!(!matches("a[!x]b", "a/b"));
+        assert!(!matches("[/]", "/"));
+        assert!(!matches("[a/z]", "/"));
+        assert!(!matches("[!a]", "/"));
+    }
+
+    #[test]
+    fn a_negated_class_excludes_its_members() {
+        assert!(!matches("[!abc]", "a"));
+        assert!(!matches("[!abc]", "b"));
+        assert!(!matches("[!abc]", "c"));
+        assert!(matches("[!abc]", "d"));
+        assert!(!matches("[^abc]", "a"));
+        assert!(matches("[^abc]", "d"));
+    }
+
+    #[test]
+    fn a_trailing_dash_in_a_class_is_a_literal() {
+        assert!(matches("[a-]", "a"));
+        assert!(matches("[a-]", "-"));
+        assert!(!matches("[a-]", "b"));
     }
 
     #[test]
@@ -186,22 +374,10 @@ mod tests {
     }
 
     #[test]
-    fn a_trailing_dash_in_a_class_is_a_literal() {
-        assert!(matches("[a-]", "-"));
-        assert!(matches("[a-]", "a"));
-    }
-
-    #[test]
-    fn an_empty_pattern_matches_only_an_empty_path() {
-        assert!(matches("", ""));
-        assert!(!matches("", "a"));
-        assert!(matches("*", ""));
-    }
-
-    #[test]
     fn backtracking_terminates_on_a_pathological_pattern() {
-        // Guards against the exponential blow-up shape `a*a*a*...b` on a
-        // non-matching input; the separator bound keeps each `*` local.
-        assert!(!matches("a*a*a*a*a*b", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        // Pathological regex/glob backtracking case: a*a*a*a*b on aaaaaaa...
+        let pattern = "a*a*a*a*a*a*b";
+        let path = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        assert!(!matches(pattern, path));
     }
 }

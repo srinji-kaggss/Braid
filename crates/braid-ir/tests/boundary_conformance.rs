@@ -53,22 +53,61 @@ const ALLOWED_USE_ROOTS: &[&str] = &[
     "braid_ir",
 ];
 
-fn toml_section_keys(toml: &str, section: &str) -> Vec<String> {
+fn parse_section_header(line: &str, section: &str) -> Option<bool> {
+    if line.starts_with('[') {
+        Some(line == format!("[{section}]"))
+    } else {
+        None
+    }
+}
+
+fn parse_key_value(line: &str) -> Option<String> {
+    if !line.is_empty() && !line.starts_with('#') {
+        line.split_once('=').map(|(key, _)| key.trim().to_string())
+    } else {
+        None
+    }
+}
+
+fn scan_toml_lines(toml: &str, section: &str) -> Vec<String> {
     let mut keys = Vec::new();
     let mut in_section = false;
     for line in toml.lines() {
-        let l = line.trim();
-        if l.starts_with('[') {
-            in_section = l == format!("[{section}]");
+        let line_text = line.trim();
+        if let Some(matches_section) = parse_section_header(line_text, section) {
+            in_section = matches_section;
             continue;
         }
-        if in_section && !l.is_empty() && !l.starts_with('#') {
-            if let Some((k, _)) = l.split_once('=') {
-                keys.push(k.trim().to_string());
+        if in_section {
+            if let Some(key_name) = parse_key_value(line_text) {
+                keys.push(key_name);
             }
         }
     }
     keys
+}
+
+fn toml_section_keys(toml: &str, section: &str) -> Vec<String> {
+    scan_toml_lines(toml, section)
+}
+
+fn check_crate_runtime_dependencies(krate: &str, manifest: &str) {
+    for dep in toml_section_keys(manifest, "dependencies") {
+        assert!(
+            allowed_deps(krate).contains(&dep.as_str()),
+            "{krate}: runtime dependency `{dep}` is outside the ADR-088 D3 boundary — \
+             extend the spec (Director) before extending the deps"
+        );
+    }
+}
+
+fn check_crate_dev_dependencies(krate: &str, manifest: &str) {
+    for dep in toml_section_keys(manifest, "dev-dependencies") {
+        assert!(
+            ALLOWED_DEV.contains(&dep.as_str()),
+            "{krate}: dev-dependency `{dep}` is not allowlisted"
+        );
+    }
 }
 
 #[test]
@@ -76,32 +115,48 @@ fn cargo_dependencies_are_allowlisted() {
     for krate in BRAID_CRATES {
         let manifest = fs::read_to_string(crates_dir().join(krate).join("Cargo.toml"))
             .unwrap_or_else(|_| panic!("{krate}/Cargo.toml readable"));
-        for dep in toml_section_keys(&manifest, "dependencies") {
-            assert!(
-                allowed_deps(krate).contains(&dep.as_str()),
-                "{krate}: runtime dependency `{dep}` is outside the ADR-088 D3 boundary — \
-                 extend the spec (Director) before extending the deps"
-            );
-        }
-        for dep in toml_section_keys(&manifest, "dev-dependencies") {
-            assert!(
-                ALLOWED_DEV.contains(&dep.as_str()),
-                "{krate}: dev-dependency `{dep}` is not allowlisted"
-            );
-        }
+        check_crate_runtime_dependencies(krate, &manifest);
+        check_crate_dev_dependencies(krate, &manifest);
+    }
+}
+
+fn visit_fs_entry(entry_path: PathBuf, out: &mut Vec<PathBuf>) {
+    if entry_path.is_dir() {
+        rust_files(&entry_path, out);
+    } else if entry_path.extension().is_some_and(|ext| ext == "rs") {
+        out.push(entry_path);
     }
 }
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     if let Ok(entries) = fs::read_dir(dir) {
-        for e in entries.flatten() {
-            let p = e.path();
-            if p.is_dir() {
-                rust_files(&p, out);
-            } else if p.extension().is_some_and(|x| x == "rs") {
-                out.push(p);
-            }
+        for entry in entries.flatten() {
+            visit_fs_entry(entry.path(), out);
         }
+    }
+}
+
+fn extract_use_root(line: &str) -> Option<String> {
+    let trimmed = line.trim();
+    let rest = trimmed
+        .strip_prefix("use ")
+        .or_else(|| trimmed.strip_prefix("pub use "))?;
+    let root: String = rest
+        .chars()
+        .take_while(|c| c.is_alphanumeric() || *c == '_')
+        .collect();
+    Some(root)
+}
+
+fn check_single_use_statement(file_path: &Path, line_num: usize, line: &str) {
+    if let Some(root) = extract_use_root(line) {
+        let type_relative = root.chars().next().is_some_and(|c| c.is_uppercase());
+        assert!(
+            type_relative || ALLOWED_USE_ROOTS.contains(&root.as_str()),
+            "{}:{}: `use {root}…` crosses the D3 boundary",
+            file_path.display(),
+            line_num + 1
+        );
     }
 }
 
@@ -111,30 +166,10 @@ fn src_use_statements_stay_inside_the_boundary() {
         let mut files = Vec::new();
         rust_files(&crates_dir().join(krate).join("src"), &mut files);
         assert!(!files.is_empty(), "{krate}/src has sources");
-        for f in files {
-            let src = fs::read_to_string(&f).unwrap();
-            for (ln, line) in src.lines().enumerate() {
-                let t = line.trim();
-                let Some(rest) = t
-                    .strip_prefix("use ")
-                    .or_else(|| t.strip_prefix("pub use "))
-                else {
-                    continue;
-                };
-                let root: String = rest
-                    .chars()
-                    .take_while(|c| c.is_alphanumeric() || *c == '_')
-                    .collect();
-                // Uppercase roots are type-relative paths (`use EffectClass::*`
-                // inside a fn) — already covered by the import that brought the
-                // type in. Crate roots are snake_case by Rust convention.
-                let type_relative = root.chars().next().is_some_and(|c| c.is_uppercase());
-                assert!(
-                    type_relative || ALLOWED_USE_ROOTS.contains(&root.as_str()),
-                    "{}:{}: `use {root}…` crosses the D3 boundary",
-                    f.display(),
-                    ln + 1
-                );
+        for file_path in files {
+            let src = fs::read_to_string(&file_path).unwrap();
+            for (line_num, line) in src.lines().enumerate() {
+                check_single_use_statement(&file_path, line_num, line);
             }
         }
     }

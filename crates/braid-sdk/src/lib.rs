@@ -19,8 +19,9 @@
 
 use braid_capability::Capability;
 use braid_ir::braid::{Braid, Strand as IrStrand};
-use braid_ir::term::TypeTag;
+use braid_ir::term::{TermSpec, TypeTag};
 use braid_ir::{Capsule, ConfirmPolicy, EffectClass, TermRegistry, IR_VERSION};
+use std::fmt;
 
 /// A typed reference to a strand already placed in the braid. Carries its
 /// output type so wiring is type-checked the moment it is used as an input.
@@ -45,30 +46,77 @@ struct TypeTagId(usize);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BuildError {
-    UnknownTerm(String),
+    UnknownTerm {
+        term: String,
+        at: &'static str,
+    },
     Arity {
         term: String,
         expected: usize,
         got: usize,
+        at: &'static str,
     },
     TypeMismatch {
         term: String,
         slot: usize,
-        // Boxed to keep `BuildError` small — `TypeTag::Opaque` carries owned
-        // strings that pushed the variant over clippy's large-err threshold.
         expected: Box<TypeTag>,
         got: Box<TypeTag>,
+        at: &'static str,
     },
-    NoOutputs,
+    NoOutputs {
+        at: &'static str,
+    },
     /// A declared budget below the composed cost (the SDK refuses to author an
     /// over-budget capsule rather than emit one the verifier will reject).
     BudgetTooLow {
         needed: u64,
         set: u64,
+        at: &'static str,
     },
     /// Irreversible/egress term used without a confirm policy set.
-    ConfirmRequired,
+    ConfirmRequired {
+        at: &'static str,
+    },
 }
+
+impl fmt::Display for BuildError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnknownTerm { term, at } => {
+                write!(f, "unknown term `{term}` at {at}")
+            }
+            Self::Arity {
+                term,
+                expected,
+                got,
+                at,
+            } => {
+                write!(f, "arity mismatch for `{term}` at {at}: expected {expected}, got {got}")
+            }
+            Self::TypeMismatch {
+                term,
+                slot,
+                expected,
+                got,
+                at,
+            } => {
+                write!(
+                    f,
+                    "type mismatch for `{term}` slot {slot} at {at}: expected {expected:?}, got {got:?}"
+                )
+            }
+            Self::NoOutputs { at } => write!(f, "capsule has no declared outputs at {at}"),
+            Self::BudgetTooLow { needed, set, at } => {
+                write!(f, "budget too low at {at}: needed {needed}, set {set}")
+            }
+            Self::ConfirmRequired { at } => {
+                write!(f, "human confirmation required for dangerous terms at {at}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for BuildError {}
 
 /// Capsule builder bound to a registry.
 pub struct Builder<'r> {
@@ -117,31 +165,54 @@ impl<'r> Builder<'r> {
         }
     }
 
-    /// Place a strand, type- and arity-checking its inputs against the
-    /// registry. Returns a handle usable as input to later strands.
-    pub fn strand(&mut self, term_id: &str, inputs: &[Strand]) -> Result<Strand, BuildError> {
-        let spec = self
-            .registry
-            .get(term_id)
-            .ok_or_else(|| BuildError::UnknownTerm(term_id.to_string()))?;
-        if spec.inputs.len() != inputs.len() {
-            return Err(BuildError::Arity {
+    fn check_arity(term_id: &str, expected: usize, got: usize) -> Result<(), BuildError> {
+        if expected != got {
+            Err(BuildError::Arity {
                 term: term_id.to_string(),
-                expected: spec.inputs.len(),
-                got: inputs.len(),
-            });
+                expected,
+                got,
+                at: "Builder::strand",
+            })
+        } else {
+            Ok(())
         }
-        for (slot, (h, expected)) in inputs.iter().zip(spec.inputs.iter()).enumerate() {
-            let got = &self.type_interner[h.ty.0];
-            if got != expected {
-                return Err(BuildError::TypeMismatch {
-                    term: term_id.to_string(),
-                    slot,
-                    expected: Box::new(expected.clone()),
-                    got: Box::new(got.clone()),
-                });
-            }
+    }
+
+    fn check_slot_type(
+        &self,
+        term_id: &str,
+        slot: usize,
+        handle: Strand,
+        expected: &TypeTag,
+    ) -> Result<(), BuildError> {
+        let got = &self.type_interner[handle.ty.0];
+        if got != expected {
+            Err(BuildError::TypeMismatch {
+                term: term_id.to_string(),
+                slot,
+                expected: Box::new(expected.clone()),
+                got: Box::new(got.clone()),
+                at: "Builder::strand",
+            })
+        } else {
+            Ok(())
         }
+    }
+
+    fn validate_inputs(
+        &self,
+        term_id: &str,
+        inputs: &[Strand],
+        spec: &TermSpec,
+    ) -> Result<(), BuildError> {
+        Self::check_arity(term_id, spec.inputs.len(), inputs.len())?;
+        for (slot, (&handle, expected)) in inputs.iter().zip(spec.inputs.iter()).enumerate() {
+            self.check_slot_type(term_id, slot, handle, expected)?;
+        }
+        Ok(())
+    }
+
+    fn record_effects(&mut self, spec: &TermSpec) {
         if let Some(cap) = &spec.capability {
             if !self.grants.iter().any(|g| g.to_string() == cap.to_string()) {
                 self.grants.push(cap.clone());
@@ -151,6 +222,17 @@ impl<'r> Builder<'r> {
             self.has_dangerous = true;
         }
         self.cost = self.cost.saturating_add(spec.cost);
+    }
+
+    /// Place a strand, type- and arity-checking its inputs against the
+    /// registry. Returns a handle usable as input to later strands.
+    pub fn strand(&mut self, term_id: &str, inputs: &[Strand]) -> Result<Strand, BuildError> {
+        let spec = self.registry.get(term_id).ok_or_else(|| BuildError::UnknownTerm {
+            term: term_id.to_string(),
+            at: "Builder::strand",
+        })?;
+        self.validate_inputs(term_id, inputs, spec)?;
+        self.record_effects(spec);
 
         let index = self.strands.len() as u32;
         let ty = self.intern(&spec.output);
@@ -190,27 +272,47 @@ impl<'r> Builder<'r> {
         self
     }
 
+    fn check_has_outputs(&self) -> Result<(), BuildError> {
+        if self.outputs.is_empty() {
+            Err(BuildError::NoOutputs {
+                at: "Builder::build",
+            })
+        } else {
+            Ok(())
+        }
+    }
+
+    fn resolve_budget(&self) -> Result<u64, BuildError> {
+        let budget = self.budget.unwrap_or(self.cost);
+        if budget < self.cost {
+            Err(BuildError::BudgetTooLow {
+                needed: self.cost,
+                set: budget,
+                at: "Builder::build",
+            })
+        } else {
+            Ok(budget)
+        }
+    }
+
+    fn resolve_confirm(&self) -> Result<ConfirmPolicy, BuildError> {
+        let confirm = self.confirm.unwrap_or(ConfirmPolicy::None);
+        if self.has_dangerous && confirm != ConfirmPolicy::HumanConfirm {
+            Err(BuildError::ConfirmRequired {
+                at: "Builder::build",
+            })
+        } else {
+            Ok(confirm)
+        }
+    }
+
     /// Finalize. Grants are emitted sorted+deduped (canonical order); a
     /// dangerous capsule without `HumanConfirm` is refused at author time.
     pub fn build(self) -> Result<Capsule, BuildError> {
-        if self.outputs.is_empty() {
-            return Err(BuildError::NoOutputs);
-        }
-        let budget = self.budget.unwrap_or(self.cost);
-        if budget < self.cost {
-            return Err(BuildError::BudgetTooLow {
-                needed: self.cost,
-                set: budget,
-            });
-        }
-        let confirm = match self.confirm {
-            Some(c) => c,
-            None if self.has_dangerous => return Err(BuildError::ConfirmRequired),
-            None => ConfirmPolicy::None,
-        };
-        if self.has_dangerous && confirm != ConfirmPolicy::HumanConfirm {
-            return Err(BuildError::ConfirmRequired);
-        }
+        self.check_has_outputs()?;
+        let budget = self.resolve_budget()?;
+        let confirm = self.resolve_confirm()?;
+
         let mut grants = self.grants;
         grants.sort_by_key(|c| c.to_string());
 

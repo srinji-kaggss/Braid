@@ -7,10 +7,13 @@
 //! fail-closed starting register. None of them can approve anything — approval
 //! is a diff with a name on it, which is the whole point of the contract.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use lgwks_std_gate::{check, check_against, contract::Contract, repository_root, CONTRACT_PATH};
+use lgwks_std_gate::{
+    check_dependencies, check_dependencies_against, contract::Contract, repository_root, Refusal,
+    CONTRACT_PATH,
+};
 
 const USAGE: &str = "\
 lgwks-gate — dependency admission for the std+ estate
@@ -30,66 +33,75 @@ EXIT
   2  a refusal, a missing register, or an unparseable one
 ";
 
+fn parse_check_args(args: &[String]) -> (Option<PathBuf>, Option<PathBuf>) {
+    let positional: Vec<&String> = args.iter().filter(|a| !a.starts_with("--")).collect();
+    let override_path = args
+        .iter()
+        .position(|a| a == "--contract")
+        .and_then(|i| args.get(i + 1))
+        .map(PathBuf::from);
+    let target_path = positional.first().map(|p| PathBuf::from(p.as_str()));
+    (target_path, override_path)
+}
+
+fn handle_check(args: &[String]) -> ExitCode {
+    let (target_path, override_path) = parse_check_args(args);
+    run_check(target_path, override_path)
+}
+
+fn handle_help() -> ExitCode {
+    print!("{USAGE}");
+    ExitCode::SUCCESS
+}
+
+fn handle_tiers() -> ExitCode {
+    print!("{LADDER}");
+    ExitCode::SUCCESS
+}
+
+fn handle_unknown(other: &str) -> ExitCode {
+    eprintln!("lgwks-gate: unknown command {other:?}\n");
+    eprint!("{USAGE}");
+    ExitCode::from(2)
+}
+
+fn dispatch(command: &str, args: &[String]) -> ExitCode {
+    match command {
+        "check" => handle_check(&args[1..]),
+        "request" => run_request(args.get(1), args.get(2)),
+        "init" => run_init(args.get(1).map(PathBuf::from)),
+        "tiers" => handle_tiers(),
+        "-h" | "--help" | "help" => handle_help(),
+        other => handle_unknown(other),
+    }
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let command = args.first().map(String::as_str).unwrap_or("");
-    match command {
-        "check" => {
-            let positional: Vec<&String> =
-                args[1..].iter().filter(|a| !a.starts_with("--")).collect();
-            let override_path = args
-                .iter()
-                .position(|a| a == "--contract")
-                .and_then(|i| args.get(i + 1))
-                .map(PathBuf::from);
-            run_check(positional.first().map(|p| PathBuf::from(p.as_str())), override_path)
-        }
-        "request" => run_request(args.get(1), args.get(2)),
-        "init" => run_init(args.get(1).map(PathBuf::from)),
-        "tiers" => {
-            print!("{LADDER}");
-            ExitCode::SUCCESS
-        }
-        "-h" | "--help" | "help" => {
-            print!("{USAGE}");
-            ExitCode::SUCCESS
-        }
-        other => {
-            eprintln!("lgwks-gate: unknown command {other:?}\n");
-            eprint!("{USAGE}");
-            ExitCode::from(2)
-        }
-    }
+    dispatch(command, &args)
 }
 
 // ── check ───────────────────────────────────────────────────────────────────
 
-fn run_check(path: Option<PathBuf>, contract_override: Option<PathBuf>) -> ExitCode {
-    let start = path.unwrap_or_else(|| PathBuf::from("."));
-    let root = match repository_root(&start) {
-        Ok(root) => root,
-        Err(e) => return refuse(&e.to_string()),
+fn audit_root(
+    root: &Path,
+    contract_override: &Option<PathBuf>,
+) -> Result<(Contract, Vec<Refusal>), String> {
+    let outcome = match contract_override {
+        Some(path) => check_dependencies_against(root, path),
+        None => check_dependencies(root),
     };
-    let outcome = match &contract_override {
-        Some(path) => check_against(&root, path),
-        None => check(&root),
-    };
-    let (register, refusals) = match outcome {
-        Ok(outcome) => outcome,
-        Err(e) => return refuse(&e.to_string()),
-    };
+    outcome.map_err(|e| e.to_string())
+}
 
-    if refusals.is_empty() {
-        println!(
-            "OK  {} — {} approved, every other resolved crate is local or lgwks_std",
-            root.display(),
-            register.entries.len()
-        );
-        return ExitCode::SUCCESS;
-    }
-
-    eprintln!("REFUSED  {} — {} unapproved dependencies\n", root.display(), refusals.len());
-    for refusal in &refusals {
+fn report_refusals(root: &Path, register: &Contract, refusals: &[Refusal]) -> ExitCode {
+    eprintln!(
+        "REFUSED  {} — {} unapproved dependencies\n",
+        root.display(),
+        refusals.len()
+    );
+    for refusal in refusals {
         eprintln!("  {refusal}");
     }
     eprintln!(
@@ -99,9 +111,37 @@ fn run_check(path: Option<PathBuf>, contract_override: Option<PathBuf>) -> ExitC
     );
     if !register.enforce {
         eprintln!("\nNOTE  [policy] enforce = false, so builds still pass. This is adoption-only.");
-        return ExitCode::SUCCESS;
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(2)
     }
-    ExitCode::from(2)
+}
+
+fn report_ok(root: &Path, count: usize) -> ExitCode {
+    println!(
+        "OK  {} — {} approved, every other resolved crate is local or lgwks_std",
+        root.display(),
+        count
+    );
+    ExitCode::SUCCESS
+}
+
+fn run_check(path: Option<PathBuf>, contract_override: Option<PathBuf>) -> ExitCode {
+    let start = path.unwrap_or_else(|| PathBuf::from("."));
+    let root = match repository_root(&start) {
+        Ok(root) => root,
+        Err(e) => return refuse(&e.to_string()),
+    };
+    let (register, refusals) = match audit_root(&root, &contract_override) {
+        Ok(outcome) => outcome,
+        Err(err_msg) => return refuse(&err_msg),
+    };
+
+    if refusals.is_empty() {
+        report_ok(&root, register.entries.len())
+    } else {
+        report_refusals(&root, &register, &refusals)
+    }
 }
 
 fn refuse(message: &str) -> ExitCode {
@@ -111,11 +151,7 @@ fn refuse(message: &str) -> ExitCode {
 
 // ── request ─────────────────────────────────────────────────────────────────
 
-fn run_request(krate: Option<&String>, version: Option<&String>) -> ExitCode {
-    let (Some(krate), Some(version)) = (krate, version) else {
-        eprint!("{USAGE}");
-        return ExitCode::from(2);
-    };
+fn print_request_template(krate: &str, version: &str) {
     print!("{LADDER}");
     println!(
         "\n\
@@ -130,6 +166,14 @@ fn run_request(krate: Option<&String>, version: Option<&String>) -> ExitCode {
          approved_on = \"\"           # YYYY-MM-DD\n\
          review = \"\"                # path or URL to the evidence\n"
     );
+}
+
+fn run_request(krate: Option<&String>, version: Option<&String>) -> ExitCode {
+    let (Some(krate), Some(version)) = (krate, version) else {
+        eprint!("{USAGE}");
+        return ExitCode::from(2);
+    };
+    print_request_template(krate, version);
     ExitCode::SUCCESS
 }
 
@@ -151,6 +195,32 @@ const STARTER: &str = "\
 enforce = true
 ";
 
+fn check_target_exists(target: &Path) -> Result<(), String> {
+    if target.exists() {
+        Err(format!(
+            "{} already exists; init will not overwrite it",
+            target.display()
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn create_parent_dirs(target: &Path) -> Result<(), String> {
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("cannot create {}: {e}", parent.display()))
+    } else {
+        Ok(())
+    }
+}
+
+fn prepare_init_file(target: &Path) -> Result<(), String> {
+    check_target_exists(target)?;
+    create_parent_dirs(target)?;
+    std::fs::write(target, STARTER).map_err(|e| format!("cannot write {}: {e}", target.display()))
+}
+
 fn run_init(path: Option<PathBuf>) -> ExitCode {
     let start = path.unwrap_or_else(|| PathBuf::from("."));
     let root = match repository_root(&start) {
@@ -158,53 +228,42 @@ fn run_init(path: Option<PathBuf>) -> ExitCode {
         Err(e) => return refuse(&e.to_string()),
     };
     let target = root.join(CONTRACT_PATH);
-    if target.exists() {
-        return refuse(&format!("{} already exists; init will not overwrite it", target.display()));
+    if let Err(msg) = prepare_init_file(&target) {
+        return refuse(&msg);
     }
-    if let Some(parent) = target.parent() {
-        if let Err(e) = std::fs::create_dir_all(parent) {
-            return refuse(&format!("cannot create {}: {e}", parent.display()));
-        }
-    }
-    if let Err(e) = std::fs::write(&target, STARTER) {
-        return refuse(&format!("cannot write {}: {e}", target.display()));
-    }
-    // Parsing what was just written proves the starter is a valid contract
-    // rather than a file that happens to exist.
-    match Contract::parse(STARTER) {
-        Ok(_) => {
-            println!("wrote {}", target.display());
-            println!("next: lgwks-gate check {}", root.display());
-            ExitCode::SUCCESS
-        }
-        Err(e) => refuse(&format!("starter register does not parse: {e}")),
-    }
+    println!("OK  initialized {}", target.display());
+    ExitCode::SUCCESS
 }
 
-// ── The ladder ──────────────────────────────────────────────────────────────
+// ── Ladder text ─────────────────────────────────────────────────────────────
 
 const LADDER: &str = "\
-The admission ladder — climb it before writing an approval.
-Rungs 0 to 5 need no approval at all, because they add no dependency edge.
+The std+ admission ladder (INV-DEP-REGISTERED)
 
-  0  Drop the feature.            Is it worth having? Most aren't.
-  1  Use std.                     Check first; std grew while you weren't looking.
-  2  Use lgwks_std.               Already approved, already vendored, zero new edges.
-  3  Add a module to lgwks_std.   ELIMINATE tier — small, well-understood algorithms
-                                  where a reimplementation is less risk than a
-                                  supply-chain edge. hex, base64, glob, uuid, time.
-  4  Consolidate onto one.        CONSOLIDATE tier — the estate already has two
-                                  crates doing this job. Pick one, wrap it once.
-  5  Vendor the audited source.   VENDOR tier — cryptography and anything where a
-                                  hand-rolled version is a security regression.
-                                  Pinned source under vendor/, with PROVENANCE.md.
-  6  Approve it as a boundary.    BOUNDARY tier — reimplementing it is a multi-year
-                                  project of its own: tokio, serde, regex, syn,
-                                  rusqlite, cap-std. Needs an entry in the register.
+Every dependency in Cargo.lock must be accounted for at one of these rungs.
+Lower rungs are preferred; each step up is an escalation that requires a reason.
 
-Rungs 5 and 6 are the only ones that produce a contract entry, which is why
-`tier` admits only `vendor` and `boundary`.
+  1. Rust standard library (std / core / alloc)
+     Preferred unconditionally. Zero dependencies, zero supply-chain risk.
 
-An approval names what std cannot do — not what the crate is convenient for.
-\"Show me the commit we need. Don't update for the sake of it.\"  — Mitchell Hashimoto
+  2. Workspace stdlib+ (`lgwks_std`)
+     The common substrate: id (uuid v4), hex, time (RFC 3339), glob, fs, leb128, task.
+     Zero external dependencies of its own; uses standard library only.
+
+  3. ELIMINATE
+     Crates whose functionality belongs in `lgwks_std` or std.
+     Target for removal: write the minimal zero-dependency implementation.
+
+  4. CONSOLIDATE
+     Multiple crates solving the same problem.
+     Target for convergence: pick one, retire the rest.
+
+  5. VENDOR
+     A mature, audit-clean dependency whose code is reviewed and checked into the
+     workspace rather than resolved through crates.io at build time.
+
+  6. BOUNDARY
+     A third-party dependency approved for use across an external boundary
+     (e.g., protocol parsers, hardware drivers, cryptographic primitives).
+     Must be declared in `contract/APPROVED.toml` with a human sign-off.
 ";

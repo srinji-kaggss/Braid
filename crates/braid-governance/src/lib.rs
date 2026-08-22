@@ -126,11 +126,17 @@ impl std::fmt::Display for GovernanceError {
             Self::Serialization(msg) => write!(f, "serialization failed: {msg}"),
             Self::Denied(msg) => write!(f, "generation action denied: {msg}"),
             Self::InvalidCommitment(field) => {
-                write!(f, "design commitment is outside the admitted envelope: {field}")
+                write!(
+                    f,
+                    "design commitment is outside the admitted envelope: {field}"
+                )
             }
             Self::BudgetExceeded(field) => write!(f, "resource budget exceeded: {field}"),
             Self::MalformedExpiry(msg) => {
-                write!(f, "expires_at not in strict UTC 'YYYY-MM-DDTHH:MM:SSZ' form: {msg}")
+                write!(
+                    f,
+                    "expires_at not in strict UTC 'YYYY-MM-DDTHH:MM:SSZ' form: {msg}"
+                )
             }
             Self::Expired(unix) => write!(f, "envelope expired at unix {unix}"),
         }

@@ -106,13 +106,22 @@ impl core::fmt::Display for ElabError {
                 )
             }
             ElabError::UnresolvedIdentifier(name) => {
-                write!(f, "unresolved identifier `{name}` (referenced before declaration)")
+                write!(
+                    f,
+                    "unresolved identifier `{name}` (referenced before declaration)"
+                )
             }
             ElabError::DuplicateBinding(name) => {
-                write!(f, "duplicate binding `{name}` (variable already declared in scope)")
+                write!(
+                    f,
+                    "duplicate binding `{name}` (variable already declared in scope)"
+                )
             }
             ElabError::BannedIdentifier(name) => {
-                write!(f, "banned identifier/keyword `{name}` is forbidden in pure Braid dataflow")
+                write!(
+                    f,
+                    "banned identifier/keyword `{name}` is forbidden in pure Braid dataflow"
+                )
             }
             ElabError::Build(m) => write!(f, "build error: {m}"),
             ElabError::Render(m) => write!(f, "render error: {m}"),
@@ -306,7 +315,9 @@ fn lex(src: &str) -> Result<Vec<Token>, ElabError> {
                         return Err(ElabError::Lex("unterminated block comment".into()));
                     }
                 } else {
-                    return Err(ElabError::Lex("division `/` is not supported in fixed-point v0".into()));
+                    return Err(ElabError::Lex(
+                        "division `/` is not supported in fixed-point v0".into(),
+                    ));
                 }
             }
             '"' | '\'' => {
@@ -562,7 +573,11 @@ impl Parser {
                     }
                     match self.bump() {
                         Some(Token::RParen) => Expr::Call { callee: name, args },
-                        other => return Err(ElabError::Parse(format!("expected ')' after call args, found {other:?}"))),
+                        other => {
+                            return Err(ElabError::Parse(format!(
+                                "expected ')' after call args, found {other:?}"
+                            )))
+                        }
                     }
                 } else {
                     Expr::Ident(name)
@@ -606,11 +621,19 @@ impl Parser {
                 self.bump(); // consume let/const
                 let name = match self.bump() {
                     Some(Token::Ident(n)) => n,
-                    other => return Err(ElabError::Parse(format!("expected identifier after declaration, found {other:?}"))),
+                    other => {
+                        return Err(ElabError::Parse(format!(
+                            "expected identifier after declaration, found {other:?}"
+                        )))
+                    }
                 };
                 match self.bump() {
                     Some(Token::Assign) => {}
-                    other => return Err(ElabError::Parse(format!("expected '=' after variable name, found {other:?}"))),
+                    other => {
+                        return Err(ElabError::Parse(format!(
+                            "expected '=' after variable name, found {other:?}"
+                        )))
+                    }
                 }
                 let expr = self.expr_bp(0)?;
                 if self.peek() == Some(&Token::Semi) {
@@ -627,7 +650,10 @@ impl Parser {
                 Ok(Stmt::Return(expr))
             }
             Some(Token::Ident(_)) if self.toks.get(self.pos + 1) == Some(&Token::Assign) => {
-                Err(ElabError::Parse("variable mutation / reassignment is forbidden; Braid is an immutable DAG".into()))
+                Err(ElabError::Parse(
+                    "variable mutation / reassignment is forbidden; Braid is an immutable DAG"
+                        .into(),
+                ))
             }
             _ => {
                 let expr = self.expr_bp(0)?;
@@ -661,7 +687,11 @@ pub fn parse_program(src: &str) -> Result<Program, ElabError> {
     if toks.is_empty() {
         return Err(ElabError::Empty);
     }
-    let mut p = Parser { toks, pos: 0, depth: 0 };
+    let mut p = Parser {
+        toks,
+        pos: 0,
+        depth: 0,
+    };
     p.parse_program()
 }
 
@@ -671,7 +701,11 @@ pub fn parse(src: &str) -> Result<Expr, ElabError> {
     if toks.is_empty() {
         return Err(ElabError::Empty);
     }
-    let mut p = Parser { toks, pos: 0, depth: 0 };
+    let mut p = Parser {
+        toks,
+        pos: 0,
+        depth: 0,
+    };
     let expr = p.expr_bp(0)?;
     if p.pos != p.toks.len() {
         return Err(ElabError::Parse(format!(
@@ -769,35 +803,62 @@ fn emit_expr(
                 let (a, at) = emit_expr(b, &args[0], scope, depth + 1)?;
                 let (c, ct) = emit_expr(b, &args[1], scope, depth + 1)?;
                 if at != ValType::Num || ct != ValType::Num {
-                    return Err(ElabError::TypeError { op: "add()".into(), operands: vec![at, ct] });
+                    return Err(ElabError::TypeError {
+                        op: "add()".into(),
+                        operands: vec![at, ct],
+                    });
                 }
-                Ok((b.strand("js.add", &[a, c]).map_err(ElabError::build)?, ValType::Num))
+                Ok((
+                    b.strand("js.add", &[a, c]).map_err(ElabError::build)?,
+                    ValType::Num,
+                ))
             }
             "concat" if args.len() == 2 => {
                 let (a, at) = emit_expr(b, &args[0], scope, depth + 1)?;
                 let (c, ct) = emit_expr(b, &args[1], scope, depth + 1)?;
                 if at != ValType::Str || ct != ValType::Str {
-                    return Err(ElabError::TypeError { op: "concat()".into(), operands: vec![at, ct] });
+                    return Err(ElabError::TypeError {
+                        op: "concat()".into(),
+                        operands: vec![at, ct],
+                    });
                 }
-                Ok((b.strand("js.concat", &[a, c]).map_err(ElabError::build)?, ValType::Str))
+                Ok((
+                    b.strand("js.concat", &[a, c]).map_err(ElabError::build)?,
+                    ValType::Str,
+                ))
             }
             "mul" if args.len() == 2 => {
                 let (a, at) = emit_expr(b, &args[0], scope, depth + 1)?;
                 let (c, ct) = emit_expr(b, &args[1], scope, depth + 1)?;
                 if at != ValType::Num || ct != ValType::Num {
-                    return Err(ElabError::TypeError { op: "mul()".into(), operands: vec![at, ct] });
+                    return Err(ElabError::TypeError {
+                        op: "mul()".into(),
+                        operands: vec![at, ct],
+                    });
                 }
-                Ok((b.strand("js.mul", &[a, c]).map_err(ElabError::build)?, ValType::Num))
+                Ok((
+                    b.strand("js.mul", &[a, c]).map_err(ElabError::build)?,
+                    ValType::Num,
+                ))
             }
             "sub" if args.len() == 2 => {
                 let (a, at) = emit_expr(b, &args[0], scope, depth + 1)?;
                 let (c, ct) = emit_expr(b, &args[1], scope, depth + 1)?;
                 if at != ValType::Num || ct != ValType::Num {
-                    return Err(ElabError::TypeError { op: "sub()".into(), operands: vec![at, ct] });
+                    return Err(ElabError::TypeError {
+                        op: "sub()".into(),
+                        operands: vec![at, ct],
+                    });
                 }
-                Ok((b.strand("js.sub", &[a, c]).map_err(ElabError::build)?, ValType::Num))
+                Ok((
+                    b.strand("js.sub", &[a, c]).map_err(ElabError::build)?,
+                    ValType::Num,
+                ))
             }
-            other => Err(ElabError::Parse(format!("unsupported or undeclared function `{other}` with {} args", args.len()))),
+            other => Err(ElabError::Parse(format!(
+                "unsupported or undeclared function `{other}` with {} args",
+                args.len()
+            ))),
         },
     }
 }

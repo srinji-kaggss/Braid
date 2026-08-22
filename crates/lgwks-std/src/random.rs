@@ -42,7 +42,11 @@ impl EntropyError {
 
 impl fmt::Display for EntropyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "could not read OS entropy from {}: {}", self.device, self.cause)
+        write!(
+            f,
+            "could not read OS entropy from {}: {}",
+            self.device, self.cause
+        )
     }
 }
 
@@ -57,11 +61,14 @@ pub fn fill_bytes(buf: &mut [u8]) -> Result<(), EntropyError> {
     if buf.is_empty() {
         return Ok(());
     }
-    let mut device = File::open(ENTROPY_DEVICE)
-        .map_err(|cause| EntropyError { device: ENTROPY_DEVICE, cause })?;
-    device
-        .read_exact(buf)
-        .map_err(|cause| EntropyError { device: ENTROPY_DEVICE, cause })
+    let mut device = File::open(ENTROPY_DEVICE).map_err(|cause| EntropyError {
+        device: ENTROPY_DEVICE,
+        cause,
+    })?;
+    device.read_exact(buf).map_err(|cause| EntropyError {
+        device: ENTROPY_DEVICE,
+        cause,
+    })
 }
 
 /// Returns `N` cryptographically secure random bytes from the OS.

@@ -106,7 +106,7 @@ fn duplicate_names_are_rejected() {
     ] }"#;
     assert!(matches!(
         build_from_json(dup),
-        Err(ProjectError::DuplicateName(n)) if n == "x"
+        Err(ProjectError::DuplicateName { name, .. }) if name == "x"
     ));
 }
 
@@ -114,10 +114,10 @@ fn duplicate_names_are_rejected() {
 fn empty_and_malformed_manifests_fail_closed() {
     assert!(matches!(
         build_from_json(r#"{ "name": "e", "capsules": [] }"#),
-        Err(ProjectError::Empty)
+        Err(ProjectError::Empty { .. })
     ));
     assert!(matches!(
         build_from_json("not json"),
-        Err(ProjectError::Parse(_))
+        Err(ProjectError::Parse { .. })
     ));
 }

@@ -135,6 +135,7 @@ dependencies = [
 name = "braid-project"
 version = "0.1.0"
 dependencies = [
+ "blake3",
  "braid-elaborate-js",
  "braid-ir",
  "braid-verify",

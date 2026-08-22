@@ -80,6 +80,9 @@ fn print_kat_values() {
     println!("# Braid v0 known-answer vectors — ADR-088 D8.");
     println!("# Regenerating these is an IR_VERSION event (D11), never routine.");
     println!("registry_cid_hex = {}", registry_v0().cid().to_hex());
-    println!("capsule_bytes_hex = {}", lgwks_std::hex::encode(capsule.to_bytes()));
+    println!(
+        "capsule_bytes_hex = {}",
+        lgwks_std::hex::encode(capsule.to_bytes())
+    );
     println!("capsule_cid_hex = {}", capsule.cid().to_hex());
 }

@@ -90,10 +90,7 @@ fn identifier_reuse_and_dag_sharing() {
         y + x;
     "#;
     let e = admit(src);
-    assert_eq!(
-        terms(&e.capsule),
-        ["js.lit.number", "js.add", "js.add"]
-    );
+    assert_eq!(terms(&e.capsule), ["js.lit.number", "js.add", "js.add"]);
     // Strand 1 (y = x + x) takes strand 0 twice
     assert_eq!(e.capsule.braid.strands[1].inputs, vec![0, 0]);
     // Strand 2 (y + x) takes strand 1 and strand 0
@@ -157,10 +154,7 @@ fn refusal_01_eval_attempt_banned() {
 #[test]
 fn refusal_02_reassignment_banned() {
     let src = "let x = 1; x = 2;";
-    assert!(matches!(
-        elaborate_js(src),
-        Err(ElabError::Parse(_))
-    ));
+    assert!(matches!(elaborate_js(src), Err(ElabError::Parse(_))));
 }
 
 #[test]
@@ -323,8 +317,5 @@ fn refusal_deep_nesting_fails_closed() {
     for _ in 0..200 {
         deep.push(')');
     }
-    assert!(matches!(
-        elaborate_js(&deep),
-        Err(ElabError::Parse(_))
-    ));
+    assert!(matches!(elaborate_js(&deep), Err(ElabError::Parse(_))));
 }
