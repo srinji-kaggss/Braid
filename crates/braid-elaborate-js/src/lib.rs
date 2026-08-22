@@ -16,6 +16,9 @@
 //! - **Fail-Closed Guards**: bans loops (`while`, `for`), mutation (`x = 2`), eval (`eval(...)`),
 //!   DOM access (`document`, `window`), globals (`process`, `globalThis`), and implicit coercions.
 
+#![forbid(unsafe_code)]
+#![deny(missing_docs)]
+
 use std::collections::BTreeMap;
 
 use braid_ir::Capsule;
@@ -23,6 +26,9 @@ use braid_render::{manifest, render_text};
 use braid_sdk::{Builder, Strand};
 use braid_verify::{verify, Verdict};
 use braid_vocab_js::registry_v0;
+
+/// Maximum recursion depth allowed during parsing and elaboration to prevent stack exhaustion.
+pub const MAX_DEPTH: usize = 128;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Value types + errors
@@ -494,6 +500,7 @@ pub struct Program {
 struct Parser {
     toks: Vec<Token>,
     pos: usize,
+    depth: usize,
 }
 
 impl Parser {
@@ -523,6 +530,18 @@ impl Parser {
     }
 
     fn expr_bp(&mut self, min_bp: u8) -> Result<Expr, ElabError> {
+        self.depth += 1;
+        if self.depth > MAX_DEPTH {
+            return Err(ElabError::Parse(format!(
+                "maximum expression nesting depth ({MAX_DEPTH}) exceeded"
+            )));
+        }
+        let res = self.expr_bp_inner(min_bp);
+        self.depth -= 1;
+        res
+    }
+
+    fn expr_bp_inner(&mut self, min_bp: u8) -> Result<Expr, ElabError> {
         let mut lhs = match self.bump() {
             Some(Token::Num(n)) => Expr::Num(n),
             Some(Token::Str(s)) => Expr::Str(s),
@@ -642,7 +661,7 @@ pub fn parse_program(src: &str) -> Result<Program, ElabError> {
     if toks.is_empty() {
         return Err(ElabError::Empty);
     }
-    let mut p = Parser { toks, pos: 0 };
+    let mut p = Parser { toks, pos: 0, depth: 0 };
     p.parse_program()
 }
 
@@ -652,7 +671,7 @@ pub fn parse(src: &str) -> Result<Expr, ElabError> {
     if toks.is_empty() {
         return Err(ElabError::Empty);
     }
-    let mut p = Parser { toks, pos: 0 };
+    let mut p = Parser { toks, pos: 0, depth: 0 };
     let expr = p.expr_bp(0)?;
     if p.pos != p.toks.len() {
         return Err(ElabError::Parse(format!(
@@ -698,7 +717,14 @@ fn emit_expr(
     b: &mut Builder,
     e: &Expr,
     scope: &BTreeMap<String, (Strand, ValType)>,
+    depth: usize,
 ) -> Result<(Strand, ValType), ElabError> {
+    if depth > MAX_DEPTH {
+        return Err(ElabError::Build(format!(
+            "expression tree exceeds maximum elaboration depth ({MAX_DEPTH})"
+        )));
+    }
+
     match e {
         Expr::Str(_) => Ok((
             b.strand("js.lit.string", &[]).map_err(ElabError::build)?,
@@ -720,7 +746,7 @@ fn emit_expr(
             }
         }
         Expr::Unary(UnOp::Not, x) => {
-            let (xh, xt) = emit_expr(b, x, scope)?;
+            let (xh, xt) = emit_expr(b, x, scope, depth + 1)?;
             if xt != ValType::Bool {
                 return Err(ElabError::TypeError {
                     op: "!".to_string(),
@@ -733,39 +759,39 @@ fn emit_expr(
             ))
         }
         Expr::Binary(op, l, r) => {
-            let (lh, lt) = emit_expr(b, l, scope)?;
-            let (rh, rt) = emit_expr(b, r, scope)?;
+            let (lh, lt) = emit_expr(b, l, scope, depth + 1)?;
+            let (rh, rt) = emit_expr(b, r, scope, depth + 1)?;
             let (term, out) = resolve_binary(*op, lt, rt)?;
             Ok((b.strand(term, &[lh, rh]).map_err(ElabError::build)?, out))
         }
         Expr::Call { callee, args } => match callee.as_str() {
             "add" if args.len() == 2 => {
-                let (a, at) = emit_expr(b, &args[0], scope)?;
-                let (c, ct) = emit_expr(b, &args[1], scope)?;
+                let (a, at) = emit_expr(b, &args[0], scope, depth + 1)?;
+                let (c, ct) = emit_expr(b, &args[1], scope, depth + 1)?;
                 if at != ValType::Num || ct != ValType::Num {
                     return Err(ElabError::TypeError { op: "add()".into(), operands: vec![at, ct] });
                 }
                 Ok((b.strand("js.add", &[a, c]).map_err(ElabError::build)?, ValType::Num))
             }
             "concat" if args.len() == 2 => {
-                let (a, at) = emit_expr(b, &args[0], scope)?;
-                let (c, ct) = emit_expr(b, &args[1], scope)?;
+                let (a, at) = emit_expr(b, &args[0], scope, depth + 1)?;
+                let (c, ct) = emit_expr(b, &args[1], scope, depth + 1)?;
                 if at != ValType::Str || ct != ValType::Str {
                     return Err(ElabError::TypeError { op: "concat()".into(), operands: vec![at, ct] });
                 }
                 Ok((b.strand("js.concat", &[a, c]).map_err(ElabError::build)?, ValType::Str))
             }
             "mul" if args.len() == 2 => {
-                let (a, at) = emit_expr(b, &args[0], scope)?;
-                let (c, ct) = emit_expr(b, &args[1], scope)?;
+                let (a, at) = emit_expr(b, &args[0], scope, depth + 1)?;
+                let (c, ct) = emit_expr(b, &args[1], scope, depth + 1)?;
                 if at != ValType::Num || ct != ValType::Num {
                     return Err(ElabError::TypeError { op: "mul()".into(), operands: vec![at, ct] });
                 }
                 Ok((b.strand("js.mul", &[a, c]).map_err(ElabError::build)?, ValType::Num))
             }
             "sub" if args.len() == 2 => {
-                let (a, at) = emit_expr(b, &args[0], scope)?;
-                let (c, ct) = emit_expr(b, &args[1], scope)?;
+                let (a, at) = emit_expr(b, &args[0], scope, depth + 1)?;
+                let (c, ct) = emit_expr(b, &args[1], scope, depth + 1)?;
                 if at != ValType::Num || ct != ValType::Num {
                     return Err(ElabError::TypeError { op: "sub()".into(), operands: vec![at, ct] });
                 }
@@ -795,16 +821,16 @@ pub fn elaborate_js(src: &str) -> Result<Capsule, ElabError> {
                 if scope.contains_key(&name) {
                     return Err(ElabError::DuplicateBinding(name));
                 }
-                let (strand, ty) = emit_expr(&mut b, &expr, &scope)?;
+                let (strand, ty) = emit_expr(&mut b, &expr, &scope, 0)?;
                 scope.insert(name, (strand, ty));
                 last_out = Some(strand);
             }
             Stmt::Expr(expr) => {
-                let (strand, _ty) = emit_expr(&mut b, &expr, &scope)?;
+                let (strand, _ty) = emit_expr(&mut b, &expr, &scope, 0)?;
                 last_out = Some(strand);
             }
             Stmt::Return(expr) => {
-                let (strand, _ty) = emit_expr(&mut b, &expr, &scope)?;
+                let (strand, _ty) = emit_expr(&mut b, &expr, &scope, 0)?;
                 last_out = Some(strand);
                 break;
             }

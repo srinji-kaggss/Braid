@@ -311,3 +311,20 @@ fn golden_10_comparisons() {
     let capsule = elaborate_js(src).expect("elaborates");
     assert!(!capsule.cid().to_hex().is_empty());
 }
+
+#[test]
+fn refusal_deep_nesting_fails_closed() {
+    // 200 levels of nested parentheses exceeds MAX_DEPTH (128)
+    let mut deep = String::new();
+    for _ in 0..200 {
+        deep.push('(');
+    }
+    deep.push('1');
+    for _ in 0..200 {
+        deep.push(')');
+    }
+    assert!(matches!(
+        elaborate_js(&deep),
+        Err(ElabError::Parse(_))
+    ));
+}
