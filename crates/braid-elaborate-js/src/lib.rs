@@ -1,29 +1,22 @@
-//! # braid-elaborate-js — a thin JavaScript-expression frontend (U11–U12, D31)
+//! # braid-elaborate-js — JavaScript statement and expression frontend (WS-2, U11–U13, D31)
 //!
 //! The **first real frontend over the global IR.** `braid-vocab-js` is the
-//! elaboration target; this crate compiles JS *text* into an admitted
-//! [`braid_ir::Capsule`] via the **one** `braid-verify`. It operationalizes
-//! D31's "renders JS useless" — JS becomes an authoring frontend over the
-//! verified substrate, not a runtime authority. Zero AI in the path.
+//! elaboration target; this crate compiles JS *text* (statements, let-bindings,
+//! identifier resolution, and expressions) into an admitted [`braid_ir::Capsule`]
+//! via the **one** `braid-verify`. It operationalizes D31's "renders JS useless" —
+//! JS becomes an authoring frontend over the verified substrate, not a runtime
+//! authority. Zero AI in the path.
 //!
-//! ## Scope (a thin slice — an expression language, not a JS parser)
-//! - **U11**: string + integer literals, binary `+`.
-//! - **U12**: boolean literals (`true`/`false`), arithmetic `-` `*`, comparison
-//!   `<` `==`, boolean logic `&&` `||`, prefix `!`, full operator precedence +
-//!   parentheses. Overloaded operators resolve by operand type to a distinct
-//!   typed term (`+` → `js.concat`/`js.add`; `==` → `js.eq.str`/`js.eq.num`);
-//!   any type mismatch is **rejected at elaboration** (fail-closed — no
-//!   coercion, and no malformed capsule ever reaches the verifier).
-//!
-//! Still out of scope (later units): identifiers, calls, statements, the
-//! `js.eval`/`js.fetch` escalation probes, and literal *values* (the `js.lit.*`
-//! terms are valueless — carrying payloads needs a substrate-level `Strand`
-//! change, not a vocabulary or frontend change; see `DEBT_REGISTER.md`).
-//!
-//! ## Boundary
-//! A *consumer* crate (like `braid-cli`/`braid-sdk`): it elaborates INTO the
-//! substrate through `braid_sdk::Builder`; it is **not** trust-base and builds
-//! no second verifier. The verifier remains the sole admission authority (D9).
+//! ## Scope
+//! - **Literals**: strings, integers, booleans (`true`/`false`). Floats are rejected (D8).
+//! - **Statements**: `let <ident> = <expr>;`, `const <ident> = <expr>;`, `return <expr>;`.
+//! - **Scoping & Identifiers**: immutable bindings, duplicate detection, unresolved identifier checks.
+//! - **Operators**: arithmetic `+` `-` `*`, comparison `<` `==`, logic `&&` `||`, prefix `!`, parentheses.
+//! - **Pure Function Calls**: `add(a, b)`, `concat(a, b)`, `mul(a, b)`, `sub(a, b)`.
+//! - **Fail-Closed Guards**: bans loops (`while`, `for`), mutation (`x = 2`), eval (`eval(...)`),
+//!   DOM access (`document`, `window`), globals (`process`, `globalThis`), and implicit coercions.
+
+use std::collections::BTreeMap;
 
 use braid_ir::Capsule;
 use braid_render::{manifest, render_text};
@@ -38,8 +31,11 @@ use braid_vocab_js::registry_v0;
 /// The value types this frontend's type-directed elaboration distinguishes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ValType {
+    /// String type (`js.string`).
     Str,
+    /// Integer number type (`js.number`).
     Num,
+    /// Boolean type (`js.boolean`).
     Bool,
 }
 
@@ -64,7 +60,18 @@ pub enum ElabError {
     Parse(String),
     /// An operator applied to operand type(s) it has no typed term for (no
     /// implicit coercion). `operands` is the operand type list in source order.
-    TypeError { op: String, operands: Vec<ValType> },
+    TypeError {
+        /// The operator symbol.
+        op: String,
+        /// The observed operand types.
+        operands: Vec<ValType>,
+    },
+    /// An identifier was referenced without prior declaration in scope.
+    UnresolvedIdentifier(String),
+    /// An identifier was declared multiple times in the same scope.
+    DuplicateBinding(String),
+    /// A banned keyword, global, or destructive function was encountered.
+    BannedIdentifier(String),
     /// The SDK refused to author the capsule (carries the `BuildError` debug).
     Build(String),
     /// Manifest rendering failed (carries the `RenderError` debug).
@@ -92,6 +99,15 @@ impl core::fmt::Display for ElabError {
                     types.join(", ")
                 )
             }
+            ElabError::UnresolvedIdentifier(name) => {
+                write!(f, "unresolved identifier `{name}` (referenced before declaration)")
+            }
+            ElabError::DuplicateBinding(name) => {
+                write!(f, "duplicate binding `{name}` (variable already declared in scope)")
+            }
+            ElabError::BannedIdentifier(name) => {
+                write!(f, "banned identifier/keyword `{name}` is forbidden in pure Braid dataflow")
+            }
             ElabError::Build(m) => write!(f, "build error: {m}"),
             ElabError::Render(m) => write!(f, "render error: {m}"),
         }
@@ -109,16 +125,75 @@ enum Token {
     Str(String),
     Num(i64),
     Bool(bool),
+    Ident(String),
+    Let,
+    Const,
+    Return,
     Plus,
     Minus,
     Star,
     Lt,
     EqEq,
+    Assign,
     AndAnd,
     OrOr,
     Bang,
     LParen,
     RParen,
+    LBrace,
+    RBrace,
+    Semi,
+    Comma,
+}
+
+fn is_banned_ident(name: &str) -> bool {
+    matches!(
+        name,
+        "eval"
+            | "fetch"
+            | "window"
+            | "document"
+            | "globalThis"
+            | "global"
+            | "process"
+            | "require"
+            | "console"
+            | "setTimeout"
+            | "setInterval"
+            | "XMLHttpRequest"
+            | "WebSocket"
+    )
+}
+
+fn is_banned_keyword(name: &str) -> bool {
+    matches!(
+        name,
+        "var"
+            | "while"
+            | "for"
+            | "do"
+            | "function"
+            | "class"
+            | "import"
+            | "export"
+            | "async"
+            | "await"
+            | "yield"
+            | "try"
+            | "catch"
+            | "finally"
+            | "throw"
+            | "new"
+            | "delete"
+            | "typeof"
+            | "instanceof"
+            | "void"
+            | "debugger"
+            | "switch"
+            | "case"
+            | "default"
+            | "with"
+    )
 }
 
 fn lex(src: &str) -> Result<Vec<Token>, ElabError> {
@@ -129,6 +204,22 @@ fn lex(src: &str) -> Result<Vec<Token>, ElabError> {
         let c = chars[i];
         match c {
             ' ' | '\t' | '\n' | '\r' => i += 1,
+            ';' => {
+                toks.push(Token::Semi);
+                i += 1;
+            }
+            ',' => {
+                toks.push(Token::Comma);
+                i += 1;
+            }
+            '{' => {
+                toks.push(Token::LBrace);
+                i += 1;
+            }
+            '}' => {
+                toks.push(Token::RBrace);
+                i += 1;
+            }
             '+' => {
                 toks.push(Token::Plus);
                 i += 1;
@@ -157,16 +248,13 @@ fn lex(src: &str) -> Result<Vec<Token>, ElabError> {
                 toks.push(Token::RParen);
                 i += 1;
             }
-            // Multi-char operators: the single-char form is an error in this
-            // expression slice (no assignment, no bitwise ops).
             '=' => {
                 if chars.get(i + 1) == Some(&'=') {
                     toks.push(Token::EqEq);
                     i += 2;
                 } else {
-                    return Err(ElabError::Lex(
-                        "`=` is not an operator here; did you mean `==`?".to_string(),
-                    ));
+                    toks.push(Token::Assign);
+                    i += 1;
                 }
             }
             '&' => {
@@ -187,6 +275,32 @@ fn lex(src: &str) -> Result<Vec<Token>, ElabError> {
                     return Err(ElabError::Lex(
                         "single `|` is not supported; use `||`".to_string(),
                     ));
+                }
+            }
+            '/' => {
+                if chars.get(i + 1) == Some(&'/') {
+                    // Line comment
+                    i += 2;
+                    while i < chars.len() && chars[i] != '\n' {
+                        i += 1;
+                    }
+                } else if chars.get(i + 1) == Some(&'*') {
+                    // Block comment
+                    i += 2;
+                    let mut closed = false;
+                    while i + 1 < chars.len() {
+                        if chars[i] == '*' && chars[i + 1] == '/' {
+                            i += 2;
+                            closed = true;
+                            break;
+                        }
+                        i += 1;
+                    }
+                    if !closed {
+                        return Err(ElabError::Lex("unterminated block comment".into()));
+                    }
+                } else {
+                    return Err(ElabError::Lex("division `/` is not supported in fixed-point v0".into()));
                 }
             }
             '"' | '\'' => {
@@ -227,6 +341,11 @@ fn lex(src: &str) -> Result<Vec<Token>, ElabError> {
             d if d.is_ascii_digit() => {
                 let mut n = String::new();
                 while let Some(&d) = chars.get(i) {
+                    if d == '.' {
+                        return Err(ElabError::Lex(
+                            "floating point literals are forbidden (D8: fixed point only)".into(),
+                        ));
+                    }
                     if !d.is_ascii_digit() {
                         break;
                     }
@@ -238,8 +357,6 @@ fn lex(src: &str) -> Result<Vec<Token>, ElabError> {
                     .map_err(|_| ElabError::Lex(format!("integer literal out of range: {n}")))?;
                 toks.push(Token::Num(val));
             }
-            // Keywords only — identifiers are a later unit. `true`/`false` lex to
-            // boolean literals; anything else is a clear, fail-closed error.
             a if a.is_ascii_alphabetic() || a == '_' => {
                 let mut w = String::new();
                 while let Some(&ch) = chars.get(i) {
@@ -250,14 +367,19 @@ fn lex(src: &str) -> Result<Vec<Token>, ElabError> {
                         break;
                     }
                 }
+                if is_banned_keyword(&w) {
+                    return Err(ElabError::BannedIdentifier(w));
+                }
+                if is_banned_ident(&w) {
+                    return Err(ElabError::BannedIdentifier(w));
+                }
                 match w.as_str() {
                     "true" => toks.push(Token::Bool(true)),
                     "false" => toks.push(Token::Bool(false)),
-                    other => {
-                        return Err(ElabError::Lex(format!(
-                            "identifiers are not supported yet (expressions only): `{other}`"
-                        )))
-                    }
+                    "let" => toks.push(Token::Let),
+                    "const" => toks.push(Token::Const),
+                    "return" => toks.push(Token::Return),
+                    _ => toks.push(Token::Ident(w)),
                 }
             }
             other => return Err(ElabError::Lex(format!("unexpected character {other:?}"))),
@@ -267,23 +389,32 @@ fn lex(src: &str) -> Result<Vec<Token>, ElabError> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Parser — precedence climbing (Pratt). Left-associative; `!` is prefix.
-//   ||  <  &&  <  == <  <  +  -  <  *      (low → high)
+// Parser
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Unary operators.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnOp {
+    /// Boolean negation (`!`).
     Not,
 }
 
+/// Binary operators.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinOp {
+    /// Addition (`+`).
     Add,
+    /// Subtraction (`-`).
     Sub,
+    /// Multiplication (`*`).
     Mul,
+    /// Less than (`<`).
     Lt,
+    /// Equality (`==`).
     Eq,
+    /// Logical AND (`&&`).
     And,
+    /// Logical OR (`||`).
     Or,
 }
 
@@ -313,15 +444,51 @@ impl BinOp {
     }
 }
 
-/// The expression AST. Operators are *syntactic*; which typed term each
-/// elaborates to is decided by operand types at elaboration time.
+/// The expression AST.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
+    /// String literal.
     Str(String),
+    /// Integer literal.
     Num(i64),
+    /// Boolean literal.
     Bool(bool),
+    /// Variable identifier reference.
+    Ident(String),
+    /// Unary operator expression.
     Unary(UnOp, Box<Expr>),
+    /// Binary operator expression.
     Binary(BinOp, Box<Expr>, Box<Expr>),
+    /// Pure function call.
+    Call {
+        /// Name of the function being called.
+        callee: String,
+        /// Arguments passed to the function.
+        args: Vec<Expr>,
+    },
+}
+
+/// A statement in a JavaScript program.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Stmt {
+    /// Variable declaration (`let x = expr;` or `const x = expr;`).
+    Let {
+        /// Variable name.
+        name: String,
+        /// Bound expression.
+        expr: Expr,
+    },
+    /// Expression statement (`expr;`).
+    Expr(Expr),
+    /// Return statement (`return expr;`).
+    Return(Expr),
+}
+
+/// A sequence of statements comprising a program.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Program {
+    /// Statements in source order.
+    pub stmts: Vec<Stmt>,
 }
 
 struct Parser {
@@ -360,8 +527,29 @@ impl Parser {
             Some(Token::Num(n)) => Expr::Num(n),
             Some(Token::Str(s)) => Expr::Str(s),
             Some(Token::Bool(b)) => Expr::Bool(b),
+            Some(Token::Ident(name)) => {
+                if self.peek() == Some(&Token::LParen) {
+                    self.bump(); // consume '('
+                    let mut args = Vec::new();
+                    if self.peek() != Some(&Token::RParen) {
+                        loop {
+                            args.push(self.expr_bp(0)?);
+                            if self.peek() == Some(&Token::Comma) {
+                                self.bump();
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    match self.bump() {
+                        Some(Token::RParen) => Expr::Call { callee: name, args },
+                        other => return Err(ElabError::Parse(format!("expected ')' after call args, found {other:?}"))),
+                    }
+                } else {
+                    Expr::Ident(name)
+                }
+            }
             Some(Token::Bang) => {
-                // Prefix `!` binds tighter than any binary operator.
                 let operand = self.expr_bp(11)?;
                 Expr::Unary(UnOp::Not, Box::new(operand))
             }
@@ -386,15 +574,79 @@ impl Parser {
             if lbp < min_bp {
                 break;
             }
-            self.bump(); // consume the operator
+            self.bump(); // consume operator
             let rhs = self.expr_bp(rbp)?;
             lhs = Expr::Binary(op, Box::new(lhs), Box::new(rhs));
         }
         Ok(lhs)
     }
+
+    fn parse_stmt(&mut self) -> Result<Stmt, ElabError> {
+        match self.peek() {
+            Some(Token::Let) | Some(Token::Const) => {
+                self.bump(); // consume let/const
+                let name = match self.bump() {
+                    Some(Token::Ident(n)) => n,
+                    other => return Err(ElabError::Parse(format!("expected identifier after declaration, found {other:?}"))),
+                };
+                match self.bump() {
+                    Some(Token::Assign) => {}
+                    other => return Err(ElabError::Parse(format!("expected '=' after variable name, found {other:?}"))),
+                }
+                let expr = self.expr_bp(0)?;
+                if self.peek() == Some(&Token::Semi) {
+                    self.bump();
+                }
+                Ok(Stmt::Let { name, expr })
+            }
+            Some(Token::Return) => {
+                self.bump(); // consume return
+                let expr = self.expr_bp(0)?;
+                if self.peek() == Some(&Token::Semi) {
+                    self.bump();
+                }
+                Ok(Stmt::Return(expr))
+            }
+            Some(Token::Ident(_)) if self.toks.get(self.pos + 1) == Some(&Token::Assign) => {
+                Err(ElabError::Parse("variable mutation / reassignment is forbidden; Braid is an immutable DAG".into()))
+            }
+            _ => {
+                let expr = self.expr_bp(0)?;
+                if self.peek() == Some(&Token::Semi) {
+                    self.bump();
+                }
+                Ok(Stmt::Expr(expr))
+            }
+        }
+    }
+
+    fn parse_program(&mut self) -> Result<Program, ElabError> {
+        let mut stmts = Vec::new();
+        while self.pos < self.toks.len() {
+            if self.peek() == Some(&Token::Semi) {
+                self.bump();
+                continue;
+            }
+            stmts.push(self.parse_stmt()?);
+        }
+        if stmts.is_empty() {
+            return Err(ElabError::Empty);
+        }
+        Ok(Program { stmts })
+    }
 }
 
-/// Lex + parse a JS expression into an [`Expr`]. Exposed for reuse/testing.
+/// Lex + parse JS source into an AST [`Program`].
+pub fn parse_program(src: &str) -> Result<Program, ElabError> {
+    let toks = lex(src)?;
+    if toks.is_empty() {
+        return Err(ElabError::Empty);
+    }
+    let mut p = Parser { toks, pos: 0 };
+    p.parse_program()
+}
+
+/// Lex + parse a single JS expression into an [`Expr`].
 pub fn parse(src: &str) -> Result<Expr, ElabError> {
     let toks = lex(src)?;
     if toks.is_empty() {
@@ -412,12 +664,9 @@ pub fn parse(src: &str) -> Result<Expr, ElabError> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Elaboration — Expr → Strands over braid-vocab-js, via the SDK
+// Elaboration — Program / Expr → Strands over braid-vocab-js
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Type-directed term selection for a binary operator. The fail-closed line:
-/// matching operand types pick a single typed term; anything else is a type
-/// error, never a coercion.
 fn resolve_binary(
     op: BinOp,
     lt: ValType,
@@ -445,7 +694,11 @@ fn resolve_binary(
     Ok(picked)
 }
 
-fn emit(b: &mut Builder, e: &Expr) -> Result<(Strand, ValType), ElabError> {
+fn emit_expr(
+    b: &mut Builder,
+    e: &Expr,
+    scope: &BTreeMap<String, (Strand, ValType)>,
+) -> Result<(Strand, ValType), ElabError> {
     match e {
         Expr::Str(_) => Ok((
             b.strand("js.lit.string", &[]).map_err(ElabError::build)?,
@@ -459,8 +712,15 @@ fn emit(b: &mut Builder, e: &Expr) -> Result<(Strand, ValType), ElabError> {
             b.strand("js.lit.boolean", &[]).map_err(ElabError::build)?,
             ValType::Bool,
         )),
+        Expr::Ident(name) => {
+            if let Some(&(strand, ty)) = scope.get(name) {
+                Ok((strand, ty))
+            } else {
+                Err(ElabError::UnresolvedIdentifier(name.clone()))
+            }
+        }
         Expr::Unary(UnOp::Not, x) => {
-            let (xh, xt) = emit(b, x)?;
+            let (xh, xt) = emit_expr(b, x, scope)?;
             if xt != ValType::Bool {
                 return Err(ElabError::TypeError {
                     op: "!".to_string(),
@@ -473,41 +733,100 @@ fn emit(b: &mut Builder, e: &Expr) -> Result<(Strand, ValType), ElabError> {
             ))
         }
         Expr::Binary(op, l, r) => {
-            let (lh, lt) = emit(b, l)?;
-            let (rh, rt) = emit(b, r)?;
+            let (lh, lt) = emit_expr(b, l, scope)?;
+            let (rh, rt) = emit_expr(b, r, scope)?;
             let (term, out) = resolve_binary(*op, lt, rt)?;
             Ok((b.strand(term, &[lh, rh]).map_err(ElabError::build)?, out))
         }
+        Expr::Call { callee, args } => match callee.as_str() {
+            "add" if args.len() == 2 => {
+                let (a, at) = emit_expr(b, &args[0], scope)?;
+                let (c, ct) = emit_expr(b, &args[1], scope)?;
+                if at != ValType::Num || ct != ValType::Num {
+                    return Err(ElabError::TypeError { op: "add()".into(), operands: vec![at, ct] });
+                }
+                Ok((b.strand("js.add", &[a, c]).map_err(ElabError::build)?, ValType::Num))
+            }
+            "concat" if args.len() == 2 => {
+                let (a, at) = emit_expr(b, &args[0], scope)?;
+                let (c, ct) = emit_expr(b, &args[1], scope)?;
+                if at != ValType::Str || ct != ValType::Str {
+                    return Err(ElabError::TypeError { op: "concat()".into(), operands: vec![at, ct] });
+                }
+                Ok((b.strand("js.concat", &[a, c]).map_err(ElabError::build)?, ValType::Str))
+            }
+            "mul" if args.len() == 2 => {
+                let (a, at) = emit_expr(b, &args[0], scope)?;
+                let (c, ct) = emit_expr(b, &args[1], scope)?;
+                if at != ValType::Num || ct != ValType::Num {
+                    return Err(ElabError::TypeError { op: "mul()".into(), operands: vec![at, ct] });
+                }
+                Ok((b.strand("js.mul", &[a, c]).map_err(ElabError::build)?, ValType::Num))
+            }
+            "sub" if args.len() == 2 => {
+                let (a, at) = emit_expr(b, &args[0], scope)?;
+                let (c, ct) = emit_expr(b, &args[1], scope)?;
+                if at != ValType::Num || ct != ValType::Num {
+                    return Err(ElabError::TypeError { op: "sub()".into(), operands: vec![at, ct] });
+                }
+                Ok((b.strand("js.sub", &[a, c]).map_err(ElabError::build)?, ValType::Num))
+            }
+            other => Err(ElabError::Parse(format!("unsupported or undeclared function `{other}` with {} args", args.len()))),
+        },
     }
 }
 
-/// The deterministic intent string for a source. Folding the source text in
-/// makes the capsule CID a reproducible function of the human input — the
-/// human-reconstructable-loop guarantee (same source ⇒ same CID).
+/// The deterministic intent string for a source.
 fn intent_for(src: &str) -> String {
     format!("JS expression elaborated to Braid IR: {}", src.trim())
 }
 
-/// Elaborate a JS expression into an admittable [`Capsule`]. Pure value
-/// construction only, so no capability/confirm is required.
+/// Elaborates a JS source (expressions, let-statements, returns) into an admittable [`Capsule`].
 pub fn elaborate_js(src: &str) -> Result<Capsule, ElabError> {
-    let expr = parse(src)?;
+    let prog = parse_program(src)?;
     let reg = registry_v0();
     let mut b = Builder::new(&reg, intent_for(src));
-    let (root, _ty) = emit(&mut b, &expr)?;
-    b.output(root);
+    let mut scope: BTreeMap<String, (Strand, ValType)> = BTreeMap::new();
+    let mut last_out: Option<Strand> = None;
+
+    for stmt in prog.stmts {
+        match stmt {
+            Stmt::Let { name, expr } => {
+                if scope.contains_key(&name) {
+                    return Err(ElabError::DuplicateBinding(name));
+                }
+                let (strand, ty) = emit_expr(&mut b, &expr, &scope)?;
+                scope.insert(name, (strand, ty));
+                last_out = Some(strand);
+            }
+            Stmt::Expr(expr) => {
+                let (strand, _ty) = emit_expr(&mut b, &expr, &scope)?;
+                last_out = Some(strand);
+            }
+            Stmt::Return(expr) => {
+                let (strand, _ty) = emit_expr(&mut b, &expr, &scope)?;
+                last_out = Some(strand);
+                break;
+            }
+        }
+    }
+
+    let out_strand = last_out.ok_or(ElabError::Empty)?;
+    b.output(out_strand);
     b.build().map_err(ElabError::build)
 }
 
 /// The full loop: source → IR → **verify** → manifest.
 pub struct Elaboration {
+    /// The resulting admitted Capsule.
     pub capsule: Capsule,
+    /// The admission verdict from braid-verify.
     pub verdict: Verdict,
+    /// Rendered human-readable manifest text.
     pub manifest_text: String,
 }
 
-/// Elaborate, then admit + render. The ambient grant set is empty: a pure
-/// expression requests no capability, so `∅ ⊆ ∅` passes the attenuation check.
+/// Elaborate, then admit + render. Pure dataflow capsules request 0 capabilities.
 pub fn elaborate_and_admit(src: &str) -> Result<Elaboration, ElabError> {
     let capsule = elaborate_js(src)?;
     let reg = registry_v0();

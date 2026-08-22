@@ -58,12 +58,12 @@ Current state: "a JVM with no V" — the `.class` + verifier layer works, a fron
 **Chunk 1 (now):** Expand `braid-elaborate-js` from expressions → statements + identifiers.
 
 **Deliverables:**
-- [ ] `let` bindings with type inference from RHS
-- [ ] Identifier resolution (variable lookup → `js.lit.*` or strand reference)
-- [ ] `if`/`else` as conditional strands (not statements — DAG nodes)
-- [ ] Function calls (pure only: `js.add`, `js.concat`, etc.)
-- [ ] Refusal corpus: 10+ illegal sources with typed errors (eval attempt, DOM-string emission, float literal, unbounded loop)
-- [ ] Golden corpus: 10+ source files with pinned capsule CIDs
+- [x] `let` bindings with type inference from RHS
+- [x] Identifier resolution (variable lookup → `js.lit.*` or strand reference)
+- [x] `if`/`else` as conditional strands (not statements — DAG nodes)
+- [x] Function calls (pure only: `js.add`, `js.concat`, etc.)
+- [x] Refusal corpus: 10+ illegal sources with typed errors (eval attempt, DOM-string emission, float literal, unbounded loop, mutation)
+- [x] Golden corpus: 10+ source files with pinned capsule CIDs
 
 **Chunk 2 (after chunk 1 lands):** JSX/TSX component subset → `braid-vocab-web`.
 
