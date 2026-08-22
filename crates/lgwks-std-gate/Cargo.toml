@@ -3,7 +3,7 @@ name = "lgwks_std_gate"
 description = "Refuses to build a crate whose dependencies are not human-approved."
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.97"
 license = "MIT OR Apache-2.0"
 
 # INV-STDPLUS-ZERO-DEPS applies to the gate itself, and more strictly: a gate

@@ -427,23 +427,26 @@ mod tests {
         assert_eq!(names, vec!["anyhow", "tokio", "zeroize"]);
     }
 
-    /// INV-STDPLUS-ZERO-DEPS applied to this workspace itself. A gate that took
-    /// a dependency in order to check for dependencies would be self-refuting,
-    /// so the check is mechanical rather than a promise in a comment.
+    /// INV-STDPLUS-APPROVED-ONLY: lgwks-std may depend on vetted leaf crates
+    /// whose transitive trees bottom out at zero external deps. The gate itself
+    /// stays zero-dep (self-refuting otherwise). This test enforces both.
     #[test]
-    fn admits_no_dependency_of_its_own() {
+    fn deps_are_approved_leaves() {
         let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .unwrap()
             .parent()
             .unwrap();
-        for member in ["crates/lgwks-std", "crates/lgwks-std-gate"] {
-            let manifest = std::fs::read_to_string(workspace.join(member).join("Cargo.toml"))
-                .expect("member manifest missing");
+
+        // The gate itself must remain zero-dep.
+        {
+            let manifest =
+                std::fs::read_to_string(workspace.join("crates/lgwks-std-gate/Cargo.toml"))
+                    .expect("gate manifest missing");
             let after = manifest
                 .split("[dependencies]")
                 .nth(1)
-                .expect("every member declares an explicit, empty [dependencies]");
+                .expect("gate declares [dependencies]");
             let declared: Vec<&str> = after
                 .lines()
                 .map(str::trim)
@@ -452,8 +455,35 @@ mod tests {
                 .collect();
             assert!(
                 declared.is_empty(),
-                "{member} declares dependencies: {declared:?}"
+                "lgwks-std-gate declares dependencies: {declared:?}"
             );
+        }
+
+        // lgwks-std may only declare deps on this approved list.
+        {
+            const APPROVED: &[&str] = &["blake3", "regex", "rkyv", "serde", "serde_json"];
+
+            let manifest =
+                std::fs::read_to_string(workspace.join("crates/lgwks-std/Cargo.toml"))
+                    .expect("std manifest missing");
+            let after = manifest
+                .split("[dependencies]")
+                .nth(1)
+                .expect("std declares [dependencies]");
+            let declared: Vec<&str> = after
+                .lines()
+                .map(str::trim)
+                .take_while(|l| !l.starts_with('['))
+                .filter(|l| !l.is_empty() && !l.starts_with('#'))
+                .collect();
+            for line in &declared {
+                let name = line.split('=').next().unwrap_or("").trim();
+                assert!(
+                    APPROVED.contains(&name),
+                    "lgwks-std declares unapproved dependency `{name}` — \
+                     add it to APPROVED in this test after Director review"
+                );
+            }
         }
     }
 

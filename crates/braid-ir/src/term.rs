@@ -257,7 +257,7 @@ fn decode_vocab_version(v: &Value) -> Result<u32, RegistryError> {
     }
 }
 
-fn decode_terms_value_list<'a>(v: &'a Value) -> Result<&'a Vec<Value>, RegistryError> {
+fn decode_terms_value_list(v: &Value) -> Result<&Vec<Value>, RegistryError> {
     match v.get_field("terms") {
         Some(Value::List(items)) => Ok(items),
         _ => Err(RegistryError::Malformed {
@@ -517,9 +517,9 @@ fn decode_term_core(v: &Value) -> Result<(String, Vec<TypeTag>, TypeTag), Regist
     Ok((id, inputs, output))
 }
 
-fn decode_term_policy(
-    v: &Value,
-) -> Result<(EffectClass, Exposure, u64, Option<Capability>, Option<Exposure>), RegistryError> {
+type PolicyFields = (EffectClass, Exposure, u64, Option<Capability>, Option<Exposure>);
+
+fn decode_term_policy(v: &Value) -> Result<PolicyFields, RegistryError> {
     let effect = decode_term_effect(v)?;
     let source_exposure = decode_term_exposure(v)?;
     let cost = decode_term_cost(v)?;

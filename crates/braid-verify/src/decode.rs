@@ -157,7 +157,7 @@ impl<'a> Cursor<'a> {
 
     fn read_arg_u64(&mut self) -> Result<u64, DecodeError> {
         let slice_bytes = self.read_slice(8)?;
-        let val_u64 = u64::from(u64::from_be_bytes(slice_bytes.try_into().unwrap()));
+        let val_u64 = u64::from_be_bytes(slice_bytes.try_into().unwrap());
         if val_u64 > 0xffff_ffff {
             Ok(val_u64)
         } else {

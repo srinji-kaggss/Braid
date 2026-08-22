@@ -17,7 +17,7 @@ fn check_build_command(cmd: &str) -> Result<(), String> {
     }
 }
 
-fn extract_manifest_path<'a>(rest: &'a [String]) -> Result<&'a str, String> {
+fn extract_manifest_path(rest: &[String]) -> Result<&str, String> {
     rest.iter()
         .find(|a| !a.starts_with("--") && a.as_str() != "rust")
         .map(String::as_str)

@@ -119,10 +119,7 @@ pub fn parse(text: &str) -> Result<Vec<Resolved>, LockError> {
 
 fn extract_version(pending: &mut Pending) -> String {
     // If a package has no version declared in lockfile, default to empty string.
-    match pending.version.take() {
-        Some(ver) => ver,
-        None => String::new(),
-    }
+    pending.version.take().unwrap_or_default()
 }
 
 fn flush(pending: &mut Pending, out: &mut Vec<Resolved>) -> Result<(), LockError> {

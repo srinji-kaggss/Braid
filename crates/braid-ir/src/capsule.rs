@@ -234,9 +234,9 @@ fn decode_capsule_meta(v: &Value) -> Result<(u32, u32, Cid, String), CapsuleErro
     Ok((ir_version, vocab_version, registry_cid, intent))
 }
 
-fn decode_capsule_execution(
-    v: &Value,
-) -> Result<(Vec<Capability>, Braid, u64, ConfirmPolicy, Vec<String>), CapsuleError> {
+type ExecutionFields = (Vec<Capability>, Braid, u64, ConfirmPolicy, Vec<String>);
+
+fn decode_capsule_execution(v: &Value) -> Result<ExecutionFields, CapsuleError> {
     let grants = decode_grants(v)?;
     let braid = decode_braid(v)?;
     let budget = decode_budget(v)?;

@@ -27,6 +27,8 @@ USAGE
   lgwks-gate request <CRATE> <VERSION> print an approval block to fill in
   lgwks-gate init [PATH]               write a fail-closed starting register
   lgwks-gate tiers                     print the admission ladder
+  lgwks-gate freshness [PATH]          check resolved deps against crates.io
+             [--json]                  output as JSON instead of a table
 
 EXIT
   0  every resolved dependency is std, lgwks_std, local, or approved
@@ -71,6 +73,7 @@ fn dispatch(command: &str, args: &[String]) -> ExitCode {
         "request" => run_request(args.get(1), args.get(2)),
         "init" => run_init(args.get(1).map(PathBuf::from)),
         "tiers" => handle_tiers(),
+        "freshness" => handle_freshness(&args[1..]),
         "-h" | "--help" | "help" => handle_help(),
         other => handle_unknown(other),
     }
@@ -233,6 +236,191 @@ fn run_init(path: Option<PathBuf>) -> ExitCode {
     }
     println!("OK  initialized {}", target.display());
     ExitCode::SUCCESS
+}
+
+// ── freshness ──────────────────────────────────────────────────────────────
+
+fn handle_freshness(args: &[String]) -> ExitCode {
+    let json_output = args.iter().any(|a| a == "--json");
+    let positional: Vec<&String> = args.iter().filter(|a| !a.starts_with("--")).collect();
+    let start = positional
+        .first()
+        .map(|p| PathBuf::from(p.as_str()))
+        .unwrap_or_else(|| PathBuf::from("."));
+
+    let root = match repository_root(&start) {
+        Ok(root) => root,
+        Err(e) => return refuse(&e.to_string()),
+    };
+
+    let lock_path = root.join("Cargo.lock");
+    let lock_text = match std::fs::read_to_string(&lock_path) {
+        Ok(t) => t,
+        Err(e) => return refuse(&format!("cannot read {}: {e}", lock_path.display())),
+    };
+
+    let resolved = match lgwks_std_gate::lock::parse(&lock_text) {
+        Ok(r) => r,
+        Err(e) => return refuse(&format!("Cargo.lock: {e}")),
+    };
+
+    let registry: Vec<&lgwks_std_gate::lock::Resolved> =
+        resolved.iter().filter(|p| !p.local).collect();
+
+    if registry.is_empty() {
+        println!("no registry dependencies in Cargo.lock");
+        return ExitCode::SUCCESS;
+    }
+
+    let results = query_crates_io(&registry);
+
+    if json_output {
+        print_freshness_json(&results);
+    } else {
+        print_freshness_table(&results);
+    }
+
+    let stale_count = results.iter().filter(|r| r.stale).count();
+    if stale_count > 0 {
+        ExitCode::from(1)
+    } else {
+        ExitCode::SUCCESS
+    }
+}
+
+struct FreshnessResult {
+    name: String,
+    resolved: String,
+    latest: String,
+    repository: String,
+    stale: bool,
+    error: Option<String>,
+}
+
+fn query_crates_io(packages: &[&lgwks_std_gate::lock::Resolved]) -> Vec<FreshnessResult> {
+    let mut seen = std::collections::HashSet::new();
+    let mut results = Vec::new();
+
+    for pkg in packages {
+        if !seen.insert(&pkg.name) {
+            continue;
+        }
+
+        let output = std::process::Command::new("curl")
+            .args([
+                "-sf",
+                "--max-time",
+                "10",
+                "-H",
+                "User-Agent: lgwks-gate/0.1 (srinji@logicalworks.ca)",
+                &format!("https://crates.io/api/v1/crates/{}", pkg.name),
+            ])
+            .output();
+
+        match output {
+            Ok(o) if o.status.success() => {
+                let body = String::from_utf8_lossy(&o.stdout);
+                let (latest, repo) = parse_crate_response(&body);
+                let stale = !latest.is_empty() && latest != pkg.version;
+                results.push(FreshnessResult {
+                    name: pkg.name.clone(),
+                    resolved: pkg.version.clone(),
+                    latest,
+                    repository: repo,
+                    stale,
+                    error: None,
+                });
+            }
+            Ok(o) => {
+                results.push(FreshnessResult {
+                    name: pkg.name.clone(),
+                    resolved: pkg.version.clone(),
+                    latest: String::new(),
+                    repository: String::new(),
+                    stale: false,
+                    error: Some(format!("HTTP {}", o.status)),
+                });
+            }
+            Err(e) => {
+                results.push(FreshnessResult {
+                    name: pkg.name.clone(),
+                    resolved: pkg.version.clone(),
+                    latest: String::new(),
+                    repository: String::new(),
+                    stale: false,
+                    error: Some(e.to_string()),
+                });
+            }
+        }
+    }
+    results
+}
+
+/// INV-GATE-ZERO-DEPS: no JSON parser — extract fields by line scan.
+fn parse_crate_response(body: &str) -> (String, String) {
+    let newest = extract_json_string(body, "newest_version");
+    let repo = extract_json_string(body, "repository");
+    (newest, repo)
+}
+
+fn extract_json_string(body: &str, key: &str) -> String {
+    let needle = format!("\"{}\":\"", key);
+    let alt_needle = format!("\"{}\": \"", key);
+    let start = body
+        .find(&needle)
+        .map(|i| i + needle.len())
+        .or_else(|| body.find(&alt_needle).map(|i| i + alt_needle.len()));
+    match start {
+        Some(s) => body[s..]
+            .find('"')
+            .map(|e| body[s..s + e].to_string())
+            .unwrap_or_default(),
+        None => String::new(),
+    }
+}
+
+fn print_freshness_table(results: &[FreshnessResult]) {
+    println!(
+        "{:<30} {:<12} {:<12} {:<5} {}",
+        "crate", "resolved", "latest", "stale", "repository"
+    );
+    println!("{}", "-".repeat(90));
+    for r in results {
+        if let Some(err) = &r.error {
+            println!("{:<30} {:<12} {:<12} {:<5} {}", r.name, r.resolved, "?", "err", err);
+        } else {
+            let stale_mark = if r.stale { "YES" } else { "" };
+            println!(
+                "{:<30} {:<12} {:<12} {:<5} {}",
+                r.name, r.resolved, r.latest, stale_mark, r.repository
+            );
+        }
+    }
+    let stale_count = results.iter().filter(|r| r.stale).count();
+    let err_count = results.iter().filter(|r| r.error.is_some()).count();
+    println!(
+        "\n{} checked, {} stale, {} errors",
+        results.len(),
+        stale_count,
+        err_count
+    );
+}
+
+fn print_freshness_json(results: &[FreshnessResult]) {
+    println!("[");
+    for (i, r) in results.iter().enumerate() {
+        let comma = if i + 1 < results.len() { "," } else { "" };
+        let error_field = match &r.error {
+            Some(e) => format!(", \"error\": \"{}\"", e.replace('"', "\\\"")),
+            None => String::new(),
+        };
+        println!(
+            "  {{\"name\": \"{}\", \"resolved\": \"{}\", \"latest\": \"{}\", \
+             \"stale\": {}, \"repository\": \"{}\"{}}}{}",
+            r.name, r.resolved, r.latest, r.stale, r.repository, error_field, comma
+        );
+    }
+    println!("]");
 }
 
 // ── Ladder text ─────────────────────────────────────────────────────────────

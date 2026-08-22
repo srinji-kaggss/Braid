@@ -3,6 +3,7 @@
 //! loops defensively, stays within root sandbox bounds, and requires zero
 //! external dependencies like `walkdir`.
 
+use std::collections::HashSet;
 use std::fs::{self, DirEntry};
 use std::io;
 use std::path::{Path, PathBuf};
@@ -33,7 +34,7 @@ pub fn walk_dir(root: impl AsRef<Path>, options: &WalkOptions) -> io::Result<Vec
     let root_path = root.as_ref();
     let canonical_root = root_path.canonicalize().ok();
     let mut out = Vec::new();
-    let mut visited = Vec::new();
+    let mut visited = HashSet::new();
     walk_recursive(
         root_path,
         &canonical_root,
@@ -45,12 +46,11 @@ pub fn walk_dir(root: impl AsRef<Path>, options: &WalkOptions) -> io::Result<Vec
     Ok(out)
 }
 
-fn track_canonical_visit(dir: &Path, visited_canonical: &mut Vec<PathBuf>) -> bool {
+fn track_canonical_visit(dir: &Path, visited_canonical: &mut HashSet<PathBuf>) -> bool {
     if let Ok(canonical) = dir.canonicalize() {
-        if visited_canonical.contains(&canonical) {
+        if !visited_canonical.insert(canonical) {
             return false;
         }
-        visited_canonical.push(canonical);
     }
     true
 }
@@ -101,7 +101,7 @@ fn handle_directory_entry(
     depth: usize,
     options: &WalkOptions,
     out: &mut Vec<PathBuf>,
-    visited: &mut Vec<PathBuf>,
+    visited: &mut HashSet<PathBuf>,
 ) -> io::Result<()> {
     walk_recursive(path, canonical_root, depth, options, out, visited)
 }
@@ -113,7 +113,7 @@ fn handle_symlink_entry(
     depth: usize,
     options: &WalkOptions,
     out: &mut Vec<PathBuf>,
-    visited: &mut Vec<PathBuf>,
+    visited: &mut HashSet<PathBuf>,
 ) -> io::Result<()> {
     if options.follow_symlinks {
         if let Some(target_dir) = resolve_symlink_target(dir, path, canonical_root) {
@@ -130,7 +130,7 @@ fn process_entry(
     current_depth: usize,
     options: &WalkOptions,
     out: &mut Vec<PathBuf>,
-    visited_canonical: &mut Vec<PathBuf>,
+    visited_canonical: &mut HashSet<PathBuf>,
 ) -> io::Result<()> {
     let path = entry.path();
     let Ok(file_type) = entry.file_type() else {
@@ -168,7 +168,7 @@ fn walk_recursive(
     current_depth: usize,
     options: &WalkOptions,
     out: &mut Vec<PathBuf>,
-    visited_canonical: &mut Vec<PathBuf>,
+    visited_canonical: &mut HashSet<PathBuf>,
 ) -> io::Result<()> {
     if current_depth > options.max_depth {
         return Ok(());
@@ -197,6 +197,18 @@ fn walk_recursive(
 mod tests {
     use super::*;
 
+    use std::fs as stdfs;
+
+    fn tmp_tree() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        stdfs::create_dir_all(root.join("a/b/c")).unwrap();
+        stdfs::write(root.join("a/f.txt"), b"").unwrap();
+        stdfs::write(root.join("a/b/g.txt"), b"").unwrap();
+        stdfs::write(root.join("a/b/c/h.txt"), b"").unwrap();
+        tmp
+    }
+
     #[test]
     fn walks_directory_deterministically() {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -205,5 +217,57 @@ mod tests {
         let entries2 = walk_dir(&src_dir, &WalkOptions::default()).expect("walks src");
         assert!(!entries1.is_empty());
         assert_eq!(entries1, entries2);
+    }
+
+    #[test]
+    fn max_depth_zero_returns_only_immediate_children() {
+        let tmp = tmp_tree();
+        let opts = WalkOptions { max_depth: 0, ..Default::default() };
+        let entries = walk_dir(tmp.path().join("a"), &opts).unwrap();
+        for e in &entries {
+            assert_eq!(e.parent().unwrap(), tmp.path().join("a"));
+        }
+    }
+
+    #[test]
+    fn max_depth_bounds_traversal() {
+        let tmp = tmp_tree();
+        let opts = WalkOptions { max_depth: 1, ..Default::default() };
+        let entries = walk_dir(tmp.path().join("a"), &opts).unwrap();
+        let deepest: Vec<_> = entries.iter().filter(|p| p.ends_with("h.txt")).collect();
+        assert!(deepest.is_empty(), "depth-2 file h.txt should be excluded");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn symlink_loop_terminates() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        stdfs::create_dir(root.join("d")).unwrap();
+        std::os::unix::fs::symlink(root.join("d"), root.join("d/loop")).unwrap();
+        let opts = WalkOptions { follow_symlinks: true, ..Default::default() };
+        let entries = walk_dir(root, &opts).unwrap();
+        assert!(!entries.is_empty());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn symlink_outside_root_is_rejected() {
+        let inner = tempfile::tempdir().unwrap();
+        let outer = tempfile::tempdir().unwrap();
+        stdfs::write(outer.path().join("secret.txt"), b"secret").unwrap();
+        std::os::unix::fs::symlink(outer.path(), inner.path().join("escape")).unwrap();
+        let opts = WalkOptions { follow_symlinks: true, ..Default::default() };
+        let entries = walk_dir(inner.path(), &opts).unwrap();
+        let escaped: Vec<_> = entries.iter().filter(|p| {
+            p.to_string_lossy().contains("secret")
+        }).collect();
+        assert!(escaped.is_empty(), "sandbox escape: symlink outside root must be rejected");
+    }
+
+    #[test]
+    fn nonexistent_directory_returns_error() {
+        let result = walk_dir("/nonexistent-path-that-does-not-exist", &WalkOptions::default());
+        assert!(result.is_err());
     }
 }

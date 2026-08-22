@@ -175,8 +175,8 @@ fn step_slash_double_star(path: &[u8], dp: &[bool], next: &mut [bool]) {
         if dp[j] {
             next[j] = true;
             if j < path.len() && path[j] == b'/' {
-                for k in j + 1..=path.len() {
-                    next[k] = true;
+                for slot in &mut next[j + 1..=path.len()] {
+                    *slot = true;
                 }
             }
         }
@@ -245,12 +245,7 @@ fn skip_class_prefix(pattern: &[u8]) -> usize {
 }
 
 fn find_closing_bracket(pattern: &[u8], start: usize) -> Option<usize> {
-    for idx in start..pattern.len() {
-        if pattern[idx] == b']' {
-            return Some(idx);
-        }
-    }
-    None
+    (start..pattern.len()).find(|&idx| pattern[idx] == b']')
 }
 
 /// Index of the `]` that closes the class opening at `pattern[0]`, or `None` if
