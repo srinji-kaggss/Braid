@@ -27,6 +27,7 @@ use braid_ir::Value;
 use serde::Deserialize;
 
 use std::collections::BTreeMap;
+use std::fmt;
 
 /// Domain separator for repo-manifest CIDs — the same hashing discipline as
 /// capsule/registry/project CIDs (D8/D11).
@@ -37,28 +38,33 @@ pub const MANIFEST_DOMAIN: &[u8] = b"lw.braid.repo-manifest.v1";
 /// unknown member.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Archetype {
+    /// Standard multi-crate workspace member.
     WorkspaceCrate,
+    /// Standalone application crate.
     SingleCrateApp,
+    /// Infrastructure security gate tool.
     InfraGate,
+    /// Documentation-only repository.
     Docs,
 }
 
 impl Archetype {
+    /// Returns the canonical kebab-case identifier for this archetype.
     pub fn as_str(self) -> &'static str {
         match self {
-            Archetype::WorkspaceCrate => "workspace-crate",
-            Archetype::SingleCrateApp => "single-crate-app",
-            Archetype::InfraGate => "infra-gate",
-            Archetype::Docs => "docs",
+            Self::WorkspaceCrate => "workspace-crate",
+            Self::SingleCrateApp => "single-crate-app",
+            Self::InfraGate => "infra-gate",
+            Self::Docs => "docs",
         }
     }
 
-    fn parse(s: &str) -> Option<Archetype> {
+    fn parse(s: &str) -> Option<Self> {
         match s {
-            "workspace-crate" => Some(Archetype::WorkspaceCrate),
-            "single-crate-app" => Some(Archetype::SingleCrateApp),
-            "infra-gate" => Some(Archetype::InfraGate),
-            "docs" => Some(Archetype::Docs),
+            "workspace-crate" => Some(Self::WorkspaceCrate),
+            "single-crate-app" => Some(Self::SingleCrateApp),
+            "infra-gate" => Some(Self::InfraGate),
+            "docs" => Some(Self::Docs),
             _ => None,
         }
     }
@@ -69,25 +75,29 @@ impl Archetype {
 /// undocumented CI state blocks admission rather than rendering as UNKNOWN.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CiStatus {
+    /// Continuous integration builds cleanly.
     Green,
+    /// Continuous integration is failing.
     Red,
+    /// Repository has no automated CI configured.
     None,
 }
 
 impl CiStatus {
+    /// Returns the canonical lowercase string identifier for this CI status.
     pub fn as_str(self) -> &'static str {
         match self {
-            CiStatus::Green => "green",
-            CiStatus::Red => "red",
-            CiStatus::None => "none",
+            Self::Green => "green",
+            Self::Red => "red",
+            Self::None => "none",
         }
     }
 
-    fn parse(s: &str) -> Option<CiStatus> {
+    fn parse(s: &str) -> Option<Self> {
         match s {
-            "green" => Some(CiStatus::Green),
-            "red" => Some(CiStatus::Red),
-            "none" => Some(CiStatus::None),
+            "green" => Some(Self::Green),
+            "red" => Some(Self::Red),
+            "none" => Some(Self::None),
             _ => None,
         }
     }
@@ -97,13 +107,21 @@ impl CiStatus {
 /// UNKNOWN, and the W5 verify line is "no UNKNOWN fields".
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RepoManifest {
+    /// Unique repository name.
     pub name: String,
+    /// Architectural archetype classification.
     pub archetype: Archetype,
+    /// Owning team or individual.
     pub owner: String,
+    /// Minimum required security gate version.
     pub gate_version: String,
+    /// Status of continuous integration.
     pub ci_status: CiStatus,
+    /// Primary entry documentation links.
     pub entry_docs: Vec<String>,
+    /// Standard reproduction commands.
     pub canonical_commands: Vec<String>,
+    /// Whether local pre-commit CI runs.
     pub local_ci: bool,
 }
 
@@ -113,64 +131,98 @@ impl RepoManifest {
         Cid::compute(MANIFEST_DOMAIN, &self.to_bytes())
     }
 
+    /// Encodes the repository manifest into canonical CBOR byte representation.
     pub fn to_bytes(&self) -> Vec<u8> {
         encode(&to_canon(self))
     }
 
     /// Strict parse: canonical bytes only (bijection-guarded), full shape
     /// validation — the same discipline as `Capsule::from_bytes`.
-    pub fn from_bytes(bytes: &[u8]) -> Result<RepoManifest, ManifestError> {
-        from_canon(&decode_strict(bytes).map_err(ManifestError::Canon)?)
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ManifestError> {
+        let val = decode_strict(bytes).map_err(|error| ManifestError::Canon {
+            error,
+            at: "RepoManifest::from_bytes",
+        })?;
+        from_canon(&val)
     }
 }
 
 /// Every way a manifest fails closed. None of these produce an artifact.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ManifestError {
-    /// The authored JSON did not parse, or had an unknown/missing field
-    /// (serde names the offending field in the message).
-    Parse(String),
+    /// The authored JSON did not parse, or had an unknown/missing field.
+    Parse {
+        /// Parse error message.
+        message: String,
+        /// Source location of the error.
+        at: &'static str,
+    },
     /// A value outside a closed enum (the dimension contract).
-    BadEnum { field: &'static str, value: String },
+    BadEnum {
+        /// The field name.
+        field: &'static str,
+        /// The invalid value provided.
+        value: String,
+        /// Source location of the error.
+        at: &'static str,
+    },
     /// A required string is empty.
-    EmptyField(&'static str),
+    EmptyField {
+        /// The empty field name.
+        field: &'static str,
+        /// Source location of the error.
+        at: &'static str,
+    },
     /// A required list is empty or contains an empty entry.
-    EmptyList(&'static str),
-    /// A string contains a character banned by the TSV machine-line contract
-    /// (tab, newline, comma — comma is the join character).
-    BannedChar { field: &'static str },
+    EmptyList {
+        /// The list field name.
+        field: &'static str,
+        /// Source location of the error.
+        at: &'static str,
+    },
+    /// A string contains a character banned by the TSV machine-line contract.
+    BannedChar {
+        /// The offending field name.
+        field: &'static str,
+        /// Source location of the error.
+        at: &'static str,
+    },
     /// The repo name is not a safe single path component / storage key.
-    UnsafeName(String),
+    UnsafeName {
+        /// The unsafe name string.
+        name: String,
+        /// Source location of the error.
+        at: &'static str,
+    },
     /// Canonical-bytes decode failure (read side).
-    Canon(CanonError),
+    Canon {
+        /// The underlying canonical codec error.
+        error: CanonError,
+        /// Source location of the error.
+        at: &'static str,
+    },
     /// Shape violation on canonical decode (read side).
-    Malformed(&'static str),
+    Malformed {
+        /// The malformed field description.
+        field: &'static str,
+        /// Source location of the error.
+        at: &'static str,
+    },
 }
 
-impl core::fmt::Display for ManifestError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl fmt::Display for ManifestError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ManifestError::Parse(m) => write!(f, "manifest parse error: {m}"),
-            ManifestError::BadEnum { field, value } => {
-                write!(
-                    f,
-                    "field `{field}` has value `{value}`, outside its closed set"
-                )
+            Self::Parse { message, at } => write!(f, "manifest parse error at {at}: {message}"),
+            Self::BadEnum { field, value, at } => {
+                write!(f, "field `{field}` has invalid value `{value}` at {at}")
             }
-            ManifestError::EmptyField(k) => write!(f, "field `{k}` is empty"),
-            ManifestError::EmptyList(k) => write!(f, "field `{k}` is empty or has an empty entry"),
-            ManifestError::BannedChar { field } => write!(
-                f,
-                "field `{field}` contains tab, newline, or comma (banned by the \
-                 machine-line contract)"
-            ),
-            ManifestError::UnsafeName(n) => write!(
-                f,
-                "name `{n}` is not a safe storage key (want a single path component: \
-                 [A-Za-z0-9._-]+, no leading `.`)"
-            ),
-            ManifestError::Canon(e) => write!(f, "not canonical bytes: {e:?}"),
-            ManifestError::Malformed(k) => write!(f, "canonical shape violation: {k}"),
+            Self::EmptyField { field, at } => write!(f, "field `{field}` is empty at {at}"),
+            Self::EmptyList { field, at } => write!(f, "field `{field}` list is empty at {at}"),
+            Self::BannedChar { field, at } => write!(f, "field `{field}` contains banned characters at {at}"),
+            Self::UnsafeName { name, at } => write!(f, "name `{name}` is not a safe path key at {at}"),
+            Self::Canon { error, at } => write!(f, "canonical decoding failed at {at}: {error:?}"),
+            Self::Malformed { field, at } => write!(f, "canonical shape violation on `{field}` at {at}"),
         }
     }
 }
@@ -194,36 +246,76 @@ fn no_tsv_separators(s: &str) -> bool {
     !s.chars().any(|c| c == '\t' || c == '\n' || c == ',')
 }
 
+fn validate_safe_name(name: &str) -> Result<(), ManifestError> {
+    if !safe_name_component(name) {
+        Err(ManifestError::UnsafeName {
+            name: name.to_string(),
+            at: "enforce_contracts",
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_single_field(field: &'static str, v: &str) -> Result<(), ManifestError> {
+    if v.is_empty() {
+        Err(ManifestError::EmptyField {
+            field,
+            at: "enforce_contracts",
+        })
+    } else if !no_tsv_separators(v) {
+        Err(ManifestError::BannedChar {
+            field,
+            at: "enforce_contracts",
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_list_item(field: &'static str, item: &str) -> Result<(), ManifestError> {
+    if item.is_empty() {
+        Err(ManifestError::EmptyList {
+            field,
+            at: "enforce_contracts",
+        })
+    } else if !no_tsv_separators(item) {
+        Err(ManifestError::BannedChar {
+            field,
+            at: "enforce_contracts",
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn check_list_not_empty(field: &'static str, is_empty: bool) -> Result<(), ManifestError> {
+    if is_empty {
+        Err(ManifestError::EmptyList {
+            field,
+            at: "enforce_contracts",
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_string_list(field: &'static str, list: &[String]) -> Result<(), ManifestError> {
+    check_list_not_empty(field, list.is_empty())?;
+    for item in list {
+        validate_list_item(field, item)?;
+    }
+    Ok(())
+}
+
 /// The one contract check, shared by `validate` (author side) and `from_canon`
 /// (read side): write invariant == read invariant.
-fn enforce_contracts(m: &RepoManifest) -> Result<(), ManifestError> {
-    if !safe_name_component(&m.name) {
-        return Err(ManifestError::UnsafeName(m.name.clone()));
-    }
-    for (field, v) in [("owner", &m.owner), ("gate_version", &m.gate_version)] {
-        if v.is_empty() {
-            return Err(ManifestError::EmptyField(field));
-        }
-        if !no_tsv_separators(v) {
-            return Err(ManifestError::BannedChar { field });
-        }
-    }
-    for (field, list) in [
-        ("entry_docs", &m.entry_docs),
-        ("canonical_commands", &m.canonical_commands),
-    ] {
-        if list.is_empty() {
-            return Err(ManifestError::EmptyList(field));
-        }
-        for item in list {
-            if item.is_empty() {
-                return Err(ManifestError::EmptyList(field));
-            }
-            if !no_tsv_separators(item) {
-                return Err(ManifestError::BannedChar { field });
-            }
-        }
-    }
+fn enforce_contracts(manifest: &RepoManifest) -> Result<(), ManifestError> {
+    validate_safe_name(&manifest.name)?;
+    validate_single_field("owner", &manifest.owner)?;
+    validate_single_field("gate_version", &manifest.gate_version)?;
+    validate_string_list("entry_docs", &manifest.entry_docs)?;
+    validate_string_list("canonical_commands", &manifest.canonical_commands)?;
     Ok(())
 }
 
@@ -243,20 +335,32 @@ struct JsonManifest {
     local_ci: bool,
 }
 
+fn parse_archetype_field(val: &str) -> Result<Archetype, ManifestError> {
+    Archetype::parse(val).ok_or_else(|| ManifestError::BadEnum {
+        field: "archetype",
+        value: val.to_string(),
+        at: "validate",
+    })
+}
+
+fn parse_ci_status_field(val: &str) -> Result<CiStatus, ManifestError> {
+    CiStatus::parse(val).ok_or_else(|| ManifestError::BadEnum {
+        field: "ci_status",
+        value: val.to_string(),
+        at: "validate",
+    })
+}
+
 /// Validate an authored repo-manifest JSON document. Fail-closed: any
 /// violation names the field, nothing is produced.
 pub fn validate(json: &str) -> Result<RepoManifest, ManifestError> {
-    let j: JsonManifest =
-        serde_json::from_str(json).map_err(|e| ManifestError::Parse(e.to_string()))?;
-    let archetype = Archetype::parse(&j.archetype).ok_or(ManifestError::BadEnum {
-        field: "archetype",
-        value: j.archetype.clone(),
+    let j: JsonManifest = serde_json::from_str(json).map_err(|e| ManifestError::Parse {
+        message: e.to_string(),
+        at: "validate",
     })?;
-    let ci_status = CiStatus::parse(&j.ci_status).ok_or(ManifestError::BadEnum {
-        field: "ci_status",
-        value: j.ci_status.clone(),
-    })?;
-    let m = RepoManifest {
+    let archetype = parse_archetype_field(&j.archetype)?;
+    let ci_status = parse_ci_status_field(&j.ci_status)?;
+    let manifest = RepoManifest {
         name: j.name,
         archetype,
         owner: j.owner,
@@ -266,8 +370,8 @@ pub fn validate(json: &str) -> Result<RepoManifest, ManifestError> {
         canonical_commands: j.canonical_commands,
         local_ci: j.local_ci,
     };
-    enforce_contracts(&m)?;
-    Ok(m)
+    enforce_contracts(&manifest)?;
+    Ok(manifest)
 }
 
 /// Canonical form — fixed key set; the encoder re-sorts map keys at the
@@ -287,9 +391,53 @@ pub fn to_canon(m: &RepoManifest) -> Value {
     ])
 }
 
-/// Strict decode of the canonical form — the exact key universe, nothing
-/// else (a smuggled field is a rejected byte form).
-pub fn from_canon(v: &Value) -> Result<RepoManifest, ManifestError> {
+fn decode_text_field(v: &Value, k: &'static str) -> Result<String, ManifestError> {
+    match v.get_field(k) {
+        Some(Value::Text(s)) => Ok(s.clone()),
+        _ => Err(ManifestError::Malformed {
+            field: k,
+            at: "from_canon",
+        }),
+    }
+}
+
+fn extract_text_item(i: &Value, k: &'static str) -> Result<String, ManifestError> {
+    match i {
+        Value::Text(s) => Ok(s.clone()),
+        _ => Err(ManifestError::Malformed {
+            field: k,
+            at: "from_canon",
+        }),
+    }
+}
+
+fn decode_list_field(v: &Value, k: &'static str) -> Result<Vec<String>, ManifestError> {
+    match v.get_field(k) {
+        Some(Value::List(items)) => {
+            let mut list = Vec::with_capacity(items.len());
+            for item in items {
+                list.push(extract_text_item(item, k)?);
+            }
+            Ok(list)
+        }
+        _ => Err(ManifestError::Malformed {
+            field: k,
+            at: "from_canon",
+        }),
+    }
+}
+
+fn decode_bool_field(v: &Value, k: &'static str) -> Result<bool, ManifestError> {
+    match v.get_field(k) {
+        Some(Value::Bool(b)) => Ok(*b),
+        _ => Err(ManifestError::Malformed {
+            field: k,
+            at: "from_canon",
+        }),
+    }
+}
+
+fn check_canon_keys(v: &Value) -> Result<(), ManifestError> {
     if !v.require_only_keys(&[
         "archetype",
         "canonical_commands",
@@ -300,82 +448,124 @@ pub fn from_canon(v: &Value) -> Result<RepoManifest, ManifestError> {
         "name",
         "owner",
     ]) {
-        return Err(ManifestError::Malformed("repo-manifest: unknown field"));
+        Err(ManifestError::Malformed {
+            field: "repo-manifest: unknown field",
+            at: "from_canon",
+        })
+    } else {
+        Ok(())
     }
-    let text = |k: &'static str| -> Result<String, ManifestError> {
-        match v.get(k) {
-            Some(Value::Text(s)) => Ok(s.clone()),
-            _ => Err(ManifestError::Malformed(k)),
-        }
-    };
-    let list = |k: &'static str| -> Result<Vec<String>, ManifestError> {
-        match v.get(k) {
-            Some(Value::List(items)) => items
-                .iter()
-                .map(|i| match i {
-                    Value::Text(s) => Ok(s.clone()),
-                    _ => Err(ManifestError::Malformed(k)),
-                })
-                .collect(),
-            _ => Err(ManifestError::Malformed(k)),
-        }
-    };
-    let local_ci = match v.get("local_ci") {
-        Some(Value::Bool(b)) => *b,
-        _ => return Err(ManifestError::Malformed("local_ci")),
-    };
-    let m = RepoManifest {
-        archetype: Archetype::parse(&text("archetype")?)
-            .ok_or(ManifestError::Malformed("archetype"))?,
-        canonical_commands: list("canonical_commands")?,
-        ci_status: CiStatus::parse(&text("ci_status")?)
-            .ok_or(ManifestError::Malformed("ci_status"))?,
-        entry_docs: list("entry_docs")?,
-        gate_version: text("gate_version")?,
+}
+
+fn decode_manifest_archetype(v: &Value) -> Result<Archetype, ManifestError> {
+    let arch_str = decode_text_field(v, "archetype")?;
+    Archetype::parse(&arch_str).ok_or(ManifestError::Malformed {
+        field: "archetype",
+        at: "from_canon",
+    })
+}
+
+fn decode_manifest_ci_status(v: &Value) -> Result<CiStatus, ManifestError> {
+    let ci_str = decode_text_field(v, "ci_status")?;
+    CiStatus::parse(&ci_str).ok_or(ManifestError::Malformed {
+        field: "ci_status",
+        at: "from_canon",
+    })
+}
+
+fn decode_manifest_metadata(
+    v: &Value,
+) -> Result<(String, bool, String, String), ManifestError> {
+    let gate_version = decode_text_field(v, "gate_version")?;
+    let local_ci = decode_bool_field(v, "local_ci")?;
+    let name = decode_text_field(v, "name")?;
+    let owner = decode_text_field(v, "owner")?;
+    Ok((gate_version, local_ci, name, owner))
+}
+
+fn decode_manifest_lists(
+    v: &Value,
+) -> Result<(Vec<String>, Vec<String>), ManifestError> {
+    let canonical_commands = decode_list_field(v, "canonical_commands")?;
+    let entry_docs = decode_list_field(v, "entry_docs")?;
+    Ok((canonical_commands, entry_docs))
+}
+
+/// Strict decode of the canonical form — the exact key universe, nothing
+/// else (a smuggled field is a rejected byte form).
+pub fn from_canon(v: &Value) -> Result<RepoManifest, ManifestError> {
+    check_canon_keys(v)?;
+    let archetype = decode_manifest_archetype(v)?;
+    let ci_status = decode_manifest_ci_status(v)?;
+    let (canonical_commands, entry_docs) = decode_manifest_lists(v)?;
+    let (gate_version, local_ci, name, owner) = decode_manifest_metadata(v)?;
+    let manifest = RepoManifest {
+        archetype,
+        canonical_commands,
+        ci_status,
+        entry_docs,
+        gate_version,
         local_ci,
-        name: text("name")?,
-        owner: text("owner")?,
+        name,
+        owner,
     };
-    enforce_contracts(&m)?;
-    Ok(m)
+    enforce_contracts(&manifest)?;
+    Ok(manifest)
 }
 
 /// One declared repo: its name and the pinned content address of its
-/// admitted manifest. `cid == None` = declared but not yet admitted — the
-/// catalog refuses to render until every declaration is pinned (no UNKNOWN,
-/// no silent partial map).
+/// admitted manifest. `cid == None` = declared but not yet admitted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InventoryEntry {
+    /// Repository name.
     pub name: String,
+    /// Pinned manifest CID if admitted.
     pub cid: Option<Cid>,
 }
 
+fn parse_inventory_cid(name: &str, h: &str) -> Result<Cid, ManifestError> {
+    Cid::from_hex(h).ok_or_else(|| ManifestError::Parse {
+        message: format!("inventory[{name}]: not a 64-char hex CID"),
+        at: "parse_inventory",
+    })
+}
+
+fn parse_inventory_item(
+    name: String,
+    cid_hex: Option<String>,
+) -> Result<InventoryEntry, ManifestError> {
+    validate_safe_name(&name)?;
+    let cid = match cid_hex {
+        None => None,
+        Some(h) => Some(parse_inventory_cid(&name, &h)?),
+    };
+    Ok(InventoryEntry { name, cid })
+}
+
+fn check_raw_not_empty(is_empty: bool) -> Result<(), ManifestError> {
+    if is_empty {
+        Err(ManifestError::EmptyList {
+            field: "inventory",
+            at: "parse_inventory",
+        })
+    } else {
+        Ok(())
+    }
+}
+
 /// Parse the declared inventory — the org database, the ONE place the org
-/// set is declared: a JSON object mapping repo name → pinned manifest CID
-/// (64 hex chars) or `null` (declared, not yet admitted). Keys must be safe
-/// name components. The pin is what makes the store tamper-evident: catalog
-/// re-hashes every artifact and denies on any pin mismatch.
+/// set is declared.
 pub fn parse_inventory(json: &str) -> Result<Vec<InventoryEntry>, ManifestError> {
     let raw: BTreeMap<String, Option<String>> =
-        serde_json::from_str(json).map_err(|e| ManifestError::Parse(e.to_string()))?;
-    if raw.is_empty() {
-        return Err(ManifestError::EmptyList("inventory"));
-    }
+        serde_json::from_str(json).map_err(|e| ManifestError::Parse {
+            message: e.to_string(),
+            at: "parse_inventory",
+        })?;
+    check_raw_not_empty(raw.is_empty())?;
     let mut out = Vec::with_capacity(raw.len());
     for (name, cid_hex) in raw {
-        if !safe_name_component(&name) {
-            return Err(ManifestError::UnsafeName(name));
-        }
-        let cid = match cid_hex {
-            None => None,
-            Some(h) => {
-                let cid = Cid::from_hex(&h).ok_or_else(|| {
-                    ManifestError::Parse(format!("inventory[{name}]: not a 64-char hex CID"))
-                })?;
-                Some(cid)
-            }
-        };
-        out.push(InventoryEntry { name, cid });
+        let entry = parse_inventory_item(name, cid_hex)?;
+        out.push(entry);
     }
     Ok(out)
 }

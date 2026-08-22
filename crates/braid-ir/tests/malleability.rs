@@ -6,7 +6,10 @@ use braid_ir::{decode_strict, encode, CanonError, Value};
 #[test]
 fn non_minimal_int_head_rejected() {
     // 5 encoded with a one-byte argument (0x18 0x05) instead of inline 0x05.
-    assert_eq!(decode_strict(&[0x18, 0x05]), Err(CanonError::NonMinimalInt));
+    assert!(matches!(
+        decode_strict(&[0x18, 0x05]),
+        Err(CanonError::NonMinimalInt { .. })
+    ));
     // Canonical form decodes.
     assert_eq!(decode_strict(&[0x05]), Ok(Value::Int(5)));
 }
@@ -16,7 +19,7 @@ fn indefinite_length_rejected() {
     // 0x9f = indefinite-length array.
     assert!(matches!(
         decode_strict(&[0x9f, 0x01, 0xff]),
-        Err(CanonError::ForbiddenForm(_))
+        Err(CanonError::ForbiddenForm { .. })
     ));
 }
 
@@ -29,7 +32,7 @@ fn floats_do_not_exist() {
         assert!(
             matches!(
                 decode_strict(&bytes),
-                Err(CanonError::ForbiddenForm(_)) | Err(CanonError::TrailingBytes)
+                Err(CanonError::ForbiddenForm { .. }) | Err(CanonError::TrailingBytes { .. })
             ),
             "float head {head:#x} must be rejected"
         );
@@ -40,32 +43,41 @@ fn floats_do_not_exist() {
 fn tags_and_null_rejected() {
     assert!(matches!(
         decode_strict(&[0xc0, 0x00]),
-        Err(CanonError::ForbiddenForm(_))
+        Err(CanonError::ForbiddenForm { .. })
     )); // tag
     assert!(matches!(
         decode_strict(&[0xf6]),
-        Err(CanonError::ForbiddenForm(_))
+        Err(CanonError::ForbiddenForm { .. })
     )); // null
     assert!(matches!(
         decode_strict(&[0xf7]),
-        Err(CanonError::ForbiddenForm(_))
+        Err(CanonError::ForbiddenForm { .. })
     )); // undefined
 }
 
 #[test]
 fn trailing_junk_rejected() {
     // A valid int followed by padding — junk-padded artifact (A4.8 case).
-    assert_eq!(decode_strict(&[0x01, 0x00]), Err(CanonError::TrailingBytes));
+    assert!(matches!(
+        decode_strict(&[0x01, 0x00]),
+        Err(CanonError::TrailingBytes { .. })
+    ));
 }
 
 #[test]
 fn unordered_or_duplicate_map_keys_rejected() {
     // {"b":1,"a":2} — keys out of canonical order.
     let unordered = [0xa2, 0x61, b'b', 0x01, 0x61, b'a', 0x02];
-    assert_eq!(decode_strict(&unordered), Err(CanonError::KeyOrder));
+    assert!(matches!(
+        decode_strict(&unordered),
+        Err(CanonError::KeyOrder { .. })
+    ));
     // {"a":1,"a":2} — duplicate.
     let dup = [0xa2, 0x61, b'a', 0x01, 0x61, b'a', 0x02];
-    assert_eq!(decode_strict(&dup), Err(CanonError::KeyOrder));
+    assert!(matches!(
+        decode_strict(&dup),
+        Err(CanonError::KeyOrder { .. })
+    ));
 }
 
 #[test]
@@ -75,21 +87,27 @@ fn length_first_key_order_is_the_canon() {
     let canonical = [0xa2, 0x61, b'z', 0x01, 0x62, b'a', b'a', 0x02];
     assert!(decode_strict(&canonical).is_ok());
     let wrong = [0xa2, 0x62, b'a', b'a', 0x02, 0x61, b'z', 0x01];
-    assert_eq!(decode_strict(&wrong), Err(CanonError::KeyOrder));
+    assert!(matches!(
+        decode_strict(&wrong),
+        Err(CanonError::KeyOrder { .. })
+    ));
 }
 
 #[test]
 fn forged_collection_length_rejected_before_allocation() {
     // Array head claiming 2^32 items with 1 byte of payload.
-    assert_eq!(
+    assert!(matches!(
         decode_strict(&[0x9a, 0xff, 0xff, 0xff, 0xff, 0x01]),
-        Err(CanonError::Truncated)
-    );
+        Err(CanonError::Truncated { .. })
+    ));
 }
 
 #[test]
 fn truncated_input_rejected() {
-    assert_eq!(decode_strict(&[0x62, b'a']), Err(CanonError::Truncated));
+    assert!(matches!(
+        decode_strict(&[0x62, b'a']),
+        Err(CanonError::Truncated { .. })
+    ));
 }
 
 #[test]
@@ -97,13 +115,16 @@ fn non_text_map_key_rejected() {
     // {1: 2} — int key.
     assert!(matches!(
         decode_strict(&[0xa1, 0x01, 0x02]),
-        Err(CanonError::ForbiddenForm(_))
+        Err(CanonError::ForbiddenForm { .. })
     ));
 }
 
 #[test]
 fn invalid_utf8_text_rejected() {
-    assert_eq!(decode_strict(&[0x61, 0xff]), Err(CanonError::Utf8));
+    assert!(matches!(
+        decode_strict(&[0x61, 0xff]),
+        Err(CanonError::Utf8 { .. })
+    ));
 }
 
 #[test]
@@ -160,9 +181,9 @@ fn capsule_unknown_extra_field_rejected() {
 fn assert_nested_smuggle_rejected(mutate: impl Fn(&mut braid_ir::Value)) {
     use braid_ir::Capsule;
     let capsule = braid_vocab_cms::edit_section_capsule();
-    let mut v = capsule.to_canon();
-    mutate(&mut v);
-    let bytes = braid_ir::canon::encode(&v);
+    let mut canon_val = capsule.to_canon();
+    mutate(&mut canon_val);
+    let bytes = braid_ir::canon::encode(&canon_val);
     // Bytes are still individually canonical (the Value round-trips)…
     assert!(
         braid_ir::decode_strict(&bytes).is_ok(),

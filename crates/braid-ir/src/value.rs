@@ -38,7 +38,7 @@ impl Value {
 
     /// Typed field access for struct decoding (missing key = error at the
     /// caller; absence is never defaulted — fail-closed L9).
-    pub fn get<'a>(&'a self, key: &str) -> Option<&'a Value> {
+    pub fn get_field<'a>(&'a self, key: &str) -> Option<&'a Value> {
         match self {
             Value::Map(m) => m.get(key),
             _ => None,

@@ -23,34 +23,38 @@ fn vectors_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../calibration/vectors")
 }
 
+fn json_to_number(n: &serde_json::Number) -> Option<Value> {
+    n.as_i64().map(Value::Int)
+}
+
+fn json_to_array(items: &[serde_json::Value]) -> Option<Value> {
+    let mut out = Vec::with_capacity(items.len());
+    for item in items {
+        out.push(rfc_json_to_braid(item)?);
+    }
+    Some(Value::List(out))
+}
+
+fn json_to_object(map: &serde_json::Map<String, serde_json::Value>) -> Option<Value> {
+    let mut btm = BTreeMap::new();
+    for (k, val) in map {
+        btm.insert(k.clone(), rfc_json_to_braid(val)?);
+    }
+    Some(Value::Map(btm))
+}
+
 /// Decode the JSON `decoded` field of an RFC vector into a Braid `Value`.
 /// The RFC uses JSON's type system; we map to Braid's closed universe.
 fn rfc_json_to_braid(v: &serde_json::Value) -> Option<Value> {
     use serde_json::Value as J;
-    Some(match v {
-        J::Bool(b) => Value::Bool(*b),
-        J::Number(n) => {
-            // RFC ints are within i64; floats are out of Braid's universe.
-            let i = n.as_i64()?; // float or out-of-range — outside Braid's subset
-            Value::Int(i)
-        }
-        J::String(s) => Value::Text(s.clone()),
-        J::Array(items) => {
-            let mut out = Vec::with_capacity(items.len());
-            for it in items {
-                out.push(rfc_json_to_braid(it)?);
-            }
-            Value::List(out)
-        }
-        J::Object(map) => {
-            let mut btm = BTreeMap::new();
-            for (k, val) in map {
-                btm.insert(k.clone(), rfc_json_to_braid(val)?);
-            }
-            Value::Map(btm)
-        }
-        J::Null => return None, // Braid has no null (D8)
-    })
+    match v {
+        J::Bool(b) => Some(Value::Bool(*b)),
+        J::Number(n) => json_to_number(n),
+        J::String(s) => Some(Value::Text(s.clone())),
+        J::Array(items) => json_to_array(items),
+        J::Object(map) => json_to_object(map),
+        J::Null => None,
+    }
 }
 
 /// Braid's encoder MUST produce the exact RFC 8949 deterministic bytes for
@@ -69,7 +73,7 @@ fn canonical_encoder_matches_rfc8949_deterministic_vectors() {
     for case in cases {
         let hex = case.get("hex").and_then(|h| h.as_str()).expect("hex field");
         let decoded = case.get("decoded").expect("decoded field");
-        let expected = match hex::decode(hex) {
+        let expected = match lgwks_std::hex::decode(hex) {
             Ok(b) => b,
             Err(_) => {
                 skipped += 1;

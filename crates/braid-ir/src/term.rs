@@ -17,14 +17,6 @@ use core::str::FromStr;
 
 /// The closed type universe of strand wiring. No interpretable-code type
 /// exists (T1) and no float type exists (T8) — by construction, not by check.
-///
-/// //why an `Opaque` variant (D31): a *global* IR must let each vocabulary
-/// package declare its own domain types (CMS `entity`/`directive`, JS
-/// `function`/`record`, …) without a core edit per language. The dotted
-/// label is the protocol-stable identity (compared by `(label, args)`); it
-/// is what canonical encoding serializes, so a rename is CID-breaking. The
-/// core keeps only the language-neutral atoms (`Bool`/`Int`/`Bytes`/`Text`/
-/// `Cid`/`List`); every domain type is a vocabulary-owned `Opaque`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypeTag {
     Bool,
@@ -33,12 +25,7 @@ pub enum TypeTag {
     Bytes,
     Text,
     Cid,
-    /// A vocabulary-defined domain type: a dotted label plus optional type
-    /// arguments (e.g. `Opaque("cms.entity", [])`, `Opaque("js.record", [Text])`).
-    /// The label is the identity; the verifier compares `(label, args)` by
-    /// structural equality. No core type lives here — `Entity`/`Directive`
-    /// are now `Opaque("cms.entity", [])` / `Opaque("cms.directive", [])` in
-    /// the `braid-vocab-cms` package.
+    /// A vocabulary-defined domain type.
     Opaque(String, Vec<TypeTag>),
     List(Box<TypeTag>),
 }
@@ -84,13 +71,35 @@ pub struct TermSpec {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RegistryError {
     /// Pure terms carry no capability; effectful terms must carry one.
-    CapabilityEffectMismatch(String),
+    CapabilityEffectMismatch { term: String, at: &'static str },
     /// Irreversible/Egress terms must declare an egress ceiling.
-    MissingCeiling(String),
-    DuplicateTerm(String),
+    MissingCeiling { term: String, at: &'static str },
+    /// Duplicate term identifier.
+    DuplicateTerm { term: String, at: &'static str },
     /// Canonical-form violation while decoding a registry value.
-    Malformed(&'static str),
+    Malformed { field: &'static str, at: &'static str },
 }
+
+impl core::fmt::Display for RegistryError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::CapabilityEffectMismatch { term, at } => {
+                write!(f, "capability effect mismatch on {term} at {at}")
+            }
+            Self::MissingCeiling { term, at } => {
+                write!(f, "missing ceiling on {term} at {at}")
+            }
+            Self::DuplicateTerm { term, at } => {
+                write!(f, "duplicate term {term} at {at}")
+            }
+            Self::Malformed { field, at } => {
+                write!(f, "malformed {field} at {at}")
+            }
+        }
+    }
+}
+
+impl core::error::Error for RegistryError {}
 
 /// The closed, versioned term registry.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,6 +109,82 @@ pub struct TermRegistry {
     /// registry event, never silent drift.
     pub vocab_version: u32,
     terms: BTreeMap<String, TermSpec>,
+}
+
+fn check_capability_effect_alignment(spec: &TermSpec) -> Result<(), RegistryError> {
+    let is_pure = spec.effect == EffectClass::Pure;
+    if is_pure == spec.capability.is_some() {
+        Err(RegistryError::CapabilityEffectMismatch {
+            term: spec.id.clone(),
+            at: "TermRegistry::insert",
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn check_egress_ceiling_presence(spec: &TermSpec) -> Result<(), RegistryError> {
+    if matches!(spec.effect, EffectClass::Irreversible | EffectClass::Egress)
+        && spec.egress_ceiling.is_none()
+    {
+        Err(RegistryError::MissingCeiling {
+            term: spec.id.clone(),
+            at: "TermRegistry::insert",
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn check_no_duplicate_term(
+    terms: &BTreeMap<String, TermSpec>,
+    spec: &TermSpec,
+) -> Result<(), RegistryError> {
+    if terms.contains_key(&spec.id) {
+        Err(RegistryError::DuplicateTerm {
+            term: spec.id.clone(),
+            at: "TermRegistry::insert",
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn check_registry_key_universe(v: &Value) -> Result<(), RegistryError> {
+    if !v.require_only_keys(&["terms", "vocab_version"]) {
+        Err(RegistryError::Malformed {
+            field: "registry: unknown field",
+            at: "TermRegistry::from_canon",
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn check_term_ordering(prev: &Option<String>, id: &str) -> Result<(), RegistryError> {
+    if let Some(p) = prev {
+        if p.as_str() >= id {
+            Err(RegistryError::Malformed {
+                field: "term order",
+                at: "TermRegistry::from_canon",
+            })
+        } else {
+            Ok(())
+        }
+    } else {
+        Ok(())
+    }
+}
+
+fn decode_and_insert_term(
+    reg: &mut TermRegistry,
+    prev: &mut Option<String>,
+    it: &Value,
+) -> Result<(), RegistryError> {
+    let spec = term_from_canon(it)?;
+    check_term_ordering(prev, &spec.id)?;
+    *prev = Some(spec.id.clone());
+    reg.insert(spec)
 }
 
 impl TermRegistry {
@@ -113,20 +198,9 @@ impl TermRegistry {
     /// Insert with the registry invariants enforced (fail-closed at
     /// construction — an illegal TermSpec is unrepresentable in a registry).
     pub fn insert(&mut self, spec: TermSpec) -> Result<(), RegistryError> {
-        // Pure ⇔ no capability: a pure term with authority, or an effectful
-        // term without one, is unrepresentable in a registry.
-        let is_pure = spec.effect == EffectClass::Pure;
-        if is_pure == spec.capability.is_some() {
-            return Err(RegistryError::CapabilityEffectMismatch(spec.id));
-        }
-        if matches!(spec.effect, EffectClass::Irreversible | EffectClass::Egress)
-            && spec.egress_ceiling.is_none()
-        {
-            return Err(RegistryError::MissingCeiling(spec.id));
-        }
-        if self.terms.contains_key(&spec.id) {
-            return Err(RegistryError::DuplicateTerm(spec.id));
-        }
+        check_capability_effect_alignment(&spec)?;
+        check_egress_ceiling_presence(&spec)?;
+        check_no_duplicate_term(&self.terms, &spec)?;
         self.terms.insert(spec.id.clone(), spec);
         Ok(())
     }
@@ -152,8 +226,6 @@ impl TermRegistry {
         Cid::compute(REGISTRY_DOMAIN, &canon::encode(&self.to_canon()))
     }
 
-    // ── canonical (de)serialization ──
-
     pub fn to_canon(&self) -> Value {
         let terms: Vec<Value> = self.terms.values().map(term_to_canon).collect();
         Value::map(vec![
@@ -163,32 +235,35 @@ impl TermRegistry {
     }
 
     pub fn from_canon(v: &Value) -> Result<Self, RegistryError> {
-        if !v.require_only_keys(&["terms", "vocab_version"]) {
-            return Err(RegistryError::Malformed("registry: unknown field"));
-        }
-        let vocab = match v.get("vocab_version") {
-            Some(Value::Int(n)) if *n >= 0 && *n <= u32::MAX as i64 => *n as u32,
-            _ => return Err(RegistryError::Malformed("vocab_version")),
-        };
+        check_registry_key_universe(v)?;
+        let vocab = decode_vocab_version(v)?;
         let mut reg = TermRegistry::new(vocab);
-        let items = match v.get("terms") {
-            Some(Value::List(items)) => items,
-            _ => return Err(RegistryError::Malformed("terms")),
-        };
+        let items = decode_terms_value_list(v)?;
         let mut prev: Option<String> = None;
         for it in items {
-            let spec = term_from_canon(it)?;
-            // Canonical form: terms sorted by id, no duplicates (one registry,
-            // one byte form — T3 applies to the registry too).
-            if let Some(p) = &prev {
-                if p.as_str() >= spec.id.as_str() {
-                    return Err(RegistryError::Malformed("term order"));
-                }
-            }
-            prev = Some(spec.id.clone());
-            reg.insert(spec)?;
+            decode_and_insert_term(&mut reg, &mut prev, it)?;
         }
         Ok(reg)
+    }
+}
+
+fn decode_vocab_version(v: &Value) -> Result<u32, RegistryError> {
+    match v.get_field("vocab_version") {
+        Some(Value::Int(n)) if *n >= 0 && *n <= u32::MAX as i64 => Ok(*n as u32),
+        _ => Err(RegistryError::Malformed {
+            field: "vocab_version",
+            at: "decode_vocab_version",
+        }),
+    }
+}
+
+fn decode_terms_value_list(v: &Value) -> Result<&Vec<Value>, RegistryError> {
+    match v.get_field("terms") {
+        Some(Value::List(items)) => Ok(items),
+        _ => Err(RegistryError::Malformed {
+            field: "terms",
+            at: "decode_terms_value_list",
+        }),
     }
 }
 
@@ -216,35 +291,39 @@ fn type_to_text(t: &TypeTag) -> String {
     }
 }
 
+fn parse_opaque_args(args_str: &str) -> Result<Vec<TypeTag>, RegistryError> {
+    if args_str.is_empty() {
+        Ok(Vec::new())
+    } else {
+        args_str
+            .split(',')
+            .map(|a| type_from_text(a.trim()))
+            .collect()
+    }
+}
+
+fn parse_compound_type(s: &str) -> Result<TypeTag, RegistryError> {
+    if let Some(inner) = s.strip_prefix("list<").and_then(|r| r.strip_suffix('>')) {
+        Ok(TypeTag::List(Box::new(type_from_text(inner)?)))
+    } else if let Some(open) = s.find('<') {
+        let label = s[..open].to_string();
+        let args_str = &s[open + 1..s.len() - 1];
+        let args = parse_opaque_args(args_str)?;
+        Ok(TypeTag::Opaque(label, args))
+    } else {
+        Ok(TypeTag::Opaque(s.to_string(), Vec::new()))
+    }
+}
+
 fn type_from_text(s: &str) -> Result<TypeTag, RegistryError> {
-    Ok(match s {
-        "bool" => TypeTag::Bool,
-        "int" => TypeTag::Int,
-        "bytes" => TypeTag::Bytes,
-        "text" => TypeTag::Text,
-        "cid" => TypeTag::Cid,
-        _ => {
-            // `list<...>` is the only core parameterized form; everything else
-            // is a vocabulary `Opaque`. A label with `<...>` carries type args.
-            if let Some(inner) = s.strip_prefix("list<").and_then(|r| r.strip_suffix('>')) {
-                TypeTag::List(Box::new(type_from_text(inner)?))
-            } else if let Some(open) = s.find('<') {
-                let label = s[..open].to_string();
-                let args_str = &s[open + 1..s.len() - 1];
-                let args = if args_str.is_empty() {
-                    Vec::new()
-                } else {
-                    args_str
-                        .split(',')
-                        .map(|a| type_from_text(a.trim()))
-                        .collect::<Result<Vec<_>, _>>()?
-                };
-                TypeTag::Opaque(label, args)
-            } else {
-                TypeTag::Opaque(s.to_string(), Vec::new())
-            }
-        }
-    })
+    match s {
+        "bool" => Ok(TypeTag::Bool),
+        "int" => Ok(TypeTag::Int),
+        "bytes" => Ok(TypeTag::Bytes),
+        "text" => Ok(TypeTag::Text),
+        "cid" => Ok(TypeTag::Cid),
+        _ => parse_compound_type(s),
+    }
 }
 
 pub(crate) fn effect_to_text(e: EffectClass) -> &'static str {
@@ -258,14 +337,17 @@ pub(crate) fn effect_to_text(e: EffectClass) -> &'static str {
 }
 
 fn effect_from_text(s: &str) -> Result<EffectClass, RegistryError> {
-    Ok(match s {
-        "pure" => EffectClass::Pure,
-        "read" => EffectClass::Read,
-        "reversible-write" => EffectClass::ReversibleWrite,
-        "irreversible" => EffectClass::Irreversible,
-        "egress" => EffectClass::Egress,
-        _ => return Err(RegistryError::Malformed("effect class")),
-    })
+    match s {
+        "pure" => Ok(EffectClass::Pure),
+        "read" => Ok(EffectClass::Read),
+        "reversible-write" => Ok(EffectClass::ReversibleWrite),
+        "irreversible" => Ok(EffectClass::Irreversible),
+        "egress" => Ok(EffectClass::Egress),
+        _ => Err(RegistryError::Malformed {
+            field: "effect class",
+            at: "effect_from_text",
+        }),
+    }
 }
 
 pub(crate) fn exposure_to_int(x: Exposure) -> i64 {
@@ -273,13 +355,16 @@ pub(crate) fn exposure_to_int(x: Exposure) -> i64 {
 }
 
 fn exposure_from_int(n: i64) -> Result<Exposure, RegistryError> {
-    Ok(match n {
-        0 => Exposure::Public,
-        1 => Exposure::Internal,
-        2 => Exposure::Confidential,
-        3 => Exposure::Vault,
-        _ => return Err(RegistryError::Malformed("exposure")),
-    })
+    match n {
+        0 => Ok(Exposure::Public),
+        1 => Ok(Exposure::Internal),
+        2 => Ok(Exposure::Confidential),
+        3 => Ok(Exposure::Vault),
+        _ => Err(RegistryError::Malformed {
+            field: "exposure",
+            at: "exposure_from_int",
+        }),
+    }
 }
 
 fn term_to_canon(t: &TermSpec) -> Value {
@@ -299,9 +384,6 @@ fn term_to_canon(t: &TermSpec) -> Value {
         ("exposure", Value::Int(exposure_to_int(t.source_exposure))),
         ("cost", Value::Int(t.cost as i64)),
     ];
-    // //why Display-name and not a numeric discriminant: the strum serialize
-    // names ("tape.read") are the protocol-stable identifiers; enum ordinals
-    // would silently re-map on any variant reorder.
     if let Some(cap) = &t.capability {
         fields.push(("capability", Value::Text(cap.to_string())));
     }
@@ -311,9 +393,104 @@ fn term_to_canon(t: &TermSpec) -> Value {
     Value::map(fields)
 }
 
-fn term_from_canon(v: &Value) -> Result<TermSpec, RegistryError> {
-    // `capability` and `ceiling` are optional; the rest required. The allowed
-    // set is the exhaustive key universe — any other key is a smuggled field.
+fn decode_term_id(v: &Value) -> Result<String, RegistryError> {
+    match v.get_field("id") {
+        Some(Value::Text(s)) => Ok(s.clone()),
+        _ => Err(RegistryError::Malformed {
+            field: "term id",
+            at: "decode_term_id",
+        }),
+    }
+}
+
+fn decode_term_inputs(v: &Value) -> Result<Vec<TypeTag>, RegistryError> {
+    match v.get_field("inputs") {
+        Some(Value::List(items)) => items
+            .iter()
+            .map(|i| match i {
+                Value::Text(s) => type_from_text(s),
+                _ => Err(RegistryError::Malformed {
+                    field: "input type",
+                    at: "decode_term_inputs",
+                }),
+            })
+            .collect::<Result<Vec<_>, _>>(),
+        _ => Err(RegistryError::Malformed {
+            field: "inputs",
+            at: "decode_term_inputs",
+        }),
+    }
+}
+
+fn decode_term_output(v: &Value) -> Result<TypeTag, RegistryError> {
+    match v.get_field("output") {
+        Some(Value::Text(s)) => type_from_text(s),
+        _ => Err(RegistryError::Malformed {
+            field: "output",
+            at: "decode_term_output",
+        }),
+    }
+}
+
+fn decode_term_effect(v: &Value) -> Result<EffectClass, RegistryError> {
+    match v.get_field("effect") {
+        Some(Value::Text(s)) => effect_from_text(s),
+        _ => Err(RegistryError::Malformed {
+            field: "effect",
+            at: "decode_term_effect",
+        }),
+    }
+}
+
+fn decode_term_exposure(v: &Value) -> Result<Exposure, RegistryError> {
+    match v.get_field("exposure") {
+        Some(Value::Int(n)) => exposure_from_int(*n),
+        _ => Err(RegistryError::Malformed {
+            field: "exposure",
+            at: "decode_term_exposure",
+        }),
+    }
+}
+
+fn decode_term_cost(v: &Value) -> Result<u64, RegistryError> {
+    match v.get_field("cost") {
+        Some(Value::Int(n)) if *n >= 0 => Ok(*n as u64),
+        _ => Err(RegistryError::Malformed {
+            field: "cost",
+            at: "decode_term_cost",
+        }),
+    }
+}
+
+fn decode_term_capability(v: &Value) -> Result<Option<Capability>, RegistryError> {
+    match v.get_field("capability") {
+        None => Ok(None),
+        Some(Value::Text(s)) => match Capability::from_str(s) {
+            Ok(cap) => Ok(Some(cap)),
+            Err(_err) => Err(RegistryError::Malformed {
+                field: "unknown capability",
+                at: "decode_term_capability",
+            }),
+        },
+        Some(_) => Err(RegistryError::Malformed {
+            field: "capability",
+            at: "decode_term_capability",
+        }),
+    }
+}
+
+fn decode_term_ceiling(v: &Value) -> Result<Option<Exposure>, RegistryError> {
+    match v.get_field("ceiling") {
+        None => Ok(None),
+        Some(Value::Int(n)) => exposure_from_int(*n).map(Some),
+        Some(_) => Err(RegistryError::Malformed {
+            field: "ceiling",
+            at: "decode_term_ceiling",
+        }),
+    }
+}
+
+fn check_term_key_universe(v: &Value) -> Result<(), RegistryError> {
     if !v.require_only_keys(&[
         "id",
         "inputs",
@@ -324,50 +501,38 @@ fn term_from_canon(v: &Value) -> Result<TermSpec, RegistryError> {
         "capability",
         "ceiling",
     ]) {
-        return Err(RegistryError::Malformed("term: unknown field"));
+        Err(RegistryError::Malformed {
+            field: "term: unknown field",
+            at: "term_from_canon",
+        })
+    } else {
+        Ok(())
     }
-    let id = match v.get("id") {
-        Some(Value::Text(s)) => s.clone(),
-        _ => return Err(RegistryError::Malformed("term id")),
-    };
-    let inputs = match v.get("inputs") {
-        Some(Value::List(items)) => items
-            .iter()
-            .map(|i| match i {
-                Value::Text(s) => type_from_text(s),
-                _ => Err(RegistryError::Malformed("input type")),
-            })
-            .collect::<Result<Vec<_>, _>>()?,
-        _ => return Err(RegistryError::Malformed("inputs")),
-    };
-    let output = match v.get("output") {
-        Some(Value::Text(s)) => type_from_text(s)?,
-        _ => return Err(RegistryError::Malformed("output")),
-    };
-    let effect = match v.get("effect") {
-        Some(Value::Text(s)) => effect_from_text(s)?,
-        _ => return Err(RegistryError::Malformed("effect")),
-    };
-    let source_exposure = match v.get("exposure") {
-        Some(Value::Int(n)) => exposure_from_int(*n)?,
-        _ => return Err(RegistryError::Malformed("exposure")),
-    };
-    let cost = match v.get("cost") {
-        Some(Value::Int(n)) if *n >= 0 => *n as u64,
-        _ => return Err(RegistryError::Malformed("cost")),
-    };
-    let capability = match v.get("capability") {
-        None => None,
-        Some(Value::Text(s)) => Some(
-            Capability::from_str(s).map_err(|_| RegistryError::Malformed("unknown capability"))?,
-        ),
-        Some(_) => return Err(RegistryError::Malformed("capability")),
-    };
-    let egress_ceiling = match v.get("ceiling") {
-        None => None,
-        Some(Value::Int(n)) => Some(exposure_from_int(*n)?),
-        Some(_) => return Err(RegistryError::Malformed("ceiling")),
-    };
+}
+
+fn decode_term_core(v: &Value) -> Result<(String, Vec<TypeTag>, TypeTag), RegistryError> {
+    let id = decode_term_id(v)?;
+    let inputs = decode_term_inputs(v)?;
+    let output = decode_term_output(v)?;
+    Ok((id, inputs, output))
+}
+
+type PolicyFields = (EffectClass, Exposure, u64, Option<Capability>, Option<Exposure>);
+
+fn decode_term_policy(v: &Value) -> Result<PolicyFields, RegistryError> {
+    let effect = decode_term_effect(v)?;
+    let source_exposure = decode_term_exposure(v)?;
+    let cost = decode_term_cost(v)?;
+    let capability = decode_term_capability(v)?;
+    let egress_ceiling = decode_term_ceiling(v)?;
+    Ok((effect, source_exposure, cost, capability, egress_ceiling))
+}
+
+fn term_from_canon(v: &Value) -> Result<TermSpec, RegistryError> {
+    check_term_key_universe(v)?;
+    let (id, inputs, output) = decode_term_core(v)?;
+    let (effect, source_exposure, cost, capability, egress_ceiling) = decode_term_policy(v)?;
+
     Ok(TermSpec {
         id,
         inputs,

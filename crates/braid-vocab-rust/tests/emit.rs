@@ -86,7 +86,7 @@ fn rejected_capsule_refuses_to_elaborate() {
     let mut c = edit_section_capsule();
     c.braid.strands[3].inputs = vec![0]; // Entity into view.section (Types reject)
     match elaborate(&registry_v0(), &c) {
-        Err(ElabError::Rejected(reason)) => assert!(reason.contains("Types"), "{reason}"),
+        Err(ElabError::Rejected { reason, .. }) => assert!(reason.contains("Types"), "{reason}"),
         Ok(_) => panic!("rejected capsule elaborated"),
     }
 }

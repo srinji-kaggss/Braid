@@ -72,11 +72,8 @@ pub const SHRED_NAME: &str = "efface.shred";
 pub const RTBF_NAME: &str = "efface.rtbf";
 pub const REMOTE_COMPUTE_NAME: &str = "compute.remote";
 
-// A table-row constructor: one positional row per term keeps the registry
-// readable as a table; a builder would bury the columns.
-#[allow(clippy::too_many_arguments)]
-fn t(
-    id: &str,
+struct TermDecl {
+    id: &'static str,
     inputs: Vec<TypeTag>,
     output: TypeTag,
     capability: Option<Capability>,
@@ -84,120 +81,173 @@ fn t(
     source_exposure: Exposure,
     egress_ceiling: Option<Exposure>,
     cost: u64,
-) -> TermSpec {
+}
+
+fn t(decl: TermDecl) -> TermSpec {
     TermSpec {
-        id: id.into(),
-        inputs,
-        output,
-        capability,
-        effect,
-        source_exposure,
-        egress_ceiling,
-        cost,
+        id: decl.id.into(),
+        inputs: decl.inputs,
+        output: decl.output,
+        capability: decl.capability,
+        effect: decl.effect,
+        source_exposure: decl.source_exposure,
+        egress_ceiling: decl.egress_ceiling,
+        cost: decl.cost,
     }
+}
+
+fn pure_specs() -> Vec<TermSpec> {
+    use EffectClass::*;
+    use Exposure::*;
+    use TypeTag::*;
+
+    let literal_specs = vec![
+        t(TermDecl {
+            id: "lit.text",
+            inputs: vec![],
+            output: Text,
+            capability: None,
+            effect: Pure,
+            source_exposure: Public,
+            egress_ceiling: None,
+            cost: 1,
+        }),
+        t(TermDecl {
+            id: "lit.bytes",
+            inputs: vec![],
+            output: Bytes,
+            capability: None,
+            effect: Pure,
+            source_exposure: Public,
+            egress_ceiling: None,
+            cost: 1,
+        }),
+        t(TermDecl {
+            id: "lit.entity",
+            inputs: vec![],
+            output: entity(),
+            capability: None,
+            effect: Pure,
+            source_exposure: Public,
+            egress_ceiling: None,
+            cost: 1,
+        }),
+    ];
+    let string_specs = vec![
+        t(TermDecl {
+            id: "text.concat",
+            inputs: vec![Text, Text],
+            output: Text,
+            capability: None,
+            effect: Pure,
+            source_exposure: Public,
+            egress_ceiling: None,
+            cost: 1,
+        }),
+        t(TermDecl {
+            id: "bytes.id",
+            inputs: vec![Bytes],
+            output: Bytes,
+            capability: None,
+            effect: Pure,
+            source_exposure: Public,
+            egress_ceiling: None,
+            cost: 1,
+        }),
+    ];
+    let render_specs = vec![
+        t(TermDecl {
+            id: "view.section",
+            inputs: vec![Text],
+            output: directive(),
+            capability: None,
+            effect: Pure,
+            source_exposure: Public,
+            egress_ceiling: None,
+            cost: 2,
+        }),
+        t(TermDecl {
+            id: "view.page",
+            inputs: vec![List(Box::new(directive()))],
+            output: directive(),
+            capability: None,
+            effect: Pure,
+            source_exposure: Public,
+            egress_ceiling: None,
+            cost: 3,
+        }),
+    ];
+    literal_specs
+        .into_iter()
+        .chain(string_specs)
+        .chain(render_specs)
+        .collect()
+}
+
+fn action_specs() -> Vec<TermSpec> {
+    use EffectClass::*;
+    use Exposure::*;
+    use TypeTag::*;
+
+    vec![
+        t(TermDecl {
+            id: "proj.listing",
+            inputs: vec![entity()],
+            output: List(Box::new(Text)),
+            capability: Some(cap!(TAPE_READ_NAME)),
+            effect: Read,
+            source_exposure: Internal,
+            egress_ceiling: None,
+            cost: 5,
+        }),
+        t(TermDecl {
+            id: "vault.read",
+            inputs: vec![entity()],
+            output: Bytes,
+            capability: Some(cap!(TAPE_READ_NAME)),
+            effect: Read,
+            source_exposure: Vault,
+            egress_ceiling: None,
+            cost: 5,
+        }),
+        t(TermDecl {
+            id: "cms.edit_section",
+            inputs: vec![entity(), Text],
+            output: Cid,
+            capability: Some(cap!(SIGNAL_EMIT_NAME)),
+            effect: ReversibleWrite,
+            source_exposure: Internal,
+            egress_ceiling: None,
+            cost: 8,
+        }),
+        t(TermDecl {
+            id: "cms.publish",
+            inputs: vec![Cid],
+            output: Cid,
+            capability: Some(cap!(INTENT_EMIT_NAME)),
+            effect: Irreversible,
+            source_exposure: Internal,
+            egress_ceiling: Some(Internal),
+            cost: 13,
+        }),
+        t(TermDecl {
+            id: "net.egress",
+            inputs: vec![Bytes],
+            output: Cid,
+            capability: Some(cap!(REMOTE_COMPUTE_NAME)),
+            effect: Egress,
+            source_exposure: Internal,
+            egress_ceiling: Some(Internal),
+            cost: 21,
+        }),
+    ]
 }
 
 /// Build the v0 CMS registry. Infallible by construction — the specs are
 /// validated by `TermRegistry::insert` and a unit test pins the build.
 pub fn registry_v0() -> TermRegistry {
-    use EffectClass::*;
-    use Exposure::*;
-    use TypeTag::*;
-
-    let specs = vec![
-        // ── pure literals + math (the chainable alphabet) ──
-        t("lit.text", vec![], Text, None, Pure, Public, None, 1),
-        t("lit.bytes", vec![], Bytes, None, Pure, Public, None, 1),
-        t("lit.entity", vec![], entity(), None, Pure, Public, None, 1),
-        t(
-            "text.concat",
-            vec![Text, Text],
-            Text,
-            None,
-            Pure,
-            Public,
-            None,
-            1,
-        ),
-        t("bytes.id", vec![Bytes], Bytes, None, Pure, Public, None, 1),
-        // ── pure render (output is a typed Directive, never DOM — D16) ──
-        t(
-            "view.section",
-            vec![Text],
-            directive(),
-            None,
-            Pure,
-            Public,
-            None,
-            2,
-        ),
-        t(
-            "view.page",
-            vec![List(Box::new(directive()))],
-            directive(),
-            None,
-            Pure,
-            Public,
-            None,
-            3,
-        ),
-        // ── projection reads ──
-        t(
-            "proj.listing",
-            vec![entity()],
-            List(Box::new(Text)),
-            Some(cap!(TAPE_READ_NAME)),
-            Read,
-            Internal,
-            None,
-            5,
-        ),
-        t(
-            "vault.read",
-            vec![entity()],
-            Bytes,
-            Some(cap!(TAPE_READ_NAME)),
-            Read,
-            Vault,
-            None,
-            5,
-        ),
-        // ── CMS writes (the landing-port verbs) ──
-        t(
-            "cms.edit_section",
-            vec![entity(), Text],
-            Cid,
-            Some(cap!(SIGNAL_EMIT_NAME)),
-            ReversibleWrite,
-            Internal,
-            None,
-            8,
-        ),
-        t(
-            "cms.publish",
-            vec![Cid],
-            Cid,
-            Some(cap!(INTENT_EMIT_NAME)),
-            Irreversible,
-            Internal,
-            Some(Internal),
-            13,
-        ),
-        // ── the single egress door of the demo alphabet ──
-        t(
-            "net.egress",
-            vec![Bytes],
-            Cid,
-            Some(cap!(REMOTE_COMPUTE_NAME)),
-            Egress,
-            Internal,
-            Some(Internal),
-            21,
-        ),
-    ];
-
     let mut reg = TermRegistry::new(VOCAB_VERSION);
-    for spec in specs {
+    for spec in pure_specs().into_iter().chain(action_specs()) {
         reg.insert(spec)
             .expect("registry_v0 specs are statically valid");
     }

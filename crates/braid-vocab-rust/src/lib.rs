@@ -19,13 +19,29 @@
 
 use braid_ir::{Capsule, TermRegistry, TypeTag};
 use braid_verify::{verify, Verdict};
+use std::fmt;
 
 /// Failure modes of elaboration. None of these emit code.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ElabError {
     /// The verifier rejected the capsule; elaboration is fail-closed.
-    Rejected(String),
+    Rejected {
+        /// Reason given by the verifier stage.
+        reason: String,
+        /// Source component where rejection occurred.
+        at: &'static str,
+    },
 }
+
+impl fmt::Display for ElabError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Rejected { reason, at } => write!(f, "elaboration rejected at {at}: {reason}"),
+        }
+    }
+}
+
+impl std::error::Error for ElabError {}
 
 /// The emitted crate: four deterministic artifacts, nothing else.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,24 +69,39 @@ fn rust_type(t: &TypeTag) -> String {
     }
 }
 
+fn step_snake_case(c: char, prev_lower: &mut bool, out: &mut String) {
+    if !c.is_alphanumeric() {
+        out.push('_');
+        *prev_lower = false;
+    } else {
+        if c.is_uppercase() && *prev_lower {
+            out.push('_');
+        }
+        out.extend(c.to_lowercase());
+        *prev_lower = c.is_lowercase() || c.is_ascii_digit();
+    }
+}
+
 /// `js.dom.querySelector` → `js_dom_query_selector`. Term ids are dotted
 /// camelCase; emitted Rust identifiers must be snake_case (warning-clean).
 fn to_snake_case(id: &str) -> String {
     let mut out = String::with_capacity(id.len());
     let mut prev_lower = false;
     for c in id.chars() {
-        if !c.is_alphanumeric() {
-            out.push('_');
-            prev_lower = false;
-            continue;
-        }
-        if c.is_uppercase() && prev_lower {
-            out.push('_');
-        }
-        out.extend(c.to_lowercase());
-        prev_lower = c.is_lowercase() || c.is_ascii_digit();
+        step_snake_case(c, &mut prev_lower, &mut out);
     }
     out
+}
+
+fn step_newtype_char(c: char, upper: &mut bool, out: &mut String) {
+    if c == '.' || c == '-' || c == '_' {
+        *upper = true;
+    } else if *upper {
+        out.extend(c.to_uppercase());
+        *upper = false;
+    } else {
+        out.push(c);
+    }
 }
 
 /// `Opaque("dur.ms", …)` → `DurMs`. The label is the identity: distinct
@@ -79,16 +110,7 @@ fn newtype_name(label: &str) -> String {
     let mut out = String::with_capacity(label.len());
     let mut upper = true;
     for c in label.chars() {
-        if c == '.' || c == '-' || c == '_' {
-            upper = true;
-            continue;
-        }
-        if upper {
-            out.extend(c.to_uppercase());
-            upper = false;
-        } else {
-            out.push(c);
-        }
+        step_newtype_char(c, &mut upper, &mut out);
     }
     if out.is_empty() {
         "Opaque".to_string()
@@ -97,50 +119,58 @@ fn newtype_name(label: &str) -> String {
     }
 }
 
+fn collect_opaque_tag(t: &TypeTag, seen: &mut Vec<(String, Vec<TypeTag>)>) {
+    if let TypeTag::Opaque(label, args) = t {
+        if !seen.iter().any(|(l, _)| l == label) {
+            seen.push((label.clone(), args.clone()));
+        }
+    }
+}
+
 /// Distinct `Opaque` labels in the registry, first-seen order.
 fn opaque_labels(registry: &TermRegistry) -> Vec<(String, Vec<TypeTag>)> {
     let mut seen: Vec<(String, Vec<TypeTag>)> = Vec::new();
-    let visit = |t: &TypeTag, seen: &mut Vec<(String, Vec<TypeTag>)>| {
-        if let TypeTag::Opaque(label, args) = t {
-            if !seen.iter().any(|(l, _)| l == label) {
-                seen.push((label.clone(), args.clone()));
-            }
-        }
-    };
     for spec in registry.terms() {
         for t in &spec.inputs {
-            visit(t, &mut seen);
+            collect_opaque_tag(t, &mut seen);
         }
-        visit(&spec.output, &mut seen);
+        collect_opaque_tag(&spec.output, &mut seen);
     }
     seen
 }
 
-/// Elaborate an admitted capsule into a deterministic Rust crate.
-pub fn elaborate(registry: &TermRegistry, capsule: &Capsule) -> Result<RustCrate, ElabError> {
+fn verify_capsule_admission(registry: &TermRegistry, capsule: &Capsule) -> Result<(), ElabError> {
     match verify(&capsule.to_bytes(), registry, &capsule.grants) {
-        Verdict::Admit { .. } => {}
-        Verdict::Reject { stage, reason } => {
-            return Err(ElabError::Rejected(format!("{stage:?}: {reason}")));
-        }
+        Verdict::Admit { .. } => Ok(()),
+        Verdict::Reject { stage, reason } => Err(ElabError::Rejected {
+            reason: format!("{stage:?}: {reason}"),
+            at: "braid_verify::verify",
+        }),
     }
+}
 
-    // Newtypes for every distinct Opaque label (dimension contract carrier).
+fn render_single_newtype(label: &str, args: &[TypeTag], out: &mut String) {
+    let name = newtype_name(label);
+    let fields: Vec<String> = args.iter().map(rust_type).collect();
+    let decl = if fields.is_empty() {
+        format!("pub struct {name};")
+    } else {
+        format!("pub struct {name}({});", fields.join(", "))
+    };
+    out.push_str(&format!(
+        "/// Braid opaque type `{label}` — distinct from every other newtype.\n#[derive(Clone, Debug, PartialEq, Eq)]\n{decl}\n\n"
+    ));
+}
+
+fn render_newtypes(registry: &TermRegistry) -> String {
     let mut newtypes = String::new();
     for (label, args) in opaque_labels(registry) {
-        let name = newtype_name(&label);
-        let fields: Vec<String> = args.iter().map(rust_type).collect();
-        let decl = if fields.is_empty() {
-            format!("pub struct {name};")
-        } else {
-            format!("pub struct {name}({});", fields.join(", "))
-        };
-        newtypes.push_str(&format!(
-            "/// Braid opaque type `{label}` — distinct from every other newtype.\n#[derive(Clone, Debug, PartialEq, Eq)]\n{decl}\n\n"
-        ));
+        render_single_newtype(&label, &args, &mut newtypes);
     }
+    newtypes
+}
 
-    // API surface: one trait declaration per registry term.
+fn render_trait_methods(registry: &TermRegistry) -> String {
     let mut fns = String::new();
     for spec in registry.terms() {
         let args: Vec<String> = spec
@@ -166,19 +196,22 @@ pub fn elaborate(registry: &TermRegistry, capsule: &Capsule) -> Result<RustCrate
             ret = ret,
         ));
     }
+    fns
+}
 
-    let capsule_hex = {
-        const HEX: &[u8; 16] = b"0123456789abcdef";
-        let bytes = capsule.to_bytes();
-        let mut s = String::with_capacity(bytes.len() * 2);
-        for b in &bytes {
-            s.push(HEX[(b >> 4) as usize] as char);
-            s.push(HEX[(b & 0x0f) as usize] as char);
-        }
-        s
-    };
+fn encode_capsule_hex(capsule: &Capsule) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let bytes = capsule.to_bytes();
+    let mut hex_str = String::with_capacity(bytes.len() * 2);
+    for byte_val in &bytes {
+        hex_str.push(HEX[(byte_val >> 4) as usize] as char);
+        hex_str.push(HEX[(byte_val & 0x0f) as usize] as char);
+    }
+    hex_str
+}
 
-    let lib_rs = format!(
+fn render_lib_rs(capsule: &Capsule, fns: &str, newtypes: &str) -> String {
+    format!(
         "//! Braid capsule `{cid}` — generated by braid-vocab-rust. Do not edit;\n\
          //! re-elaborate from the admitted capsule. Intent: {intent}\n\
          //! Confirm policy: {confirm:?}. Budget: {budget} cost units.\n\
@@ -200,9 +233,11 @@ pub fn elaborate(registry: &TermRegistry, capsule: &Capsule) -> Result<RustCrate
         grants = capsule.grants,
         fns = fns,
         newtypes = newtypes,
-    );
+    )
+}
 
-    let build_rs = format!(
+fn render_build_rs(capsule_hex: &str) -> String {
+    format!(
         "//! Generated build script: re-verifies the capsule payload via the\n\
          //! braid CLI when it is installed; warns (never fails) when absent.\n\
          fn main() {{\n\
@@ -221,12 +256,25 @@ pub fn elaborate(registry: &TermRegistry, capsule: &Capsule) -> Result<RustCrate
          \x20   }}\n\
          }}\n",
         hex = capsule_hex,
-    );
+    )
+}
 
-    let cargo_toml = format!(
+fn render_cargo_toml(capsule: &Capsule) -> String {
+    format!(
         "[package]\nname = \"braid-capsule-{cid}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\n",
         cid = capsule.cid().to_hex(),
-    );
+    )
+}
+
+/// Elaborate an admitted capsule into a deterministic Rust crate.
+pub fn elaborate(registry: &TermRegistry, capsule: &Capsule) -> Result<RustCrate, ElabError> {
+    verify_capsule_admission(registry, capsule)?;
+    let newtypes = render_newtypes(registry);
+    let fns = render_trait_methods(registry);
+    let capsule_hex = encode_capsule_hex(capsule);
+    let lib_rs = render_lib_rs(capsule, &fns, &newtypes);
+    let build_rs = render_build_rs(&capsule_hex);
+    let cargo_toml = render_cargo_toml(capsule);
 
     Ok(RustCrate {
         cargo_toml,
@@ -234,4 +282,35 @@ pub fn elaborate(registry: &TermRegistry, capsule: &Capsule) -> Result<RustCrate
         build_rs,
         capsule_hex,
     })
+}
+
+// ── Tests ───────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use braid_vocab_cms::{edit_section_capsule, registry_v0};
+
+    #[test]
+    fn admitted_capsule_elaborates_to_rust() {
+        let reg = registry_v0();
+        let cap = edit_section_capsule();
+        let krate = elaborate(&reg, &cap).expect("admitted capsule elaborates");
+        assert!(krate.cargo_toml.contains("braid-capsule-"));
+        assert!(krate.lib_rs.contains("pub trait BraidApi"));
+        assert!(krate.lib_rs.contains("pub struct CmsDirective;"));
+        assert!(krate.lib_rs.contains("pub struct CmsEntity;"));
+        assert!(krate.lib_rs.contains("fn cms_edit_section("));
+        assert!(krate.lib_rs.contains("fn view_section("));
+        assert!(krate.build_rs.contains("capsule.enc"));
+    }
+
+    #[test]
+    fn rejected_capsule_is_refused() {
+        let reg = registry_v0();
+        let mut cap = edit_section_capsule();
+        cap.budget = 1; // insufficient budget → Verifier rejects at Bounds
+        let err = elaborate(&reg, &cap).unwrap_err();
+        assert!(matches!(err, ElabError::Rejected { .. }));
+    }
 }

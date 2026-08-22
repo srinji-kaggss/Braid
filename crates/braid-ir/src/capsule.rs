@@ -47,8 +47,19 @@ pub struct Capsule {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CapsuleError {
     Canon(CanonError),
-    Malformed(&'static str),
+    Malformed { field: &'static str, at: &'static str },
 }
+
+impl core::fmt::Display for CapsuleError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Canon(err) => write!(f, "canon error: {err:?}"),
+            Self::Malformed { field, at } => write!(f, "malformed {field} at {at}"),
+        }
+    }
+}
+
+impl core::error::Error for CapsuleError {}
 
 impl From<CanonError> for CapsuleError {
     fn from(e: CanonError) -> Self {
@@ -58,7 +69,200 @@ impl From<CanonError> for CapsuleError {
 
 impl From<RegistryError> for CapsuleError {
     fn from(_: RegistryError) -> Self {
-        CapsuleError::Malformed("braid")
+        CapsuleError::Malformed {
+            field: "braid",
+            at: "Capsule::from_canon",
+        }
+    }
+}
+
+fn decode_u32_field(v: &Value, key: &'static str) -> Result<u32, CapsuleError> {
+    match v.get_field(key) {
+        Some(Value::Int(n)) if *n >= 0 && *n <= u32::MAX as i64 => Ok(*n as u32),
+        _ => Err(CapsuleError::Malformed {
+            field: key,
+            at: "decode_u32_field",
+        }),
+    }
+}
+
+fn decode_registry_cid(v: &Value) -> Result<Cid, CapsuleError> {
+    match v.get_field("registry_cid") {
+        Some(Value::Bytes(b)) if b.len() == 32 => {
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(b);
+            Ok(Cid(arr))
+        }
+        _ => Err(CapsuleError::Malformed {
+            field: "registry_cid",
+            at: "decode_registry_cid",
+        }),
+    }
+}
+
+fn decode_intent(v: &Value) -> Result<String, CapsuleError> {
+    match v.get_field("intent") {
+        Some(Value::Text(s)) => Ok(s.clone()),
+        _ => Err(CapsuleError::Malformed {
+            field: "intent",
+            at: "decode_intent",
+        }),
+    }
+}
+
+fn check_grant_ordering(prev: &Option<String>, name: &str) -> Result<(), CapsuleError> {
+    if let Some(p) = prev.as_ref() {
+        if p.as_str() >= name {
+            Err(CapsuleError::Malformed {
+                field: "grant order",
+                at: "decode_single_grant",
+            })
+        } else {
+            Ok(())
+        }
+    } else {
+        Ok(())
+    }
+}
+
+fn extract_grant_name(item: &Value) -> Result<String, CapsuleError> {
+    match item {
+        Value::Text(s) => Ok(s.clone()),
+        _ => Err(CapsuleError::Malformed {
+            field: "grant",
+            at: "decode_single_grant",
+        }),
+    }
+}
+
+fn parse_grant_capability(name: &str) -> Result<Capability, CapsuleError> {
+    match Capability::from_str(name) {
+        Ok(c) => Ok(c),
+        Err(_err) => Err(CapsuleError::Malformed {
+            field: "unknown grant",
+            at: "decode_single_grant",
+        }),
+    }
+}
+
+fn decode_single_grant(item: &Value, prev: &mut Option<String>) -> Result<Capability, CapsuleError> {
+    let name = extract_grant_name(item)?;
+    check_grant_ordering(prev, &name)?;
+    let cap = parse_grant_capability(&name)?;
+    *prev = Some(name);
+    Ok(cap)
+}
+
+fn decode_grants(v: &Value) -> Result<Vec<Capability>, CapsuleError> {
+    match v.get_field("grants") {
+        Some(Value::List(items)) => {
+            let mut out = Vec::with_capacity(items.len());
+            let mut prev = None;
+            for item in items {
+                out.push(decode_single_grant(item, &mut prev)?);
+            }
+            Ok(out)
+        }
+        _ => Err(CapsuleError::Malformed {
+            field: "grants",
+            at: "decode_grants",
+        }),
+    }
+}
+
+fn decode_braid(v: &Value) -> Result<Braid, CapsuleError> {
+    match v.get_field("braid") {
+        Some(b) => Ok(Braid::from_canon(b)?),
+        None => Err(CapsuleError::Malformed {
+            field: "braid",
+            at: "decode_braid",
+        }),
+    }
+}
+
+fn decode_budget(v: &Value) -> Result<u64, CapsuleError> {
+    match v.get_field("budget") {
+        Some(Value::Int(n)) if *n >= 0 => Ok(*n as u64),
+        _ => Err(CapsuleError::Malformed {
+            field: "budget",
+            at: "decode_budget",
+        }),
+    }
+}
+
+fn decode_confirm(v: &Value) -> Result<ConfirmPolicy, CapsuleError> {
+    match v.get_field("confirm") {
+        Some(Value::Text(s)) => match s.as_str() {
+            "none" => Ok(ConfirmPolicy::None),
+            "human-confirm" => Ok(ConfirmPolicy::HumanConfirm),
+            _ => Err(CapsuleError::Malformed {
+                field: "confirm",
+                at: "decode_confirm",
+            }),
+        },
+        _ => Err(CapsuleError::Malformed {
+            field: "confirm",
+            at: "decode_confirm",
+        }),
+    }
+}
+
+fn decode_evidence(v: &Value) -> Result<Vec<String>, CapsuleError> {
+    match v.get_field("evidence") {
+        Some(Value::List(items)) => items
+            .iter()
+            .map(|i| match i {
+                Value::Text(s) => Ok(s.clone()),
+                _ => Err(CapsuleError::Malformed {
+                    field: "evidence",
+                    at: "decode_evidence",
+                }),
+            })
+            .collect::<Result<Vec<_>, _>>(),
+        _ => Err(CapsuleError::Malformed {
+            field: "evidence",
+            at: "decode_evidence",
+        }),
+    }
+}
+
+fn decode_capsule_meta(v: &Value) -> Result<(u32, u32, Cid, String), CapsuleError> {
+    let ir_version = decode_u32_field(v, "ir_version")?;
+    let vocab_version = decode_u32_field(v, "vocab_version")?;
+    let registry_cid = decode_registry_cid(v)?;
+    let intent = decode_intent(v)?;
+    Ok((ir_version, vocab_version, registry_cid, intent))
+}
+
+type ExecutionFields = (Vec<Capability>, Braid, u64, ConfirmPolicy, Vec<String>);
+
+fn decode_capsule_execution(v: &Value) -> Result<ExecutionFields, CapsuleError> {
+    let grants = decode_grants(v)?;
+    let braid = decode_braid(v)?;
+    let budget = decode_budget(v)?;
+    let confirm = decode_confirm(v)?;
+    let evidence = decode_evidence(v)?;
+    Ok((grants, braid, budget, confirm, evidence))
+}
+
+fn check_capsule_key_universe(v: &Value) -> Result<(), CapsuleError> {
+    if !v.require_only_keys(&[
+        "braid",
+        "budget",
+        "grants",
+        "intent",
+        "confirm",
+        "evidence",
+        "ir_version",
+        "registry_cid",
+        "vocab_version",
+    ]) {
+        Err(CapsuleError::Malformed {
+            field: "capsule: unknown field",
+            at: "Capsule::from_canon",
+        })
+    } else {
+        Ok(())
     }
 }
 
@@ -103,93 +307,10 @@ impl Capsule {
     }
 
     pub fn from_canon(v: &Value) -> Result<Self, CapsuleError> {
-        let u32_field = |key: &'static str| -> Result<u32, CapsuleError> {
-            match v.get(key) {
-                Some(Value::Int(n)) if *n >= 0 && *n <= u32::MAX as i64 => Ok(*n as u32),
-                _ => Err(CapsuleError::Malformed(key)),
-            }
-        };
-        let ir_version = u32_field("ir_version")?;
-        let vocab_version = u32_field("vocab_version")?;
-        let registry_cid = match v.get("registry_cid") {
-            Some(Value::Bytes(b)) if b.len() == 32 => {
-                let mut arr = [0u8; 32];
-                arr.copy_from_slice(b);
-                Cid(arr)
-            }
-            _ => return Err(CapsuleError::Malformed("registry_cid")),
-        };
-        let intent = match v.get("intent") {
-            Some(Value::Text(s)) => s.clone(),
-            _ => return Err(CapsuleError::Malformed("intent")),
-        };
-        let grants = match v.get("grants") {
-            Some(Value::List(items)) => {
-                let mut out: Vec<Capability> = Vec::with_capacity(items.len());
-                let mut prev: Option<String> = None;
-                for it in items {
-                    let name = match it {
-                        Value::Text(s) => s.clone(),
-                        _ => return Err(CapsuleError::Malformed("grant")),
-                    };
-                    // Canonical: strictly increasing names ⇒ sorted + deduped.
-                    if let Some(p) = &prev {
-                        if p.as_str() >= name.as_str() {
-                            return Err(CapsuleError::Malformed("grant order"));
-                        }
-                    }
-                    let cap = Capability::from_str(&name)
-                        .map_err(|_| CapsuleError::Malformed("unknown grant"))?;
-                    prev = Some(name);
-                    out.push(cap);
-                }
-                out
-            }
-            _ => return Err(CapsuleError::Malformed("grants")),
-        };
-        let braid = match v.get("braid") {
-            Some(b) => Braid::from_canon(b)?,
-            None => return Err(CapsuleError::Malformed("braid")),
-        };
-        let budget = match v.get("budget") {
-            Some(Value::Int(n)) if *n >= 0 => *n as u64,
-            _ => return Err(CapsuleError::Malformed("budget")),
-        };
-        let confirm = match v.get("confirm") {
-            Some(Value::Text(s)) => match s.as_str() {
-                "none" => ConfirmPolicy::None,
-                "human-confirm" => ConfirmPolicy::HumanConfirm,
-                _ => return Err(CapsuleError::Malformed("confirm")),
-            },
-            _ => return Err(CapsuleError::Malformed("confirm")),
-        };
-        let evidence = match v.get("evidence") {
-            Some(Value::List(items)) => items
-                .iter()
-                .map(|i| match i {
-                    Value::Text(s) => Ok(s.clone()),
-                    _ => Err(CapsuleError::Malformed("evidence")),
-                })
-                .collect::<Result<Vec<_>, _>>()?,
-            _ => return Err(CapsuleError::Malformed("evidence")),
-        };
-        // Exactly the known fields — an extra key is a rejected byte form,
-        // not ignorable padding (T3: unknown fields are a smuggling channel).
-        // Allowlist (not a bare count) so a new field can never silently widen
-        // the gate; the required keys above already enforce presence.
-        if !v.require_only_keys(&[
-            "braid",
-            "budget",
-            "grants",
-            "intent",
-            "confirm",
-            "evidence",
-            "ir_version",
-            "registry_cid",
-            "vocab_version",
-        ]) {
-            return Err(CapsuleError::Malformed("capsule: unknown field"));
-        }
+        check_capsule_key_universe(v)?;
+        let (ir_version, vocab_version, registry_cid, intent) = decode_capsule_meta(v)?;
+        let (grants, braid, budget, confirm, evidence) = decode_capsule_execution(v)?;
+
         Ok(Capsule {
             ir_version,
             vocab_version,
@@ -211,8 +332,8 @@ impl Capsule {
     /// Strict parse: canonical bytes only (bijection-guarded), full shape
     /// validation. The authoring-side mirror of the verifier's stage 1.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, CapsuleError> {
-        let v = canon::decode_strict(bytes)?;
-        Self::from_canon(&v)
+        let canon_val = canon::decode_strict(bytes)?;
+        Self::from_canon(&canon_val)
     }
 
     /// Content address under [`CAPSULE_DOMAIN`].

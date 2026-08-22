@@ -11,6 +11,7 @@
 use braid_ir::term::EffectClass;
 use braid_ir::{Capsule, Cid, ConfirmPolicy, TermRegistry};
 use std::collections::BTreeSet;
+use std::fmt;
 
 /// The deterministic human-review object, derived from (capsule, registry).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,8 +39,21 @@ pub struct Manifest {
 pub enum RenderError {
     /// A strand references a term the registry doesn't know — a manifest for
     /// an unverifiable capsule must not exist (fail-closed, L9).
-    UnknownTerm(String),
+    UnknownTerm {
+        term: String,
+        at: &'static str,
+    },
 }
+
+impl fmt::Display for RenderError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnknownTerm { term, at } => write!(f, "unknown term `{term}` at {at}"),
+        }
+    }
+}
+
+impl std::error::Error for RenderError {}
 
 fn effect_name(e: EffectClass) -> &'static str {
     match e {
@@ -51,26 +65,46 @@ fn effect_name(e: EffectClass) -> &'static str {
     }
 }
 
-/// Derive the manifest. Same (capsule, registry) ⇒ same manifest, always.
-pub fn manifest(capsule: &Capsule, registry: &TermRegistry) -> Result<Manifest, RenderError> {
-    let mut effects = BTreeSet::new();
-    let mut irreversible = 0u32;
-    let mut egress = 0u32;
-    let mut total_cost = 0u64;
-    for s in &capsule.braid.strands {
-        let spec = registry
-            .get(&s.term)
-            .ok_or_else(|| RenderError::UnknownTerm(s.term.clone()))?;
-        effects.insert(effect_name(spec.effect).to_string());
-        match spec.effect {
-            EffectClass::Irreversible => irreversible += 1,
-            EffectClass::Egress => egress += 1,
-            _ => {}
-        }
-        total_cost = total_cost.saturating_add(spec.cost);
+#[derive(Default)]
+struct StrandStats {
+    effects: BTreeSet<String>,
+    irreversible: u32,
+    egress: u32,
+    total_cost: u64,
+}
+
+fn accumulate_strand_stat(
+    registry: &TermRegistry,
+    term: &str,
+    stats: &mut StrandStats,
+) -> Result<(), RenderError> {
+    let spec = registry.get(term).ok_or_else(|| RenderError::UnknownTerm {
+        term: term.to_string(),
+        at: "manifest",
+    })?;
+    stats.effects.insert(effect_name(spec.effect).to_string());
+    match spec.effect {
+        EffectClass::Irreversible => stats.irreversible += 1,
+        EffectClass::Egress => stats.egress += 1,
+        _ => {}
     }
+    stats.total_cost = stats.total_cost.saturating_add(spec.cost);
+    Ok(())
+}
+
+fn sorted_capabilities(capsule: &Capsule) -> Vec<String> {
     let mut capabilities: Vec<String> = capsule.grants.iter().map(|c| c.to_string()).collect();
     capabilities.sort();
+    capabilities
+}
+
+/// Derive the manifest. Same (capsule, registry) ⇒ same manifest, always.
+pub fn manifest(capsule: &Capsule, registry: &TermRegistry) -> Result<Manifest, RenderError> {
+    let mut stats = StrandStats::default();
+    for s in &capsule.braid.strands {
+        accumulate_strand_stat(registry, &s.term, &mut stats)?;
+    }
+    let capabilities = sorted_capabilities(capsule);
     Ok(Manifest {
         capsule_cid: capsule.cid(),
         intent: capsule.intent.clone(),
@@ -78,11 +112,11 @@ pub fn manifest(capsule: &Capsule, registry: &TermRegistry) -> Result<Manifest, 
         vocab_version: capsule.vocab_version,
         registry_cid: capsule.registry_cid,
         capabilities,
-        effects: effects.into_iter().collect(),
-        irreversible_strands: irreversible,
-        egress_strands: egress,
+        effects: stats.effects.into_iter().collect(),
+        irreversible_strands: stats.irreversible,
+        egress_strands: stats.egress,
         strand_count: capsule.braid.strands.len() as u32,
-        total_cost,
+        total_cost: stats.total_cost,
         budget: capsule.budget,
         confirm: capsule.confirm,
         evidence: capsule.evidence.clone(),
@@ -90,13 +124,7 @@ pub fn manifest(capsule: &Capsule, registry: &TermRegistry) -> Result<Manifest, 
 }
 
 /// Escape control characters in a manifest field value so a single logical
-/// field can NEVER produce more than one manifest line (threat R3: the
-/// manifest is the review object; a `\n` in `intent`/`evidence`/etc. would
-/// inject forged `capsule:`/`capabilities:` lines that a scanning reviewer
-/// could mistake for the real binding). The manifest is line-oriented
-/// `key: value`; the only raw newlines in the output are the ones this
-/// emitter inserts between fields. Backslash is escaped first so the mapping
-/// is unambiguous and reversible.
+/// field can NEVER produce more than one manifest line.
 fn escape_field(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
@@ -111,63 +139,53 @@ fn escape_field(s: &str) -> String {
     out
 }
 
+fn format_list_field(items: &[String]) -> String {
+    if items.is_empty() {
+        "(none)".into()
+    } else {
+        items.iter().map(|item| escape_field(item)).collect::<Vec<_>>().join(", ")
+    }
+}
+
+fn push_manifest_line(out: &mut String, k: &str, v: &str) {
+    out.push_str(k);
+    out.push_str(": ");
+    out.push_str(v);
+    out.push('\n');
+}
+
+fn render_header_lines(m: &Manifest, out: &mut String) {
+    push_manifest_line(out, "capsule", &m.capsule_cid.to_hex());
+    push_manifest_line(out, "intent", &escape_field(&m.intent));
+    push_manifest_line(out, "ir_version", &m.ir_version.to_string());
+    push_manifest_line(out, "vocab_version", &m.vocab_version.to_string());
+    push_manifest_line(out, "registry", &m.registry_cid.to_hex());
+}
+
+fn render_strand_metrics(m: &Manifest, out: &mut String) {
+    push_manifest_line(out, "capabilities", &format_list_field(&m.capabilities));
+    push_manifest_line(out, "effects", &format_list_field(&m.effects));
+    push_manifest_line(out, "irreversible_strands", &m.irreversible_strands.to_string());
+    push_manifest_line(out, "egress_strands", &m.egress_strands.to_string());
+}
+
+fn render_policy_metrics(m: &Manifest, out: &mut String) {
+    push_manifest_line(out, "strands", &m.strand_count.to_string());
+    push_manifest_line(out, "cost", &format!("{} / budget {}", m.total_cost, m.budget));
+    let confirm_str = match m.confirm {
+        ConfirmPolicy::None => "none",
+        ConfirmPolicy::HumanConfirm => "human-confirm",
+    };
+    push_manifest_line(out, "confirm", confirm_str);
+    push_manifest_line(out, "evidence", &format_list_field(&m.evidence));
+}
+
 /// Deterministic text rendering — what a reviewer (or a PR diff) reads.
 pub fn render_text(m: &Manifest) -> String {
     let mut out = String::new();
-    let mut line = |k: &str, v: String| {
-        out.push_str(k);
-        out.push_str(": ");
-        out.push_str(&v);
-        out.push('\n');
-    };
-    line("capsule", m.capsule_cid.to_hex());
-    line("intent", escape_field(&m.intent));
-    line("ir_version", m.ir_version.to_string());
-    line("vocab_version", m.vocab_version.to_string());
-    line("registry", m.registry_cid.to_hex());
-    line(
-        "capabilities",
-        if m.capabilities.is_empty() {
-            "(none)".into()
-        } else {
-            m.capabilities
-                .iter()
-                .map(|c| escape_field(c))
-                .collect::<Vec<_>>()
-                .join(", ")
-        },
-    );
-    line(
-        "effects",
-        m.effects
-            .iter()
-            .map(|e| escape_field(e))
-            .collect::<Vec<_>>()
-            .join(", "),
-    );
-    line("irreversible_strands", m.irreversible_strands.to_string());
-    line("egress_strands", m.egress_strands.to_string());
-    line("strands", m.strand_count.to_string());
-    line("cost", format!("{} / budget {}", m.total_cost, m.budget));
-    line(
-        "confirm",
-        match m.confirm {
-            ConfirmPolicy::None => "none".into(),
-            ConfirmPolicy::HumanConfirm => "human-confirm".into(),
-        },
-    );
-    line(
-        "evidence",
-        if m.evidence.is_empty() {
-            "(none)".into()
-        } else {
-            m.evidence
-                .iter()
-                .map(|e| escape_field(e))
-                .collect::<Vec<_>>()
-                .join(", ")
-        },
-    );
+    render_header_lines(m, &mut out);
+    render_strand_metrics(m, &mut out);
+    render_policy_metrics(m, &mut out);
     out
 }
 
@@ -188,56 +206,45 @@ pub struct Delta {
     pub detail: String,
 }
 
-/// Mechanical widening classification (T12): authority and effect growth are
-/// facts the gate computes, never impressions a tired reviewer forms.
-pub fn manifest_diff(old: &Manifest, new: &Manifest) -> Vec<Delta> {
-    let mut deltas = Vec::new();
-    let set = |v: &[String]| -> BTreeSet<String> { v.iter().cloned().collect() };
-
-    if old.capsule_cid != new.capsule_cid {
-        deltas.push(Delta {
-            kind: DeltaKind::Neutral,
-            field: "capsule",
-            detail: format!(
-                "{} -> {}",
-                old.capsule_cid.to_hex(),
-                new.capsule_cid.to_hex()
-            ),
-        });
-    }
-
-    let (old_caps, new_caps) = (set(&old.capabilities), set(&new.capabilities));
-    for added in new_caps.difference(&old_caps) {
+fn diff_capabilities(old: &Manifest, new: &Manifest, deltas: &mut Vec<Delta>) {
+    let old_set: BTreeSet<String> = old.capabilities.iter().cloned().collect();
+    let new_set: BTreeSet<String> = new.capabilities.iter().cloned().collect();
+    for added in new_set.difference(&old_set) {
         deltas.push(Delta {
             kind: DeltaKind::Widening,
             field: "capabilities",
             detail: format!("+{added}"),
         });
     }
-    for removed in old_caps.difference(&new_caps) {
+    for removed in old_set.difference(&new_set) {
         deltas.push(Delta {
             kind: DeltaKind::Narrowing,
             field: "capabilities",
             detail: format!("-{removed}"),
         });
     }
+}
 
-    let (old_fx, new_fx) = (set(&old.effects), set(&new.effects));
-    for added in new_fx.difference(&old_fx) {
+fn diff_effects(old: &Manifest, new: &Manifest, deltas: &mut Vec<Delta>) {
+    let old_set: BTreeSet<String> = old.effects.iter().cloned().collect();
+    let new_set: BTreeSet<String> = new.effects.iter().cloned().collect();
+    for added in new_set.difference(&old_set) {
         deltas.push(Delta {
             kind: DeltaKind::Widening,
             field: "effects",
             detail: format!("+{added}"),
         });
     }
-    for removed in old_fx.difference(&new_fx) {
+    for removed in old_set.difference(&new_set) {
         deltas.push(Delta {
             kind: DeltaKind::Narrowing,
             field: "effects",
             detail: format!("-{removed}"),
         });
     }
+}
 
+fn diff_budget(old: &Manifest, new: &Manifest, deltas: &mut Vec<Delta>) {
     if new.budget > old.budget {
         deltas.push(Delta {
             kind: DeltaKind::Widening,
@@ -251,10 +258,9 @@ pub fn manifest_diff(old: &Manifest, new: &Manifest) -> Vec<Delta> {
             detail: format!("{} -> {}", old.budget, new.budget),
         });
     }
+}
 
-    // Dropping human confirmation is the sharpest widening there is — but
-    // only while the NEW capsule still contains dangerous strands; a capsule
-    // that no longer has anything to confirm hasn't widened by not asking.
+fn diff_confirm(old: &Manifest, new: &Manifest, deltas: &mut Vec<Delta>) {
     if old.confirm == ConfirmPolicy::HumanConfirm && new.confirm == ConfirmPolicy::None {
         let still_dangerous = new.irreversible_strands + new.egress_strands > 0;
         deltas.push(Delta {
@@ -273,7 +279,16 @@ pub fn manifest_diff(old: &Manifest, new: &Manifest) -> Vec<Delta> {
             detail: "none -> human-confirm".into(),
         });
     }
+}
 
+fn diff_meta_fields(old: &Manifest, new: &Manifest, deltas: &mut Vec<Delta>) {
+    if old.capsule_cid != new.capsule_cid {
+        deltas.push(Delta {
+            kind: DeltaKind::Neutral,
+            field: "capsule",
+            detail: format!("{} -> {}", old.capsule_cid.to_hex(), new.capsule_cid.to_hex()),
+        });
+    }
     if old.intent != new.intent {
         deltas.push(Delta {
             kind: DeltaKind::Neutral,
@@ -281,6 +296,16 @@ pub fn manifest_diff(old: &Manifest, new: &Manifest) -> Vec<Delta> {
             detail: "changed".into(),
         });
     }
+    if old.evidence != new.evidence {
+        deltas.push(Delta {
+            kind: DeltaKind::Neutral,
+            field: "evidence",
+            detail: "changed".into(),
+        });
+    }
+}
+
+fn diff_strand_counts(old: &Manifest, new: &Manifest, deltas: &mut Vec<Delta>) {
     if old.strand_count != new.strand_count {
         deltas.push(Delta {
             kind: DeltaKind::Neutral,
@@ -295,6 +320,9 @@ pub fn manifest_diff(old: &Manifest, new: &Manifest) -> Vec<Delta> {
             detail: format!("{} -> {}", old.total_cost, new.total_cost),
         });
     }
+}
+
+fn diff_effect_strand_counts(old: &Manifest, new: &Manifest, deltas: &mut Vec<Delta>) {
     if old.irreversible_strands != new.irreversible_strands {
         deltas.push(Delta {
             kind: DeltaKind::Neutral,
@@ -312,13 +340,19 @@ pub fn manifest_diff(old: &Manifest, new: &Manifest) -> Vec<Delta> {
             detail: format!("{} -> {}", old.egress_strands, new.egress_strands),
         });
     }
-    if old.evidence != new.evidence {
-        deltas.push(Delta {
-            kind: DeltaKind::Neutral,
-            field: "evidence",
-            detail: "changed".into(),
-        });
-    }
+}
+
+/// Mechanical widening classification (T12): authority and effect growth are
+/// facts the gate computes, never impressions a tired reviewer forms.
+pub fn manifest_diff(old: &Manifest, new: &Manifest) -> Vec<Delta> {
+    let mut deltas = Vec::new();
+    diff_meta_fields(old, new, &mut deltas);
+    diff_strand_counts(old, new, &mut deltas);
+    diff_effect_strand_counts(old, new, &mut deltas);
+    diff_capabilities(old, new, &mut deltas);
+    diff_effects(old, new, &mut deltas);
+    diff_budget(old, new, &mut deltas);
+    diff_confirm(old, new, &mut deltas);
     deltas
 }
 
@@ -329,26 +363,43 @@ pub fn has_widening(deltas: &[Delta]) -> bool {
 
 // ───────────────────────────── graph export ─────────────────────────────
 
+fn render_dot_strand(
+    out: &mut String,
+    strand_idx: usize,
+    term: &str,
+    spec_effect: EffectClass,
+    inputs: &[u32],
+) {
+    out.push_str(&format!(
+        "  s{strand_idx} [label=\"{strand_idx}: {} [{}]\"];\n",
+        term,
+        effect_name(spec_effect)
+    ));
+    for &input_idx in inputs {
+        out.push_str(&format!("  s{input_idx} -> s{strand_idx};\n"));
+    }
+}
+
+fn render_dot_output_nodes(out: &mut String, outputs: &[u32]) {
+    for &o in outputs {
+        out.push_str(&format!("  s{o} [peripheries=2];\n"));
+    }
+}
+
 /// Deterministic DOT export of the strand DAG (D17). Node label = index +
 /// term id + effect class; edges follow value flow.
 pub fn to_dot(capsule: &Capsule, registry: &TermRegistry) -> Result<String, RenderError> {
     let mut out = String::from("digraph braid {\n  rankdir=LR;\n");
-    for (i, s) in capsule.braid.strands.iter().enumerate() {
+    for (strand_idx, s) in capsule.braid.strands.iter().enumerate() {
         let spec = registry
             .get(&s.term)
-            .ok_or_else(|| RenderError::UnknownTerm(s.term.clone()))?;
-        out.push_str(&format!(
-            "  s{i} [label=\"{i}: {} [{}]\"];\n",
-            s.term,
-            effect_name(spec.effect)
-        ));
-        for &input_idx in &s.inputs {
-            out.push_str(&format!("  s{input_idx} -> s{i};\n"));
-        }
+            .ok_or_else(|| RenderError::UnknownTerm {
+                term: s.term.clone(),
+                at: "to_dot",
+            })?;
+        render_dot_strand(&mut out, strand_idx, &s.term, spec.effect, &s.inputs);
     }
-    for &o in &capsule.braid.outputs {
-        out.push_str(&format!("  s{o} [peripheries=2];\n"));
-    }
+    render_dot_output_nodes(&mut out, &capsule.braid.outputs);
     out.push_str("}\n");
     Ok(out)
 }

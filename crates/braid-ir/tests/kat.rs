@@ -50,7 +50,7 @@ fn capsule_bytes_known_answer() {
     let v = read_vectors();
     let capsule = edit_section_capsule();
     assert_eq!(
-        hex::encode(capsule.to_bytes()),
+        lgwks_std::hex::encode(capsule.to_bytes()),
         v["capsule_bytes_hex"],
         "capsule canonical bytes moved — IR_VERSION event"
     );
@@ -66,7 +66,7 @@ fn capsule_cid_known_answer() {
 #[test]
 fn capsule_round_trips_from_pinned_bytes() {
     let v = read_vectors();
-    let bytes = hex::decode(&v["capsule_bytes_hex"]).unwrap();
+    let bytes = lgwks_std::hex::decode(&v["capsule_bytes_hex"]).unwrap();
     let parsed = Capsule::from_bytes(&bytes).expect("pinned bytes are canonical");
     assert_eq!(parsed, edit_section_capsule());
 }
@@ -80,6 +80,9 @@ fn print_kat_values() {
     println!("# Braid v0 known-answer vectors — ADR-088 D8.");
     println!("# Regenerating these is an IR_VERSION event (D11), never routine.");
     println!("registry_cid_hex = {}", registry_v0().cid().to_hex());
-    println!("capsule_bytes_hex = {}", hex::encode(capsule.to_bytes()));
+    println!(
+        "capsule_bytes_hex = {}",
+        lgwks_std::hex::encode(capsule.to_bytes())
+    );
     println!("capsule_cid_hex = {}", capsule.cid().to_hex());
 }

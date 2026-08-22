@@ -1,0 +1,33 @@
+[package]
+name = "lgwks_std"
+description = "std+ — the estate's one approved non-std surface. Declarative primitives for identity, hashing, encoding, pattern matching, time, serialization, async execution, and error handling."
+version = "0.3.0"
+edition = "2021"
+rust-version = "1.97"
+license = "MPL-2.0"
+repository = "https://github.com/logicalworks/lgwks-std"
+categories = ["development-tools", "encoding", "asynchronous"]
+keywords = ["stdlib", "utilities", "zero-config", "async", "serialization"]
+
+# INV-STDPLUS-APPROVED-ONLY: every dependency here is a vetted leaf or
+# single-purpose stack with zero further external deps. The gate test
+# `deps_are_approved_leaves` in ../lgwks-std-gate/src/lib.rs reads this
+# file and verifies each entry is on the approved list.
+#
+# APPROVED STACK (2026-08-22, Director-authorized):
+#   blake3        — 3 zero-dep leaves (arrayvec, cfg-if, constant_time_eq)
+#   regex         — 4 BurntSushi-internal crates, zero external deps
+#   rkyv          — 5 djkoloski crates (rend, ptr_meta, rancor, munge + derive)
+#                   proc-macro stack shared with serde
+#   serde         — 1 crate + derive (proc-macro2, quote, syn — same stack)
+#   serde_json    — 2 crates beyond serde (itoa, ryu — both zero-dep leaves)
+#                   reuses memchr from regex tree
+[dependencies]
+blake3 = { version = "1.8", default-features = false }
+regex = "1.13"
+rkyv = { version = "0.8", default-features = false, features = ["alloc", "bytecheck"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+tempfile = "3.20"

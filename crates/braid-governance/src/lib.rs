@@ -6,10 +6,10 @@
 //! envelope, then fail-closes every proposed authoring action against it.
 
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use lgwks_std::hex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
-use thiserror::Error;
 
 pub const CHANGE_ENVELOPE_VERSION: u32 = 1;
 const DIGEST_DOMAIN: &[u8] = b"keel.change-envelope.v1\0";
@@ -98,33 +98,52 @@ pub struct SessionUsage {
     pub effectful_tool_calls: u32,
 }
 
-#[derive(Debug, Error, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum GovernanceError {
-    #[error("unsupported change-envelope version {0}")]
     UnsupportedVersion(u32),
-    #[error("missing required field: {0}")]
     MissingField(&'static str),
-    #[error("invalid SHA-256 field: {0}")]
     InvalidSha256(&'static str),
-    #[error("invalid hex field: {0}")]
     InvalidHex(&'static str),
-    #[error("invalid Ed25519 verifying key")]
     InvalidVerifyingKey,
-    #[error("invalid Ed25519 signature")]
     InvalidSignature,
-    #[error("serialization failed: {0}")]
     Serialization(String),
-    #[error("generation action denied: {0}")]
     Denied(String),
-    #[error("design commitment is outside the admitted envelope: {0}")]
     InvalidCommitment(&'static str),
-    #[error("resource budget exceeded: {0}")]
     BudgetExceeded(&'static str),
-    #[error("expires_at not in strict UTC 'YYYY-MM-DDTHH:MM:SSZ' form: {0}")]
     MalformedExpiry(&'static str),
-    #[error("envelope expired at unix {0}")]
     Expired(u64),
 }
+
+impl std::fmt::Display for GovernanceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnsupportedVersion(v) => write!(f, "unsupported change-envelope version {v}"),
+            Self::MissingField(field) => write!(f, "missing required field: {field}"),
+            Self::InvalidSha256(field) => write!(f, "invalid SHA-256 field: {field}"),
+            Self::InvalidHex(field) => write!(f, "invalid hex field: {field}"),
+            Self::InvalidVerifyingKey => write!(f, "invalid Ed25519 verifying key"),
+            Self::InvalidSignature => write!(f, "invalid Ed25519 signature"),
+            Self::Serialization(msg) => write!(f, "serialization failed: {msg}"),
+            Self::Denied(msg) => write!(f, "generation action denied: {msg}"),
+            Self::InvalidCommitment(field) => {
+                write!(
+                    f,
+                    "design commitment is outside the admitted envelope: {field}"
+                )
+            }
+            Self::BudgetExceeded(field) => write!(f, "resource budget exceeded: {field}"),
+            Self::MalformedExpiry(msg) => {
+                write!(
+                    f,
+                    "expires_at not in strict UTC 'YYYY-MM-DDTHH:MM:SSZ' form: {msg}"
+                )
+            }
+            Self::Expired(unix) => write!(f, "envelope expired at unix {unix}"),
+        }
+    }
+}
+
+impl std::error::Error for GovernanceError {}
 
 impl ChangeEnvelope {
     pub fn validate(&self) -> Result<(), GovernanceError> {

@@ -134,9 +134,9 @@ fn dot_export_is_deterministic_and_structural() {
 // value may become a line break. Regression for the closed R3 finding.
 
 fn capsule_with_intent(intent: &str) -> braid_ir::Capsule {
-    let mut c = edit_section_capsule();
-    c.intent = intent.into();
-    c
+    let mut capsule = edit_section_capsule();
+    capsule.intent = intent.into();
+    capsule
 }
 
 #[test]

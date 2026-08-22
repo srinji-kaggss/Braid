@@ -42,7 +42,7 @@ fn parity_on_the_pinned_kat_vector() {
         .lines()
         .find_map(|l| l.strip_prefix("capsule_bytes_hex = "))
         .expect("capsule_bytes_hex line");
-    let bytes = hex::decode(hex_bytes.trim()).unwrap();
+    let bytes = lgwks_std::hex::decode(hex_bytes.trim()).unwrap();
     let v = decode_canonical(&bytes).expect("pinned vector decodes");
     let mut re = Vec::new();
     reencode(&v, &mut re);
@@ -52,19 +52,25 @@ fn parity_on_the_pinned_kat_vector() {
 #[test]
 fn verify_decoder_rejects_the_malleability_set() {
     use braid_verify::decode::DecodeError;
-    assert_eq!(
+    assert!(matches!(
         decode_canonical(&[0x18, 0x05]),
-        Err(DecodeError::NonMinimal)
-    );
+        Err(DecodeError::NonMinimal { .. })
+    ));
     assert!(matches!(
         decode_canonical(&[0xf6]),
-        Err(DecodeError::Forbidden(_))
+        Err(DecodeError::Forbidden { .. })
     ));
     assert!(matches!(
         decode_canonical(&[0xfb, 0, 0, 0, 0, 0, 0, 0, 0]),
-        Err(DecodeError::Forbidden(_))
+        Err(DecodeError::Forbidden { .. })
     ));
-    assert_eq!(decode_canonical(&[0x01, 0x00]), Err(DecodeError::Trailing));
+    assert!(matches!(
+        decode_canonical(&[0x01, 0x00]),
+        Err(DecodeError::Trailing { .. })
+    ));
     let unordered = [0xa2, 0x61, b'b', 0x01, 0x61, b'a', 0x02];
-    assert_eq!(decode_canonical(&unordered), Err(DecodeError::KeyOrder));
+    assert!(matches!(
+        decode_canonical(&unordered),
+        Err(DecodeError::KeyOrder { .. })
+    ));
 }

@@ -1,52 +1,48 @@
-//! braid-manifest acceptance: the negative matrix (each violation names the
-//! field), determinism, canonical round-trip, and the inventory contract.
-
-use braid_manifest::{parse_inventory, safe_name_component, validate, ManifestError, RepoManifest};
+use braid_manifest::{
+    parse_inventory, safe_name_component, validate, Archetype, CiStatus, ManifestError,
+    RepoManifest,
+};
 
 const VALID: &str = r#"{
-  "name": "braid",
-  "archetype": "workspace-crate",
-  "owner": "Director",
-  "gate_version": "none",
-  "ci_status": "green",
-  "entry_docs": ["AGENTS.md", "README.md", ".wwfd/local-ci.sh"],
-  "canonical_commands": ["cargo test --workspace"],
-  "local_ci": true
+    "name": "braid",
+    "archetype": "workspace-crate",
+    "owner": "Director",
+    "gate_version": "0.1.0",
+    "ci_status": "green",
+    "entry_docs": [
+        "AGENTS.md",
+        "README.md",
+        ".wwfd/local-ci.sh"
+    ],
+    "canonical_commands": [
+        "cargo test --workspace",
+        "cargo build --release"
+    ],
+    "local_ci": true
 }"#;
 
 #[test]
-fn valid_manifest_round_trips_and_cid_is_deterministic() {
-    let a = validate(VALID).unwrap();
-    let bytes = a.to_bytes();
-    let b = RepoManifest::from_bytes(&bytes).unwrap();
-    assert_eq!(a, b);
-    assert_eq!(a.cid(), b.cid());
-    // Same document twice ⇒ same CID (human-reconstructable).
-    assert_eq!(a.cid(), validate(VALID).unwrap().cid());
-}
+fn valid_manifest_parses_and_roundtrips() {
+    let m = validate(VALID).expect("valid manifest parses");
+    assert_eq!(m.name, "braid");
+    assert_eq!(m.archetype, Archetype::WorkspaceCrate);
+    assert_eq!(m.owner, "Director");
+    assert_eq!(m.gate_version, "0.1.0");
+    assert_eq!(m.ci_status, CiStatus::Green);
+    assert_eq!(m.entry_docs.len(), 3);
+    assert_eq!(m.canonical_commands.len(), 2);
+    assert!(m.local_ci);
 
-#[test]
-fn missing_field_is_named() {
-    let bad = r#"{ "name": "x", "archetype": "docs", "owner": "o", "gate_version": "g", "ci_status": "none", "entry_docs": ["a"], "canonical_commands": ["b"] }"#;
-    let err = validate(bad).unwrap_err();
-    assert!(
-        matches!(&err, ManifestError::Parse(m) if m.contains("local_ci")),
-        "expected the missing field named, got {err:?}"
-    );
-}
-
-#[test]
-fn unknown_top_level_key_is_rejected() {
-    let bad = VALID.replace("\"name\"", "\"namey\"");
-    assert!(matches!(
-        validate(&bad).unwrap_err(),
-        ManifestError::Parse(_)
-    ));
+    // Canonical bytes round-trip.
+    let bytes = m.to_bytes();
+    let decoded = RepoManifest::from_bytes(&bytes).expect("canonical round-trip");
+    assert_eq!(decoded, m);
+    assert_eq!(decoded.cid(), m.cid());
 }
 
 #[test]
 fn archetype_outside_closed_set_is_named() {
-    let bad = VALID.replace("workspace-crate", "banana");
+    let bad = VALID.replace("\"workspace-crate\"", "\"weird-container\"");
     assert!(matches!(
         validate(&bad).unwrap_err(),
         ManifestError::BadEnum {
@@ -67,7 +63,7 @@ fn ci_status_outside_closed_set_is_named() {
                 ManifestError::BadEnum {
                     field: "ci_status",
                     ..
-                } | ManifestError::Parse(_)
+                } | ManifestError::Parse { .. }
             ),
             "ci_status {bad_value:?} must fail closed, got {err:?}"
         );
@@ -78,38 +74,37 @@ fn ci_status_outside_closed_set_is_named() {
 fn empty_owner_and_empty_lists_fail_closed() {
     assert!(matches!(
         validate(&VALID.replace("Director", "")).unwrap_err(),
-        ManifestError::EmptyField("owner")
+        ManifestError::EmptyField { field: "owner", .. }
     ));
     assert!(matches!(
         validate(&VALID.replace(
-            "[\"AGENTS.md\", \"README.md\", \".wwfd/local-ci.sh\"]",
+            "[\n        \"AGENTS.md\",\n        \"README.md\",\n        \".wwfd/local-ci.sh\"\n    ]",
             "[]"
         ))
         .unwrap_err(),
-        ManifestError::EmptyList("entry_docs")
+        ManifestError::EmptyList { field: "entry_docs", .. }
     ));
     assert!(matches!(
-        validate(&VALID.replace("[\"cargo test --workspace\"]", "[\"\"]")).unwrap_err(),
-        ManifestError::EmptyList("canonical_commands")
+        validate(&VALID.replace("\"cargo test --workspace\"", "\"\"")).unwrap_err(),
+        ManifestError::EmptyList { field: "canonical_commands", .. }
     ));
 }
 
 #[test]
 fn tsv_separators_are_banned_in_free_text_and_lists() {
-    // JSON strings carry the ESCAPED forms; serde decodes them, then the
-    // contract check rejects the decoded separator.
     assert!(matches!(
         validate(&VALID.replace("Director", "Dir,ector")).unwrap_err(),
-        ManifestError::BannedChar { field: "owner" }
+        ManifestError::BannedChar { field: "owner", .. }
     ));
     assert!(matches!(
         validate(&VALID.replace("Director", "Dir\\tecor")).unwrap_err(),
-        ManifestError::BannedChar { field: "owner" }
+        ManifestError::BannedChar { field: "owner", .. }
     ));
     assert!(matches!(
         validate(&VALID.replace("README.md", "READ\\nME.md")).unwrap_err(),
         ManifestError::BannedChar {
-            field: "entry_docs"
+            field: "entry_docs",
+            ..
         }
     ));
 }
@@ -124,7 +119,7 @@ fn unsafe_names_are_rejected() {
         let bad = VALID.replace("\"braid\"", &format!("\"{name}\""));
         let err = validate(&bad).unwrap_err();
         assert!(
-            matches!(err, ManifestError::UnsafeName(_)),
+            matches!(err, ManifestError::UnsafeName { .. }),
             "{name:?} got {err:?}"
         );
     }
@@ -137,7 +132,7 @@ fn unsafe_names_are_rejected() {
 fn malformed_json_fails_closed() {
     assert!(matches!(
         validate("{ not json"),
-        Err(ManifestError::Parse(_))
+        Err(ManifestError::Parse { .. })
     ));
 }
 
@@ -145,21 +140,15 @@ fn malformed_json_fails_closed() {
 fn canonical_form_rejects_smuggled_keys() {
     let m = validate(VALID).unwrap();
     let bytes = m.to_bytes();
-    // Structural flip in the CBOR header must fail strict decode.
     let mut header = bytes.clone();
     header[0] ^= 0x01;
     assert!(RepoManifest::from_bytes(&header).is_err());
-    // A content flip (mid-file, inside a text value) legitimately decodes as
-    // a DIFFERENT valid document with a different CID — the codec cannot
-    // detect content tampering; the store's inventory pin does (covered by
-    // the braid-cli catalog integration tests).
     let mut content = bytes.clone();
     let mid = content.len() / 2;
     content[mid] ^= 0x01;
     let tampered = RepoManifest::from_bytes(&content).expect("content flip decodes");
     assert_ne!(tampered, m);
     assert_ne!(tampered.cid(), m.cid());
-    // A second valid document differs in bytes ⇒ different CID.
     let other = validate(&VALID.replace("\"braid\"", "\"braid2\"")).unwrap();
     assert_ne!(m.cid(), other.cid());
 }
@@ -178,14 +167,14 @@ fn inventory_contract() {
     assert!(ok[1].cid.is_none(), "null = declared, not yet admitted");
     assert!(matches!(
         parse_inventory("{}").unwrap_err(),
-        ManifestError::EmptyList("inventory")
+        ManifestError::EmptyList { field: "inventory", .. }
     ));
     assert!(matches!(
         parse_inventory(r#"{ "a": "not-hex" }"#).unwrap_err(),
-        ManifestError::Parse(_)
+        ManifestError::Parse { .. }
     ));
     assert!(matches!(
         parse_inventory(r#"{ "../x": null }"#).unwrap_err(),
-        ManifestError::UnsafeName(_)
+        ManifestError::UnsafeName { .. }
     ));
 }

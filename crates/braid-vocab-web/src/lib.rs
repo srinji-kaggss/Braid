@@ -64,10 +64,8 @@ fn cap(name: &'static str) -> Capability {
     Capability::new(name)
 }
 
-// One positional row per term keeps the registry readable as a table.
-#[allow(clippy::too_many_arguments)]
-fn t(
-    id: &str,
+struct TermDecl {
+    id: &'static str,
     inputs: Vec<TypeTag>,
     output: TypeTag,
     capability: Option<Capability>,
@@ -75,16 +73,18 @@ fn t(
     source_exposure: Exposure,
     egress_ceiling: Option<Exposure>,
     cost: u64,
-) -> TermSpec {
+}
+
+fn t(decl: TermDecl) -> TermSpec {
     TermSpec {
-        id: id.into(),
-        inputs,
-        output,
-        capability,
-        effect,
-        source_exposure,
-        egress_ceiling,
-        cost,
+        id: decl.id.into(),
+        inputs: decl.inputs,
+        output: decl.output,
+        capability: decl.capability,
+        effect: decl.effect,
+        source_exposure: decl.source_exposure,
+        egress_ceiling: decl.egress_ceiling,
+        cost: decl.cost,
     }
 }
 
@@ -109,106 +109,121 @@ pub fn dangerous_terms(r: &TermRegistry) -> Vec<String> {
 /// satisfy `TermRegistry::insert`'s invariants (pinned by a unit test).
 ///
 /// The id set is exactly AX-Browser's closed `web.*` action vocabulary (A5).
-pub fn registry_v0() -> TermRegistry {
+fn dom_specs() -> Vec<TermSpec> {
     use EffectClass::*;
     use Exposure::*;
     use TypeTag::*;
 
-    let specs = vec![
-        // load a URL → the loaded document element. A read of the open web.
-        t(
-            "web.navigate",
-            vec![Text],
-            element(),
-            Some(cap(NAVIGATE_NAME)),
-            Read,
-            Public,
-            None,
-            3,
-        ),
-        // observe an element → a sealed observation fact.
-        t(
-            "web.observe",
-            vec![element()],
-            observation(),
-            Some(cap(OBSERVE_NAME)),
-            Read,
-            Internal,
-            None,
-            2,
-        ),
-        // reversible DOM interactions → an outcome observation.
-        t(
-            "web.click",
-            vec![element()],
-            observation(),
-            Some(cap(INTERACT_NAME)),
-            ReversibleWrite,
-            Internal,
-            None,
-            3,
-        ),
-        t(
-            "web.type",
-            vec![element(), Text],
-            observation(),
-            Some(cap(INTERACT_NAME)),
-            ReversibleWrite,
-            Internal,
-            None,
-            3,
-        ),
-        t(
-            "web.scroll",
-            vec![element()],
-            observation(),
-            Some(cap(INTERACT_NAME)),
-            ReversibleWrite,
-            Internal,
-            None,
-            2,
-        ),
-        // pure wait (no authority, no effect) — Pure ⟺ no capability.
-        t("web.wait", vec![Int], Bool, None, Pure, Public, None, 1),
-        // the single irreversible host-write: a download. egress_ceiling
-        // required for Irreversible.
-        t(
-            "web.download",
-            vec![Text],
-            Cid,
-            Some(cap(FS_WRITE_NAME)),
-            Irreversible,
-            Internal,
-            Some(Internal),
-            13,
-        ),
-        // bounded untrusted local compute. NOT Egress: a realm holding only
-        // web.compute.local cannot reach the network (egress is a separate
-        // capability), so running untrusted code cannot itself exfiltrate.
-        t(
-            "web.execute_js",
-            vec![Text],
-            observation(),
-            Some(cap(COMPUTE_LOCAL_NAME)),
-            ReversibleWrite,
-            Internal,
-            None,
-            8,
-        ),
-        t(
-            "web.execute_wasm",
-            vec![Bytes],
-            observation(),
-            Some(cap(COMPUTE_LOCAL_NAME)),
-            ReversibleWrite,
-            Internal,
-            None,
-            8,
-        ),
-    ];
+    vec![
+        t(TermDecl {
+            id: "web.navigate",
+            inputs: vec![Text],
+            output: element(),
+            capability: Some(cap(NAVIGATE_NAME)),
+            effect: Read,
+            source_exposure: Public,
+            egress_ceiling: None,
+            cost: 3,
+        }),
+        t(TermDecl {
+            id: "web.observe",
+            inputs: vec![element()],
+            output: observation(),
+            capability: Some(cap(OBSERVE_NAME)),
+            effect: Read,
+            source_exposure: Internal,
+            egress_ceiling: None,
+            cost: 2,
+        }),
+        t(TermDecl {
+            id: "web.click",
+            inputs: vec![element()],
+            output: observation(),
+            capability: Some(cap(INTERACT_NAME)),
+            effect: ReversibleWrite,
+            source_exposure: Internal,
+            egress_ceiling: None,
+            cost: 3,
+        }),
+        t(TermDecl {
+            id: "web.type",
+            inputs: vec![element(), Text],
+            output: observation(),
+            capability: Some(cap(INTERACT_NAME)),
+            effect: ReversibleWrite,
+            source_exposure: Internal,
+            egress_ceiling: None,
+            cost: 3,
+        }),
+        t(TermDecl {
+            id: "web.scroll",
+            inputs: vec![element()],
+            output: observation(),
+            capability: Some(cap(INTERACT_NAME)),
+            effect: ReversibleWrite,
+            source_exposure: Internal,
+            egress_ceiling: None,
+            cost: 2,
+        }),
+    ]
+}
 
+fn compute_specs() -> Vec<TermSpec> {
+    use EffectClass::*;
+    use Exposure::*;
+    use TypeTag::*;
+
+    vec![
+        t(TermDecl {
+            id: "web.wait",
+            inputs: vec![Int],
+            output: Bool,
+            capability: None,
+            effect: Pure,
+            source_exposure: Public,
+            egress_ceiling: None,
+            cost: 1,
+        }),
+        t(TermDecl {
+            id: "web.download",
+            inputs: vec![Text],
+            output: Cid,
+            capability: Some(cap(FS_WRITE_NAME)),
+            effect: Irreversible,
+            source_exposure: Internal,
+            egress_ceiling: Some(Internal),
+            cost: 13,
+        }),
+        t(TermDecl {
+            id: "web.execute_js",
+            inputs: vec![Text],
+            output: observation(),
+            capability: Some(cap(COMPUTE_LOCAL_NAME)),
+            effect: ReversibleWrite,
+            source_exposure: Internal,
+            egress_ceiling: None,
+            cost: 8,
+        }),
+        t(TermDecl {
+            id: "web.execute_wasm",
+            inputs: vec![Bytes],
+            output: observation(),
+            capability: Some(cap(COMPUTE_LOCAL_NAME)),
+            effect: ReversibleWrite,
+            source_exposure: Internal,
+            egress_ceiling: None,
+            cost: 8,
+        }),
+    ]
+}
+
+/// Build the v0 web action registry. Infallible by construction — the specs
+/// satisfy `TermRegistry::insert`'s invariants (pinned by a unit test).
+///
+/// The id set is exactly AX-Browser's closed `web.*` action vocabulary (A5).
+pub fn registry_v0() -> TermRegistry {
     let mut reg = TermRegistry::new(VOCAB_VERSION);
-    for spec in specs {
+    for spec in dom_specs().into_iter().chain(compute_specs()) {
         reg.insert(spec)
             .expect("registry_v0 specs are statically valid");
     }
