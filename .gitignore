@@ -6,3 +6,9 @@ Cargo.lock.orig
 
 # CodeGraph generated index — never track
 .codegraph/
+
+# rustc output from the `braid-project build --target rust` journey, which
+# compiles an emitted crate in place to prove it builds warning-free. The proof
+# is the exit code; the artifact is not evidence and must never be tracked.
+**/*.rlib
+**/*.rmeta

@@ -42,7 +42,7 @@ fn parity_on_the_pinned_kat_vector() {
         .lines()
         .find_map(|l| l.strip_prefix("capsule_bytes_hex = "))
         .expect("capsule_bytes_hex line");
-    let bytes = hex::decode(hex_bytes.trim()).unwrap();
+    let bytes = lgwks_std::hex::decode(hex_bytes.trim()).unwrap();
     let v = decode_canonical(&bytes).expect("pinned vector decodes");
     let mut re = Vec::new();
     reencode(&v, &mut re);

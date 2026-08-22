@@ -69,7 +69,7 @@ fn canonical_encoder_matches_rfc8949_deterministic_vectors() {
     for case in cases {
         let hex = case.get("hex").and_then(|h| h.as_str()).expect("hex field");
         let decoded = case.get("decoded").expect("decoded field");
-        let expected = match hex::decode(hex) {
+        let expected = match lgwks_std::hex::decode(hex) {
             Ok(b) => b,
             Err(_) => {
                 skipped += 1;
