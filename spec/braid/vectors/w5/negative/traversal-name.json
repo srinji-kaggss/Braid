@@ -1,0 +1,10 @@
+{
+  "name": "../evil",
+  "archetype": "docs",
+  "owner": "Director",
+  "gate_version": "none",
+  "ci_status": "none",
+  "entry_docs": ["README.md"],
+  "canonical_commands": ["cargo test"],
+  "local_ci": false
+}

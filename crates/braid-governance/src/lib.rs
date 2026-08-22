@@ -6,10 +6,10 @@
 //! envelope, then fail-closes every proposed authoring action against it.
 
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use lgwks_std::hex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
-use thiserror::Error;
 
 pub const CHANGE_ENVELOPE_VERSION: u32 = 1;
 const DIGEST_DOMAIN: &[u8] = b"keel.change-envelope.v1\0";
@@ -98,29 +98,46 @@ pub struct SessionUsage {
     pub effectful_tool_calls: u32,
 }
 
-#[derive(Debug, Error, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum GovernanceError {
-    #[error("unsupported change-envelope version {0}")]
     UnsupportedVersion(u32),
-    #[error("missing required field: {0}")]
     MissingField(&'static str),
-    #[error("invalid SHA-256 field: {0}")]
     InvalidSha256(&'static str),
-    #[error("invalid hex field: {0}")]
     InvalidHex(&'static str),
-    #[error("invalid Ed25519 verifying key")]
     InvalidVerifyingKey,
-    #[error("invalid Ed25519 signature")]
     InvalidSignature,
-    #[error("serialization failed: {0}")]
     Serialization(String),
-    #[error("generation action denied: {0}")]
     Denied(String),
-    #[error("design commitment is outside the admitted envelope: {0}")]
     InvalidCommitment(&'static str),
-    #[error("resource budget exceeded: {0}")]
     BudgetExceeded(&'static str),
+    MalformedExpiry(&'static str),
+    Expired(u64),
 }
+
+impl std::fmt::Display for GovernanceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnsupportedVersion(v) => write!(f, "unsupported change-envelope version {v}"),
+            Self::MissingField(field) => write!(f, "missing required field: {field}"),
+            Self::InvalidSha256(field) => write!(f, "invalid SHA-256 field: {field}"),
+            Self::InvalidHex(field) => write!(f, "invalid hex field: {field}"),
+            Self::InvalidVerifyingKey => write!(f, "invalid Ed25519 verifying key"),
+            Self::InvalidSignature => write!(f, "invalid Ed25519 signature"),
+            Self::Serialization(msg) => write!(f, "serialization failed: {msg}"),
+            Self::Denied(msg) => write!(f, "generation action denied: {msg}"),
+            Self::InvalidCommitment(field) => {
+                write!(f, "design commitment is outside the admitted envelope: {field}")
+            }
+            Self::BudgetExceeded(field) => write!(f, "resource budget exceeded: {field}"),
+            Self::MalformedExpiry(msg) => {
+                write!(f, "expires_at not in strict UTC 'YYYY-MM-DDTHH:MM:SSZ' form: {msg}")
+            }
+            Self::Expired(unix) => write!(f, "envelope expired at unix {unix}"),
+        }
+    }
+}
+
+impl std::error::Error for GovernanceError {}
 
 impl ChangeEnvelope {
     pub fn validate(&self) -> Result<(), GovernanceError> {
@@ -154,6 +171,59 @@ impl ChangeEnvelope {
             return Err(GovernanceError::MissingField("required_evidence"));
         }
         Ok(())
+    }
+
+    /// Expiry as unix seconds. Strict `YYYY-MM-DDTHH:MM:SSZ` only — no
+    /// offsets, no leap seconds, no relaxed parsing (fail-closed: a security
+    /// boundary must not guess at malformed input).
+    pub fn expiry_unix(&self) -> Result<u64, GovernanceError> {
+        let s = self.expires_at.as_str();
+        let b = s.as_bytes();
+        let sep = |i: usize| b.get(i).copied().unwrap_or(0);
+        if b.len() != 20
+            || sep(4) != b'-'
+            || sep(7) != b'-'
+            || sep(10) != b'T'
+            || sep(13) != b':'
+            || sep(16) != b':'
+            || sep(19) != b'Z'
+            || !b
+                .iter()
+                .enumerate()
+                .all(|(i, c)| matches!(i, 4 | 7 | 10 | 13 | 16 | 19) || c.is_ascii_digit())
+        {
+            return Err(GovernanceError::MalformedExpiry(
+                "expected YYYY-MM-DDTHH:MM:SSZ",
+            ));
+        }
+        let num = |r: std::ops::Range<usize>| s[r].parse::<u64>().unwrap_or(u64::MAX);
+        let (y, mo, d) = (num(0..4), num(5..7), num(8..10));
+        let (hh, mi, ss) = (num(11..13), num(14..16), num(17..19));
+        if !(1..=12).contains(&mo) || !(1..=31).contains(&d) || hh > 23 || mi > 59 || ss > 59 {
+            return Err(GovernanceError::MalformedExpiry("field out of range"));
+        }
+        // Days-from-civil (Howard Hinnant's algorithm); the round-trip below
+        // rejects non-calendar dates like Feb 30.
+        let y_adj = y as i64 - if mo <= 2 { 1 } else { 0 };
+        let era = if y_adj >= 0 { y_adj } else { y_adj - 399 } / 400;
+        let yoe = y_adj - era * 400;
+        let doy =
+            (153 * (if mo > 2 { mo as i64 - 3 } else { mo as i64 + 9 }) + 2) / 5 + d as i64 - 1;
+        let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+        let days = era * 146097 + doe - 719468;
+        let z = days + 719468;
+        let era2 = if z >= 0 { z } else { z - 146096 } / 146097;
+        let doe2 = z - era2 * 146097;
+        let yoe2 = (doe2 - doe2 / 1460 + doe2 / 36524 - doe2 / 146096) / 365;
+        let y2 = yoe2 + era2 * 400;
+        let doy2 = doe2 - (365 * yoe2 + yoe2 / 4 - yoe2 / 100);
+        let mp2 = (5 * doy2 + 2) / 153;
+        let d2 = doy2 - (153 * mp2 + 2) / 5 + 1;
+        let mo2 = if mp2 < 10 { mp2 + 3 } else { mp2 - 9 };
+        if y2 + if mo2 <= 2 { 1 } else { 0 } != y as i64 || mo2 as u64 != mo || d2 as u64 != d {
+            return Err(GovernanceError::MalformedExpiry("not a real calendar date"));
+        }
+        Ok(days as u64 * 86_400 + hh * 3_600 + mi * 60 + ss)
     }
 
     pub fn digest_sha256(&self) -> Result<String, GovernanceError> {
@@ -253,7 +323,23 @@ pub struct GovernanceSession {
 
 impl GovernanceSession {
     pub fn admit(signed: SignedChangeEnvelope) -> Result<Self, GovernanceError> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| GovernanceError::Serialization(e.to_string()))?
+            .as_secs();
+        Self::admit_at(signed, now)
+    }
+
+    /// Admission core with an explicit clock — deterministic tests inject the
+    /// time; production goes through `admit`. Expiry is enforced here, after
+    /// signature verification, so a stale envelope is refused at admission
+    /// rather than tolerated (closes the `expires_at` gap).
+    pub fn admit_at(signed: SignedChangeEnvelope, now_unix: u64) -> Result<Self, GovernanceError> {
         signed.verify()?;
+        let expiry = signed.envelope.expiry_unix()?;
+        if expiry <= now_unix {
+            return Err(GovernanceError::Expired(expiry));
+        }
         Ok(Self {
             signed,
             usage: SessionUsage::default(),
@@ -424,7 +510,7 @@ mod tests {
                 max_tool_calls: 4,
                 max_effectful_tool_calls: 1,
             },
-            expires_at: "2026-07-07T00:00:00Z".into(),
+            expires_at: "2099-01-01T00:00:00Z".into(),
         };
         let signing_key = SigningKey::from_bytes(&[7u8; 32]);
         let digest = envelope.digest_sha256().unwrap();
@@ -956,16 +1042,36 @@ mod tests {
     }
 
     #[test]
-    fn expires_at_is_not_yet_enforced() {
+    fn expired_envelope_rejected() {
         let mut signed = signed_envelope();
         signed.envelope.expires_at = "2020-01-01T00:00:00Z".into();
         let signing_key = SigningKey::from_bytes(&[7u8; 32]);
         let digest = signed.envelope.digest_sha256().unwrap();
         let signature = signing_key.sign(digest.as_bytes());
         signed.signature_hex = hex::encode(signature.to_bytes());
-        // Known gap: expires_at is validated for non-emptiness but never
-        // compared to a clock. This test pins the current behavior so a
-        // future enforcement change is a conscious event.
-        assert!(GovernanceSession::admit(signed).is_ok());
+        assert!(matches!(
+            GovernanceSession::admit_at(signed, 1_700_000_000),
+            Err(GovernanceError::Expired(_))
+        ));
+    }
+
+    #[test]
+    fn malformed_expiry_rejected() {
+        let mut signed = signed_envelope();
+        signed.envelope.expires_at = "not-a-date".into();
+        let signing_key = SigningKey::from_bytes(&[7u8; 32]);
+        let digest = signed.envelope.digest_sha256().unwrap();
+        let signature = signing_key.sign(digest.as_bytes());
+        signed.signature_hex = hex::encode(signature.to_bytes());
+        assert!(matches!(
+            GovernanceSession::admit_at(signed, 1_700_000_000),
+            Err(GovernanceError::MalformedExpiry(_))
+        ));
+    }
+
+    #[test]
+    fn unexpired_envelope_admits() {
+        let signed = signed_envelope();
+        assert!(GovernanceSession::admit_at(signed, 1_700_000_000).is_ok());
     }
 }

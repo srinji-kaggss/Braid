@@ -31,7 +31,7 @@ fn allowed_deps(krate: &str) -> &'static [&'static str] {
 /// test-only parsing of the pre-validated RFC 8949 / BLAKE3 calibration
 /// corpora (D-FLIGHT) — never linked into the artifact.
 const ALLOWED_DEV: &[&str] = &[
-    "hex",
+    "lgwks_std",
     "proptest",
     "serde_json",
     "braid-ir",

@@ -1,0 +1,16 @@
+[package]
+name = "lgwks_std"
+description = "std+ — the only non-std dependency an estate repo may declare."
+version = "0.1.0"
+edition = "2021"
+# Pinned deliberately: no repo in the estate declares rust-version today. 1.75
+# is the floor for `async fn` in traits, which the CONSOLIDATE-tier
+# `async_trait` module will need in phase 3.
+rust-version = "1.75"
+license = "MIT OR Apache-2.0"
+
+# INV-STDPLUS-ZERO-DEPS: this table stays empty, and `admits_no_dependency_of_
+# its_own` in ../lgwks-std-gate/src/lib.rs reads this file to prove it. A module
+# that cannot be built on `std` alone belongs in the VENDOR tier (pinned source
+# under vendor/) or the BOUNDARY tier (an entry in contract/APPROVED.toml).
+[dependencies]

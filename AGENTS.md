@@ -22,3 +22,21 @@ Braid holds the canonical machine-first language of the constellation: intermedi
 ## Publishing discipline
 
 Braid crates must be publishable so downstream repos can take real versioned dependencies instead of vendored snapshots. Every breaking change to `Cid`, canonical encoding, or vocabulary registry is a G4 concept-authority event and requires charter amendment.
+
+## Platform Engineering Hub (additive, 2026-08-17, Director-approved)
+
+Braid also serves as the constellation's **template source** — where solid,
+repeated patterns get extracted once so other repos pull from here instead of
+reinventing them. This is **additive to**, not a replacement of, the IR/`Cid`
+authority above: nothing in `templates/` claims a `Cid`, `Capability`,
+`Verdict`, `Fact envelope`, `Principal`, `Receipt`, or `WorkObject` type, so it
+does not trip the G2 gate.
+
+See `templates/README.md` for the index and the pull-not-push contract
+(consumers copy and adapt; they do not path-dep on `templates/`, since a
+template is a starting point per repo, not a shared authority).
+
+**Known drift:** `logic-os-kernel/CLAUDE.md`'s "Repo constellation" section
+describes Braid only as the IR/`Cid` home — it does not yet mention this
+facet. This session has no write authority on `logic-os-kernel`; updating that
+doc is a follow-up for whoever holds it next.

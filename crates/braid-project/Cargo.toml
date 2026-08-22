@@ -22,5 +22,7 @@ path = "src/main.rs"
 braid-ir = { workspace = true }
 braid-verify = { workspace = true }
 braid-elaborate-js = { path = "../braid-elaborate-js" }
+braid-vocab-js = { workspace = true }
+braid-vocab-rust = { path = "../braid-vocab-rust" }
 serde = { workspace = true }
 serde_json = "1.0.140"

@@ -12,6 +12,17 @@ members = [
     "crates/braid-elaborate-js",
     "crates/braid-project",
     "crates/braid-governance",
+    "crates/braid-vocab-rust",
+    "crates/braid-manifest",
+    "crates/braid-run",
+    # std+ and its gate. Not `braid-*`: these carry a different authority from
+    # the IR and the verifier — `lgwks_std` is the estate's one approved
+    # non-`std` surface, and `lgwks_std_gate` enforces INV-DEP-REGISTERED, that
+    # nothing outside `std` and `std+` compiles without a human's approval in
+    # `contract/APPROVED.toml`. Both declare zero dependencies, so neither can
+    # widen this workspace's lock file. See `crates/lgwks-std/README.md`.
+    "crates/lgwks-std",
+    "crates/lgwks-std-gate",
 ]
 resolver = "2"
 
@@ -31,7 +42,6 @@ blake3 = { version = "1.8.5", default-features = false }
 serde = { version = "1.0.228", default-features = false, features = ["derive", "alloc"] }
 
 # Test-only.
-hex = "0.4.3"
 proptest = "1.6.0"
 serde_json = "1.0"
 
@@ -43,6 +53,7 @@ braid-vocab-js = { path = "crates/braid-vocab-js" }
 braid-verify = { path = "crates/braid-verify" }
 braid-render = { path = "crates/braid-render" }
 braid-sdk = { path = "crates/braid-sdk" }
+braid-manifest = { path = "crates/braid-manifest" }
 
 [profile.release]
 opt-level = 3

@@ -1,0 +1,28 @@
+# Braid's approved dependencies — the semantic contract for INV-DEP-REGISTERED.
+#
+# Read by `lgwks_std_gate`. A crate reaches this file only after the ladder in
+# `lgwks-gate tiers` has been climbed and every rung above a dependency was
+# rejected for a stated reason. Adding a block here is an approval; the commit
+# that adds it is the signature. The process is `docs/ADMISSION.md`.
+#
+# ELIMINATE and CONSOLIDATE crates never appear here. They become a module in
+# `crates/lgwks-std` instead, which is why `tier` admits only `boundary` and
+# `vendor`.
+
+[policy]
+# Adoption, not enforcement — yet. Measured 2026-08-19: 119 resolved crates,
+# 105 of them unapproved. Approving 105 entries today would fill this file with
+# blocks nobody would defend in a diff, which is a whitelist wearing a
+# contract's clothes.
+#
+# The order is deliberate and is recorded in `docs/LGWKS-STD-MIGRATION.md`:
+# land the ELIMINATE-tier swaps first so the number falls without anyone
+# approving anything, approve what genuinely remains rung by rung, and only
+# then flip this to `true`. From that point the gate is a ratchet.
+#
+# While this is false, refusals report as `cargo::warning` and the build passes.
+#
+# Verified 2026-08-19 by flipping it: `enforce = true` fails `cargo build -p
+# braid-cli` with exit 101 and one `cargo::error` per unapproved crate. The
+# ratchet works; the register is what is not ready.
+enforce = false

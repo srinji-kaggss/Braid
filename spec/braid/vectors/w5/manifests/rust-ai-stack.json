@@ -1,0 +1,10 @@
+{
+  "name": "rust-ai-stack",
+  "archetype": "workspace-crate",
+  "owner": "Director",
+  "gate_version": "none",
+  "ci_status": "none",
+  "entry_docs": ["README.md"],
+  "canonical_commands": ["cargo test --workspace"],
+  "local_ci": false
+}

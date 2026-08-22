@@ -1,0 +1,128 @@
+# CI structural pattern, extracted from keel/.github/workflows/ci.yml (2026-08-17).
+#
+# WHAT THIS IS: the job-graph SHAPE and the discipline rules keel's CI proved
+# out over many incidents (see the inline notes below, each traceable to a
+# real failure in keel's own history). It is deliberately NOT a copy of
+# keel's gate binaries or detector logic — keel/CLAUDE.md states those are
+# proprietary ("Do not open-source; do not vendor detector logic to third
+# parties") and keel's own factory-spec rule #1 is "one source of truth per
+# concern." A repo that wants keel's actual gates (keel-scan, keel-ci,
+# keel-zero-gate) INVOKES keel as an external tool — see the `external-gate`
+# job below — it does not vendor keel's scripts.
+#
+# Fill in every <<placeholder>>. Delete jobs you don't need; the required
+# discipline is the PATTERN each job demonstrates, not that all of them exist.
+# `${{ github.x }}`/`${{ needs.x }}` expressions below are real GitHub Actions
+# syntax, left as-is — only the <<...>> tokens are yours to fill in.
+
+name: <<repo>> CI
+
+on:
+  push:
+    branches: [main]
+  # No `branches:` filter on pull_request. That filter matches the PR's BASE
+  # ref, so `branches: [main]` silently exempts every stacked PR (base = a
+  # review branch, not main) from CI entirely — code still heading for main,
+  # reaching it through a stack that never ran the floor. (keel ci.yml:6-17)
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # Keyed on PR number, not `github.ref`: a stacked PR's head ref is also the
+  # BASE ref of the PR above it, and two PRs in the same stack must never
+  # cancel each other. cancel-in-progress only on pull_request — main's run
+  # is the permanent record of what landed, cancelling it leaves the merge
+  # commit with no verdict. (keel ci.yml:49-51)
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # PATTERN 1 — a required job that FAILS, never one that's skipped via `if:`.
+  # GitHub reports a skipped job as "Success" and it will NOT block merge even
+  # as a required check. Any refusal that matters (stack ordering, a
+  # precondition, a scope gate) must live in a job that genuinely exits
+  # non-zero; downstream jobs `needs:` it. (keel ci.yml:174-218, comment block
+  # explains this was learned the hard way — cite the incident if you have
+  # your own.)
+  gate-precondition:
+    name: <<Precondition — name what this actually checks>>
+    runs-on: <<runner>>
+    steps:
+      - run: <<command that exits non-zero on the real failure condition>>
+
+  # PATTERN 2 — scope the expensive tiers to what actually changed, and
+  # RECORD the skip explicitly rather than letting `if:` silently omit a
+  # step. A green run must be distinguishable from a run that did nothing.
+  # (keel ci.yml: every heavy job has a paired "Record docs-only N/A" step)
+  change-scope:
+    name: "Scope — <<what dimension: code vs docs, which subsystem, etc.>>"
+    needs: []
+    runs-on: <<runner>>
+    outputs:
+      relevant_changed: ${{ steps.scope.outputs.relevant_changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - id: scope
+        run: <<diff base..HEAD, set relevant_changed=yes/no>>
+
+  build:
+    name: "Build — <<one shared build other jobs consume, not N separate ones>>"
+    needs: [gate-precondition, change-scope]
+    runs-on: <<runner>>
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          # <<build command>>; if self-hosted with a shared filesystem, build
+          # once into a run-scoped shared dir so downstream jobs skip
+          # recompilation — keel ci.yml:225-241 for the shared
+          # CARGO_TARGET_DIR rationale. On GitHub-hosted runners, use
+          # actions/cache or an artifact instead.
+
+  gate:
+    name: "<<Gate name — what it verifies>>"
+    needs: [build, change-scope]
+    runs-on: <<runner>>
+    steps:
+      - uses: actions/checkout@v4
+      # PATTERN 3 — every gate proves it can FAIL before it's trusted to pass.
+      # A check that has never been observed to refuse is not evidence; keel
+      # ships a positive+negative selftest with every gate for exactly this
+      # reason (ci.yml's "Prove the X gate can fail (self-test)" steps,
+      # repeated ~15 times across the real file).
+      - name: Prove this gate can fail (self-test)
+        run: <<run the gate against a fixture KNOWN to fail; assert non-zero>>
+      - name: Run the gate
+        if: needs.change-scope.outputs.relevant_changed == 'yes'
+        run: <<the real check>>
+      - name: Record scope-skip explicitly
+        if: always()
+        run: |
+          if [ "${{ needs.change-scope.outputs.relevant_changed }}" = "yes" ]; then
+            echo "scope: relevant change -> gate ran"
+          else
+            echo "scope: out of scope -> gate skipped (explicit N/A)"
+          fi
+
+  # PATTERN 4 — consuming an external, sole-sourced authority's gate (e.g.
+  # keel) as a TOOL, not vendored logic. This job calls out to keel; it does
+  # not reimplement keel-scan/keel-zero-gate here.
+  external-gate:
+    name: External — keel verification (if this repo opts in)
+    needs: [build, change-scope]
+    runs-on: <<runner>>
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run keel-scan / keel-zero-gate from the keel install
+        if: needs.change-scope.outputs.relevant_changed == 'yes'
+        run: <<path-to-keel-binary>> <<args>>
+        # Never copy keel's scripts/ or detector source into this repo to
+        # "make it self-contained" — that's the second-authoritative-artifact
+        # bug keel's own factory spec forbids, applied across a repo boundary.
+
+  # PATTERN 5 — toolchain pin invoked explicitly per command, not assumed.
+  # rustup resolves rust-toolchain.toml by walking up from CWD, not from
+  # --manifest-path; a bare `cargo` in a multi-workspace repo can silently
+  # pick the wrong toolchain for a nested manifest. (keel ci.yml:413-424,
+  # a real incident: identical source produced different clippy findings on
+  # the runner's default toolchain vs. the pinned one.)
