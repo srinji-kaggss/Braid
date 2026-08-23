@@ -6,7 +6,7 @@
 //! - The 10+ refusal corpus (fail-closed rejections)
 //! - The 10+ golden corpus (pinned deterministic capsule CIDs)
 
-use braid_elaborate_js::{elaborate_and_admit, elaborate_js, ElabError};
+use braid_elaborate_js::{elaborate_and_admit, elaborate_js, ElabError, MAX_SOURCE_CHARS};
 use braid_verify::Verdict;
 
 fn terms(capsule: &braid_ir::Capsule) -> Vec<&str> {
@@ -304,6 +304,17 @@ fn golden_10_comparisons() {
     let src = "let a = 10; let b = 20; let is_less = a < b; !is_less || (a < 100);";
     let capsule = elaborate_js(src).expect("elaborates");
     assert!(!capsule.cid().to_hex().is_empty());
+}
+
+#[test]
+fn oversized_source_is_refused_before_lexing() {
+    let half = MAX_SOURCE_CHARS / 2 + 1;
+    let src = "1+".repeat(half);
+    assert!(matches!(
+        elaborate_js(&src),
+        Err(ElabError::SourceTooLong { len, limit })
+            if len == half * 2 && limit == MAX_SOURCE_CHARS
+    ));
 }
 
 #[test]
