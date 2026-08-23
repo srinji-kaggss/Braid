@@ -121,3 +121,20 @@ fn empty_and_malformed_manifests_fail_closed() {
         Err(ProjectError::Parse { .. })
     ));
 }
+
+#[cfg(unix)]
+#[test]
+fn binary_rejects_non_utf8_startup_argument() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+    use std::process::Command;
+
+    let output = Command::new(env!("CARGO_BIN_EXE_braid-project"))
+        .arg(OsStr::from_bytes(&[0xff]))
+        .output()
+        .expect("project binary runs");
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("startup error"));
+    assert!(stderr.contains("not valid UTF-8"), "got: {stderr}");
+}

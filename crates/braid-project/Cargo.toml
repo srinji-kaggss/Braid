@@ -19,6 +19,7 @@ path = "src/main.rs"
 # (braid-elaborate-js) and reads verdicts off the one verifier; it adds zero
 # authority and builds no second verifier.
 [dependencies]
+braid-runtime = { workspace = true }
 braid-ir = { workspace = true }
 braid-verify = { workspace = true }
 braid-elaborate-js = { path = "../braid-elaborate-js" }

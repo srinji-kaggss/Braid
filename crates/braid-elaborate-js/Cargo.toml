@@ -19,6 +19,7 @@ path = "src/main.rs"
 # elaborates INTO the substrate via the SDK; it is not part of the D3 boundary
 # the substrate crates (braid-ir/braid-verify/braid-render) are fenced to.
 [dependencies]
+braid-runtime = { workspace = true }
 braid-ir = { workspace = true }
 braid-capability = { workspace = true }
 braid-verify = { workspace = true }

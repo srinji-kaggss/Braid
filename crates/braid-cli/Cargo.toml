@@ -18,6 +18,7 @@ path = "src/main.rs"
 # admission — it routes author input through the SDK Builder and the canonical
 # encoder, then hands bytes to the same braid-verify the SDK path uses.
 [dependencies]
+braid-runtime = { workspace = true }
 braid-ir = { workspace = true }
 braid-verify = { workspace = true }
 braid-render = { workspace = true }

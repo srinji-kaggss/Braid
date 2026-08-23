@@ -398,3 +398,19 @@ fn render_escapes_newlines_so_manifest_cannot_be_spoofed() {
         "newline is escaped in-place, not stripped: {manifest}"
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn non_utf8_startup_argument_is_an_operator_error() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+
+    let output = braid()
+        .arg(OsStr::from_bytes(&[0xff]))
+        .output()
+        .expect("braid binary runs");
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("startup error"));
+    assert!(stderr.contains("not valid UTF-8"), "got: {stderr}");
+}

@@ -35,6 +35,8 @@ use braid_ir::{Capsule, Cid};
 use braid_verify::Verdict;
 use serde::Deserialize;
 
+pub mod cli;
+
 /// Re-exported so the CLI and tooling name the emission type without a direct
 /// dependency on the elaborator crate.
 pub use braid_vocab_rust::RustCrate;
