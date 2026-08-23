@@ -8,7 +8,10 @@ pub enum CanonError {
     /// Input ended early / declared length exceeds remaining bytes.
     Truncated { at: &'static str },
     /// A head/feature outside the subset (float, tag, indefinite, null, …).
-    ForbiddenForm { form: &'static str, at: &'static str },
+    ForbiddenForm {
+        form: &'static str,
+        at: &'static str,
+    },
     /// An integer head that is not the minimal-length encoding.
     NonMinimalInt { at: &'static str },
     /// Map keys out of canonical order or duplicated.

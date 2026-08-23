@@ -42,7 +42,12 @@ mod tests {
     fn roundtrips_through_bytes() {
         let v = Nested {
             name: "test".into(),
-            bounds: Rect { x: 1, y: 2, w: 100, h: 200 },
+            bounds: Rect {
+                x: 1,
+                y: 2,
+                w: 100,
+                h: 200,
+            },
         };
         let bytes = to_bytes::<WireError>(&v).unwrap();
         let archived = access::<ArchivedNested, WireError>(&bytes).unwrap();
@@ -53,7 +58,12 @@ mod tests {
 
     #[test]
     fn encoding_is_deterministic() {
-        let v = Rect { x: 5, y: 10, w: 50, h: 100 };
+        let v = Rect {
+            x: 5,
+            y: 10,
+            w: 50,
+            h: 100,
+        };
         let a = to_bytes::<WireError>(&v).unwrap();
         let b = to_bytes::<WireError>(&v).unwrap();
         assert_eq!(a.as_slice(), b.as_slice());
@@ -61,8 +71,20 @@ mod tests {
 
     #[test]
     fn different_values_produce_different_bytes() {
-        let a = to_bytes::<WireError>(&Rect { x: 1, y: 1, w: 1, h: 1 }).unwrap();
-        let b = to_bytes::<WireError>(&Rect { x: 2, y: 1, w: 1, h: 1 }).unwrap();
+        let a = to_bytes::<WireError>(&Rect {
+            x: 1,
+            y: 1,
+            w: 1,
+            h: 1,
+        })
+        .unwrap();
+        let b = to_bytes::<WireError>(&Rect {
+            x: 2,
+            y: 1,
+            w: 1,
+            h: 1,
+        })
+        .unwrap();
         assert_ne!(a.as_slice(), b.as_slice());
     }
 }

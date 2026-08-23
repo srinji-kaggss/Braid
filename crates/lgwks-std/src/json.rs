@@ -92,5 +92,4 @@ mod tests {
         let result: Result<Point, _> = from_str("{");
         assert!(result.is_err());
     }
-
 }

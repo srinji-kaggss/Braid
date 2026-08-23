@@ -47,7 +47,10 @@ pub struct Capsule {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CapsuleError {
     Canon(CanonError),
-    Malformed { field: &'static str, at: &'static str },
+    Malformed {
+        field: &'static str,
+        at: &'static str,
+    },
 }
 
 impl core::fmt::Display for CapsuleError {
@@ -145,7 +148,10 @@ fn parse_grant_capability(name: &str) -> Result<Capability, CapsuleError> {
     }
 }
 
-fn decode_single_grant(item: &Value, prev: &mut Option<String>) -> Result<Capability, CapsuleError> {
+fn decode_single_grant(
+    item: &Value,
+    prev: &mut Option<String>,
+) -> Result<Capability, CapsuleError> {
     let name = extract_grant_name(item)?;
     check_grant_ordering(prev, &name)?;
     let cap = parse_grant_capability(&name)?;

@@ -379,6 +379,8 @@ fn extract_json_string(body: &str, key: &str) -> String {
     }
 }
 
+// Each label is a column value; the format string owns the alignment.
+#[allow(clippy::print_literal)]
 fn print_freshness_table(results: &[FreshnessResult]) {
     println!(
         "{:<30} {:<12} {:<12} {:<5} {}",
@@ -387,7 +389,10 @@ fn print_freshness_table(results: &[FreshnessResult]) {
     println!("{}", "-".repeat(90));
     for r in results {
         if let Some(err) = &r.error {
-            println!("{:<30} {:<12} {:<12} {:<5} {}", r.name, r.resolved, "?", "err", err);
+            println!(
+                "{:<30} {:<12} {:<12} {:<5} {}",
+                r.name, r.resolved, "?", "err", err
+            );
         } else {
             let stale_mark = if r.stale { "YES" } else { "" };
             println!(

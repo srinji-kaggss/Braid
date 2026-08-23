@@ -140,9 +140,10 @@ fn check_recursion_depth(depth: usize) -> Result<(), CanonError> {
 impl<'a> Reader<'a> {
     /// Reads a single byte from the buffer.
     fn byte(&mut self) -> Result<u8, CanonError> {
-        let byte_val = *self.buf.get(self.pos).ok_or(CanonError::Truncated {
-            at: "Reader::byte",
-        })?;
+        let byte_val = *self
+            .buf
+            .get(self.pos)
+            .ok_or(CanonError::Truncated { at: "Reader::byte" })?;
         self.pos += 1;
         Ok(byte_val)
     }
@@ -246,12 +247,7 @@ impl<'a> Reader<'a> {
     /// Decodes ordered list of values.
     fn decode_list(&mut self, arg_val: u64, depth: usize) -> Result<Value, CanonError> {
         let count = check_arg_as_usize(arg_val, "Reader::decode_list_overflow")?;
-        check_remaining_capacity(
-            self.buf.len(),
-            self.pos,
-            count,
-            "Reader::decode_list",
-        )?;
+        check_remaining_capacity(self.buf.len(), self.pos, count, "Reader::decode_list")?;
         let mut items = Vec::with_capacity(count);
         for _ in 0..count {
             items.push(self.value(depth + 1)?);

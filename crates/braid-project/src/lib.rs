@@ -113,10 +113,7 @@ impl core::fmt::Display for ProjectError {
                 write!(f, "capsule `{name}` failed elaboration at {at}: {error}")
             }
             Self::CapsuleRejected { name, reason, at } => {
-                write!(
-                    f,
-                    "capsule `{name}` rejected by verifier at {at}: {reason}"
-                )
+                write!(f, "capsule `{name}` rejected by verifier at {at}: {reason}")
             }
         }
     }
@@ -156,10 +153,7 @@ fn check_project_non_empty(capsules: &[CapsuleSource]) -> Result<(), ProjectErro
     }
 }
 
-fn check_name_unique<'a>(
-    seen: &mut BTreeSet<&'a str>,
-    name: &'a str,
-) -> Result<(), ProjectError> {
+fn check_name_unique<'a>(seen: &mut BTreeSet<&'a str>, name: &'a str) -> Result<(), ProjectError> {
     if !seen.insert(name) {
         Err(ProjectError::DuplicateName {
             name: name.to_string(),
@@ -178,10 +172,7 @@ fn check_no_duplicate_names(capsules: &[CapsuleSource]) -> Result<(), ProjectErr
     Ok(())
 }
 
-fn verify_capsule_verdict(
-    name: &str,
-    verdict: &Verdict,
-) -> Result<(), ProjectError> {
+fn verify_capsule_verdict(name: &str, verdict: &Verdict) -> Result<(), ProjectError> {
     match verdict {
         Verdict::Admit { .. } => Ok(()),
         Verdict::Reject { stage, reason } => Err(ProjectError::CapsuleRejected {
@@ -239,14 +230,13 @@ fn elaborate_entry_to_rust(
     registry: &braid_ir::TermRegistry,
     entry: &CapsuleEntry,
 ) -> Result<(String, RustCrate), ProjectError> {
-    let rust_crate =
-        braid_vocab_rust::elaborate(registry, &entry.capsule).map_err(|elab_err| {
-            ProjectError::CapsuleElaboration {
-                name: entry.name.clone(),
-                error: ElabError::Build(elab_err.to_string()),
-                at: "build_rust",
-            }
-        })?;
+    let rust_crate = braid_vocab_rust::elaborate(registry, &entry.capsule).map_err(|elab_err| {
+        ProjectError::CapsuleElaboration {
+            name: entry.name.clone(),
+            error: ElabError::Build(elab_err.to_string()),
+            at: "build_rust",
+        }
+    })?;
     Ok((entry.name.clone(), rust_crate))
 }
 
@@ -343,6 +333,9 @@ mod tests {
             r#"{ "name": "x", "capsules": [ { "name": "b", "source": "2" }, { "name": "a", "source": "1" } ] }"#,
         )
         .unwrap();
-        assert_eq!(build(&p1).unwrap().project_cid, build(&p2).unwrap().project_cid);
+        assert_eq!(
+            build(&p1).unwrap().project_cid,
+            build(&p2).unwrap().project_cid
+        );
     }
 }

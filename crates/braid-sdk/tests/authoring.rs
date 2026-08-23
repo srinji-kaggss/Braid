@@ -124,7 +124,10 @@ fn dangerous_capsule_without_confirm_refused_at_author_time() {
     let published = b.strand("cms.publish", &[edited]).unwrap();
     b.output(published);
     b.budget(30);
-    assert!(matches!(b.build().unwrap_err(), BuildError::ConfirmRequired { .. }));
+    assert!(matches!(
+        b.build().unwrap_err(),
+        BuildError::ConfirmRequired { .. }
+    ));
 }
 
 #[test]
@@ -145,7 +148,10 @@ fn no_outputs_refused() {
     let reg = registry_v0();
     let mut b = Builder::new(&reg, "x");
     let _ = b.strand("lit.text", &[]).unwrap();
-    assert!(matches!(b.build().unwrap_err(), BuildError::NoOutputs { .. }));
+    assert!(matches!(
+        b.build().unwrap_err(),
+        BuildError::NoOutputs { .. }
+    ));
 }
 
 /// A handle from one builder cannot be used in another: the type system

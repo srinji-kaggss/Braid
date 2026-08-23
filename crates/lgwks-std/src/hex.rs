@@ -61,7 +61,7 @@ impl fmt::Display for DecodeError {
 impl Error for DecodeError {}
 
 fn check_even_length(len: usize) -> Result<(), DecodeError> {
-    if len % 2 != 0 {
+    if !len.is_multiple_of(2) {
         Err(DecodeError::OddLength { len, at: len })
     } else {
         Ok(())

@@ -118,7 +118,9 @@ fn ensure_term_arity(
     strand: &Strand,
     registry: &TermRegistry,
 ) -> Result<(), Verdict> {
-    let spec = registry.get(&strand.term).expect("checked in ensure_known_term");
+    let spec = registry
+        .get(&strand.term)
+        .expect("checked in ensure_known_term");
     if spec.inputs.len() != strand.inputs.len() {
         Err(reject(
             Stage::Structure,

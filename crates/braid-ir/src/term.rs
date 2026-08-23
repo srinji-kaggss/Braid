@@ -77,7 +77,10 @@ pub enum RegistryError {
     /// Duplicate term identifier.
     DuplicateTerm { term: String, at: &'static str },
     /// Canonical-form violation while decoding a registry value.
-    Malformed { field: &'static str, at: &'static str },
+    Malformed {
+        field: &'static str,
+        at: &'static str,
+    },
 }
 
 impl core::fmt::Display for RegistryError {
@@ -517,7 +520,13 @@ fn decode_term_core(v: &Value) -> Result<(String, Vec<TypeTag>, TypeTag), Regist
     Ok((id, inputs, output))
 }
 
-type PolicyFields = (EffectClass, Exposure, u64, Option<Capability>, Option<Exposure>);
+type PolicyFields = (
+    EffectClass,
+    Exposure,
+    u64,
+    Option<Capability>,
+    Option<Exposure>,
+);
 
 fn decode_term_policy(v: &Value) -> Result<PolicyFields, RegistryError> {
     let effect = decode_term_effect(v)?;

@@ -222,7 +222,10 @@ mod tests {
     #[test]
     fn max_depth_zero_returns_only_immediate_children() {
         let tmp = tmp_tree();
-        let opts = WalkOptions { max_depth: 0, ..Default::default() };
+        let opts = WalkOptions {
+            max_depth: 0,
+            ..Default::default()
+        };
         let entries = walk_dir(tmp.path().join("a"), &opts).unwrap();
         for e in &entries {
             assert_eq!(e.parent().unwrap(), tmp.path().join("a"));
@@ -232,7 +235,10 @@ mod tests {
     #[test]
     fn max_depth_bounds_traversal() {
         let tmp = tmp_tree();
-        let opts = WalkOptions { max_depth: 1, ..Default::default() };
+        let opts = WalkOptions {
+            max_depth: 1,
+            ..Default::default()
+        };
         let entries = walk_dir(tmp.path().join("a"), &opts).unwrap();
         let deepest: Vec<_> = entries.iter().filter(|p| p.ends_with("h.txt")).collect();
         assert!(deepest.is_empty(), "depth-2 file h.txt should be excluded");
@@ -245,7 +251,10 @@ mod tests {
         let root = tmp.path();
         stdfs::create_dir(root.join("d")).unwrap();
         std::os::unix::fs::symlink(root.join("d"), root.join("d/loop")).unwrap();
-        let opts = WalkOptions { follow_symlinks: true, ..Default::default() };
+        let opts = WalkOptions {
+            follow_symlinks: true,
+            ..Default::default()
+        };
         let entries = walk_dir(root, &opts).unwrap();
         assert!(!entries.is_empty());
     }
@@ -257,17 +266,27 @@ mod tests {
         let outer = tempfile::tempdir().unwrap();
         stdfs::write(outer.path().join("secret.txt"), b"secret").unwrap();
         std::os::unix::fs::symlink(outer.path(), inner.path().join("escape")).unwrap();
-        let opts = WalkOptions { follow_symlinks: true, ..Default::default() };
+        let opts = WalkOptions {
+            follow_symlinks: true,
+            ..Default::default()
+        };
         let entries = walk_dir(inner.path(), &opts).unwrap();
-        let escaped: Vec<_> = entries.iter().filter(|p| {
-            p.to_string_lossy().contains("secret")
-        }).collect();
-        assert!(escaped.is_empty(), "sandbox escape: symlink outside root must be rejected");
+        let escaped: Vec<_> = entries
+            .iter()
+            .filter(|p| p.to_string_lossy().contains("secret"))
+            .collect();
+        assert!(
+            escaped.is_empty(),
+            "sandbox escape: symlink outside root must be rejected"
+        );
     }
 
     #[test]
     fn nonexistent_directory_returns_error() {
-        let result = walk_dir("/nonexistent-path-that-does-not-exist", &WalkOptions::default());
+        let result = walk_dir(
+            "/nonexistent-path-that-does-not-exist",
+            &WalkOptions::default(),
+        );
         assert!(result.is_err());
     }
 }

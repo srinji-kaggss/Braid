@@ -26,6 +26,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+pub mod bot;
 pub mod encoding;
 pub mod fs;
 pub mod glob;

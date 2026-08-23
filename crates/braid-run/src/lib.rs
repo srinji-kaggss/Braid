@@ -112,38 +112,97 @@ pub enum ExecutionError {
 }
 
 fn fmt_budget_err(f: &mut fmt::Formatter<'_>, at: &str, consumed: u64, budget: u64) -> fmt::Result {
-    write!(f, "execution budget exhausted at {at}: {consumed} > {budget}")
+    write!(
+        f,
+        "execution budget exhausted at {at}: {consumed} > {budget}"
+    )
 }
 
-fn fmt_input_ref_err(f: &mut fmt::Formatter<'_>, at: &str, strand: usize, input_index: u32) -> fmt::Result {
-    write!(f, "strand {strand} references non-preceding input {input_index} at {at}")
+fn fmt_input_ref_err(
+    f: &mut fmt::Formatter<'_>,
+    at: &str,
+    strand: usize,
+    input_index: u32,
+) -> fmt::Result {
+    write!(
+        f,
+        "strand {strand} references non-preceding input {input_index} at {at}"
+    )
 }
 
-fn fmt_type_mismatch_err(f: &mut fmt::Formatter<'_>, at: &str, expected: &TypeTag, actual: &str) -> fmt::Result {
-    write!(f, "type mismatch at {at}: expected {expected:?}, got {actual}")
+fn fmt_type_mismatch_err(
+    f: &mut fmt::Formatter<'_>,
+    at: &str,
+    expected: &TypeTag,
+    actual: &str,
+) -> fmt::Result {
+    write!(
+        f,
+        "type mismatch at {at}: expected {expected:?}, got {actual}"
+    )
 }
 
-fn fmt_effect_err(f: &mut fmt::Formatter<'_>, at: &str, term: &str, effect: EffectClass) -> fmt::Result {
-    write!(f, "term '{term}' with effect {effect:?} requires confirmation at {at}")
+fn fmt_effect_err(
+    f: &mut fmt::Formatter<'_>,
+    at: &str,
+    term: &str,
+    effect: EffectClass,
+) -> fmt::Result {
+    write!(
+        f,
+        "term '{term}' with effect {effect:?} requires confirmation at {at}"
+    )
 }
 
-fn fmt_arity_err(f: &mut fmt::Formatter<'_>, at: &str, term: &str, expected: usize, actual: usize) -> fmt::Result {
-    write!(f, "arity mismatch for '{term}' at {at}: expected {expected}, got {actual}")
+fn fmt_arity_err(
+    f: &mut fmt::Formatter<'_>,
+    at: &str,
+    term: &str,
+    expected: usize,
+    actual: usize,
+) -> fmt::Result {
+    write!(
+        f,
+        "arity mismatch for '{term}' at {at}: expected {expected}, got {actual}"
+    )
 }
 
 impl fmt::Display for ExecutionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::BudgetExhausted { budget, consumed, at } => fmt_budget_err(f, at, *consumed, *budget),
-            Self::InvalidInputReference { strand, input_index, at } => fmt_input_ref_err(f, at, *strand, *input_index),
+            Self::BudgetExhausted {
+                budget,
+                consumed,
+                at,
+            } => fmt_budget_err(f, at, *consumed, *budget),
+            Self::InvalidInputReference {
+                strand,
+                input_index,
+                at,
+            } => fmt_input_ref_err(f, at, *strand, *input_index),
             Self::HostError { message, at } => write!(f, "host error at {at}: {message}"),
-            Self::MissingCapability { capability, at } => write!(f, "missing capability {capability:?} at {at}"),
-            Self::TypeMismatch { expected, actual, at } => fmt_type_mismatch_err(f, at, expected, actual),
+            Self::MissingCapability { capability, at } => {
+                write!(f, "missing capability {capability:?} at {at}")
+            }
+            Self::TypeMismatch {
+                expected,
+                actual,
+                at,
+            } => fmt_type_mismatch_err(f, at, expected, actual),
             Self::UnconfirmedEffect { term, effect, at } => fmt_effect_err(f, at, term, *effect),
             Self::UnknownTerm { term, at } => write!(f, "unknown term '{term}' at {at}"),
-            Self::ArityMismatch { term, expected, actual, at } => fmt_arity_err(f, at, term, *expected, *actual),
-            Self::InvalidOutputReference { index, at } => write!(f, "invalid output strand {index} at {at}"),
-            Self::InvalidCapsuleHeader { reason, at } => write!(f, "invalid capsule header at {at}: {reason}"),
+            Self::ArityMismatch {
+                term,
+                expected,
+                actual,
+                at,
+            } => fmt_arity_err(f, at, term, *expected, *actual),
+            Self::InvalidOutputReference { index, at } => {
+                write!(f, "invalid output strand {index} at {at}")
+            }
+            Self::InvalidCapsuleHeader { reason, at } => {
+                write!(f, "invalid capsule header at {at}: {reason}")
+            }
         }
     }
 }
@@ -212,11 +271,7 @@ fn verify_capsule_headers(
     }
 }
 
-fn charge_strand_budget(
-    consumed: &mut u64,
-    cost: u64,
-    budget: u64,
-) -> Result<(), ExecutionError> {
+fn charge_strand_budget(consumed: &mut u64, cost: u64, budget: u64) -> Result<(), ExecutionError> {
     let next_consumed = consumed
         .checked_add(cost)
         .ok_or(ExecutionError::BudgetExhausted {
@@ -250,10 +305,7 @@ fn ensure_capability_available(
     }
 }
 
-fn verify_strand_capability(
-    spec: &TermSpec,
-    grants: &[Capability],
-) -> Result<(), ExecutionError> {
+fn verify_strand_capability(spec: &TermSpec, grants: &[Capability]) -> Result<(), ExecutionError> {
     if let Some(ref required_cap) = spec.capability {
         ensure_capability_available(required_cap, grants)?;
     }
@@ -291,7 +343,12 @@ fn check_strand_arity(term: &str, expected: usize, actual: usize) -> Result<(), 
     }
 }
 
-fn check_input_index(strand_idx: usize, in_pos: usize, evaluated_len: usize, in_idx: u32) -> Result<(), ExecutionError> {
+fn check_input_index(
+    strand_idx: usize,
+    in_pos: usize,
+    evaluated_len: usize,
+    in_idx: u32,
+) -> Result<(), ExecutionError> {
     if in_pos >= strand_idx || in_pos >= evaluated_len {
         Err(ExecutionError::InvalidInputReference {
             strand: strand_idx,
@@ -362,7 +419,11 @@ fn evaluate_strand(
     Ok((entry, out_val))
 }
 
-fn check_output_index(out_pos: usize, evaluated_len: usize, out_idx: u32) -> Result<(), ExecutionError> {
+fn check_output_index(
+    out_pos: usize,
+    evaluated_len: usize,
+    out_idx: u32,
+) -> Result<(), ExecutionError> {
     if out_pos >= evaluated_len {
         Err(ExecutionError::InvalidOutputReference {
             index: out_idx,
@@ -433,7 +494,11 @@ fn validate_cid_bytes(b: &[u8]) -> Result<(), ExecutionError> {
     }
 }
 
-fn check_opaque_tag(tag: &str, expected_label: &str, expected: &TypeTag) -> Result<(), ExecutionError> {
+fn check_opaque_tag(
+    tag: &str,
+    expected_label: &str,
+    expected: &TypeTag,
+) -> Result<(), ExecutionError> {
     if tag != expected_label {
         Err(ExecutionError::TypeMismatch {
             expected: expected.clone(),

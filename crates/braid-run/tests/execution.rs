@@ -68,10 +68,7 @@ struct CustomHost {
     pub writes: Vec<i64>,
 }
 
-fn host_binary_op(
-    inputs: &[Value],
-    op: fn(i64, i64) -> i64,
-) -> Result<Value, ExecutionError> {
+fn host_binary_op(inputs: &[Value], op: fn(i64, i64) -> i64) -> Result<Value, ExecutionError> {
     if let (Some(Value::Int(a)), Some(Value::Int(b))) = (inputs.first(), inputs.get(1)) {
         Ok(Value::Int(op(*a, *b)))
     } else {
@@ -82,10 +79,7 @@ fn host_binary_op(
     }
 }
 
-fn host_fs_write(
-    inputs: &[Value],
-    writes: &mut Vec<i64>,
-) -> Result<Value, ExecutionError> {
+fn host_fs_write(inputs: &[Value], writes: &mut Vec<i64>) -> Result<Value, ExecutionError> {
     if let Some(Value::Int(v)) = inputs.first() {
         writes.push(*v);
         Ok(Value::Bool(true))
