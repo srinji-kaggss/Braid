@@ -27,6 +27,13 @@ use braid_sdk::{Builder, Strand};
 use braid_verify::{verify, Verdict};
 use braid_vocab_js::registry_v0;
 
+/// Maximum source length accepted by the frontend.
+///
+/// This is a whole-pipeline work ceiling: lexing, parsing, and emission are
+/// linear in the token stream, so refusing oversized input before the lexer
+/// bounds every later stage as well.
+pub const MAX_SOURCE_CHARS: usize = 8192;
+
 /// Maximum recursion depth allowed during parsing and elaboration to prevent stack exhaustion.
 pub const MAX_DEPTH: usize = 128;
 
@@ -60,6 +67,13 @@ impl core::fmt::Display for ValType {
 pub enum ElabError {
     /// No tokens — empty or whitespace-only source.
     Empty,
+    /// Source exceeded the frontend's bounded-work ceiling.
+    SourceTooLong {
+        /// Number of Unicode scalar values supplied.
+        len: usize,
+        /// The [`MAX_SOURCE_CHARS`] limit.
+        limit: usize,
+    },
     /// A character or token the lexer cannot form.
     Lex(String),
     /// A token stream the grammar does not accept.
@@ -94,6 +108,9 @@ impl core::fmt::Display for ElabError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             ElabError::Empty => f.write_str("empty source: nothing to elaborate"),
+            ElabError::SourceTooLong { len, limit } => {
+                write!(f, "source has {len} characters; maximum is {limit}")
+            }
             ElabError::Lex(m) => write!(f, "lex error: {m}"),
             ElabError::Parse(m) => write!(f, "parse error: {m}"),
             ElabError::TypeError { op, operands } => {
@@ -870,6 +887,14 @@ fn intent_for(src: &str) -> String {
 
 /// Elaborates a JS source (expressions, let-statements, returns) into an admittable [`Capsule`].
 pub fn elaborate_js(src: &str) -> Result<Capsule, ElabError> {
+    let source_len = src.chars().count();
+    if source_len > MAX_SOURCE_CHARS {
+        return Err(ElabError::SourceTooLong {
+            len: source_len,
+            limit: MAX_SOURCE_CHARS,
+        });
+    }
+
     let prog = parse_program(src)?;
     let reg = registry_v0();
     let mut b = Builder::new(&reg, intent_for(src));
