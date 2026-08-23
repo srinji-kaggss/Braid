@@ -41,7 +41,7 @@ for exactly what changed in the move.
 | `crates/braid-elaborate-js` | **Frontend** (U11–U12): an operator-precedence JS expression language (`+ - * < == && \|\| !`, literals, booleans, parens) that elaborates JS *text* into an admitted capsule via the one `braid-verify`. The first real frontend over the global IR — "renders JS useless" made operational (D31). |
 | `crates/braid-project` | **Toolchain** (U13): a multi-capsule project manifest + `braid-project build` — elaborate + admit every capsule fail-closed, emit a deterministic project CID. The first step toward a `braid build` for projects (D-TOOLCHAIN). |
 | `spec/braid/` | PRD, decision register (`DECISIONS.md`), threat model, unit plan, KAT vectors. **Start here: `spec/braid/README.md`.** |
-| `docs/` | ADR-088 (ratified doctrine + locked invariants); `authoring-cli.md` (hand-author a capsule). |
+| `docs/` | ADR-088 (ratified doctrine + locked invariants); `authoring-cli.md` (hand-author a capsule); `CRATE-OWNERSHIP.md` (crate invariant and boundary map). |
 
 ## Build & test
 
