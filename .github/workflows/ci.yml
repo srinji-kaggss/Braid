@@ -106,9 +106,28 @@ jobs:
   #
   # Build once, share across jobs via the self-hosted filesystem. Downstream
   # jobs inherit the same CARGO_TARGET_DIR and find pre-built artifacts.
+  # ── Failure policy ────────────────────────────────────────────────────────
+  #
+  # The estate audit found five intentionally discarded results. This turns the
+  # discipline into an enforced ceiling rather than a remembered fact.
+  swallow-budget:
+    name: Swallow budget
+    needs: [stack-position]
+    runs-on: self-hosted
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Keep swallowed results at or below five
+        run: |
+          set -eu
+          count="$(grep -rc 'let _ = \|\.ok();' crates/ | awk -F: '{s+=$2} END{print s}')"
+          echo "swallowed-results=$count ceiling=5"
+          test "$count" -le 5
+
   build:
     name: Build
-    needs: [stack-position, scope]
+    needs: [stack-position, scope, swallow-budget]
     runs-on: self-hosted
     env:
       CARGO_TARGET_DIR: /Users/srinji/.braid-ci/targets/${{ github.run_id }}
