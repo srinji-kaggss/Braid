@@ -33,7 +33,9 @@ where
 
     fn run_any(&self, input: &dyn std::any::Any) -> Result<Box<dyn std::any::Any>, BotError> {
         match input.downcast_ref::<A::Input>() {
-            Some(typed) => self.run(typed).map(|v| Box::new(v) as Box<dyn std::any::Any>),
+            Some(typed) => self
+                .run(typed)
+                .map(|v| Box::new(v) as Box<dyn std::any::Any>),
             None => Err(BotError::DomainError {
                 domain: verb::Execute::domain_id(self).into(),
                 cause: "type mismatch in pipeline step input".into(),

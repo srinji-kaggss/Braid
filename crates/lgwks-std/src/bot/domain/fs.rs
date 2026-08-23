@@ -43,9 +43,7 @@ impl verb::Observe for Path {
     fn poll(&self) -> Result<FsState, BotError> {
         let exists = self.target.exists();
         let size = if exists {
-            std::fs::metadata(&self.target)
-                .ok()
-                .map(|m| m.len())
+            std::fs::metadata(&self.target).ok().map(|m| m.len())
         } else {
             None
         };

@@ -257,9 +257,10 @@ impl ObserveBuilder {
                 input: &dyn std::any::Any,
             ) -> Result<Box<dyn std::any::Any>, BotError> {
                 match input.downcast_ref::<A::Input>() {
-                    Some(typed) => {
-                        self.0.run(typed).map(|v| Box::new(v) as Box<dyn std::any::Any>)
-                    }
+                    Some(typed) => self
+                        .0
+                        .run(typed)
+                        .map(|v| Box::new(v) as Box<dyn std::any::Any>),
                     None => Err(BotError::DomainError {
                         domain: self.0.domain_id().into(),
                         cause: "type mismatch in execute input".into(),
