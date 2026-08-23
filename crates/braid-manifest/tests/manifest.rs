@@ -86,7 +86,10 @@ fn empty_owner_and_empty_lists_fail_closed() {
     ));
     assert!(matches!(
         validate(&VALID.replace("\"cargo test --workspace\"", "\"\"")).unwrap_err(),
-        ManifestError::EmptyList { field: "canonical_commands", .. }
+        ManifestError::EmptyList {
+            field: "canonical_commands",
+            ..
+        }
     ));
 }
 
@@ -167,7 +170,10 @@ fn inventory_contract() {
     assert!(ok[1].cid.is_none(), "null = declared, not yet admitted");
     assert!(matches!(
         parse_inventory("{}").unwrap_err(),
-        ManifestError::EmptyList { field: "inventory", .. }
+        ManifestError::EmptyList {
+            field: "inventory",
+            ..
+        }
     ));
     assert!(matches!(
         parse_inventory(r#"{ "a": "not-hex" }"#).unwrap_err(),

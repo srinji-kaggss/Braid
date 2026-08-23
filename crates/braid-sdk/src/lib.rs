@@ -91,7 +91,10 @@ impl fmt::Display for BuildError {
                 got,
                 at,
             } => {
-                write!(f, "arity mismatch for `{term}` at {at}: expected {expected}, got {got}")
+                write!(
+                    f,
+                    "arity mismatch for `{term}` at {at}: expected {expected}, got {got}"
+                )
             }
             Self::TypeMismatch {
                 term,
@@ -227,10 +230,13 @@ impl<'r> Builder<'r> {
     /// Place a strand, type- and arity-checking its inputs against the
     /// registry. Returns a handle usable as input to later strands.
     pub fn strand(&mut self, term_id: &str, inputs: &[Strand]) -> Result<Strand, BuildError> {
-        let spec = self.registry.get(term_id).ok_or_else(|| BuildError::UnknownTerm {
-            term: term_id.to_string(),
-            at: "Builder::strand",
-        })?;
+        let spec = self
+            .registry
+            .get(term_id)
+            .ok_or_else(|| BuildError::UnknownTerm {
+                term: term_id.to_string(),
+                at: "Builder::strand",
+            })?;
         self.validate_inputs(term_id, inputs, spec)?;
         self.record_effects(spec);
 

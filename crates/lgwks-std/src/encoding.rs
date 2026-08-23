@@ -107,7 +107,7 @@ pub mod base64 {
     impl Error for DecodeError {}
 
     fn check_base64_quantum(len: usize) -> Result<(), DecodeError> {
-        if len % 4 != 0 {
+        if !len.is_multiple_of(4) {
             Err(DecodeError::BadLength { len, at: len })
         } else {
             Ok(())

@@ -219,10 +219,16 @@ impl fmt::Display for ManifestError {
             }
             Self::EmptyField { field, at } => write!(f, "field `{field}` is empty at {at}"),
             Self::EmptyList { field, at } => write!(f, "field `{field}` list is empty at {at}"),
-            Self::BannedChar { field, at } => write!(f, "field `{field}` contains banned characters at {at}"),
-            Self::UnsafeName { name, at } => write!(f, "name `{name}` is not a safe path key at {at}"),
+            Self::BannedChar { field, at } => {
+                write!(f, "field `{field}` contains banned characters at {at}")
+            }
+            Self::UnsafeName { name, at } => {
+                write!(f, "name `{name}` is not a safe path key at {at}")
+            }
             Self::Canon { error, at } => write!(f, "canonical decoding failed at {at}: {error:?}"),
-            Self::Malformed { field, at } => write!(f, "canonical shape violation on `{field}` at {at}"),
+            Self::Malformed { field, at } => {
+                write!(f, "canonical shape violation on `{field}` at {at}")
+            }
         }
     }
 }
@@ -473,9 +479,7 @@ fn decode_manifest_ci_status(v: &Value) -> Result<CiStatus, ManifestError> {
     })
 }
 
-fn decode_manifest_metadata(
-    v: &Value,
-) -> Result<(String, bool, String, String), ManifestError> {
+fn decode_manifest_metadata(v: &Value) -> Result<(String, bool, String, String), ManifestError> {
     let gate_version = decode_text_field(v, "gate_version")?;
     let local_ci = decode_bool_field(v, "local_ci")?;
     let name = decode_text_field(v, "name")?;
@@ -483,9 +487,7 @@ fn decode_manifest_metadata(
     Ok((gate_version, local_ci, name, owner))
 }
 
-fn decode_manifest_lists(
-    v: &Value,
-) -> Result<(Vec<String>, Vec<String>), ManifestError> {
+fn decode_manifest_lists(v: &Value) -> Result<(Vec<String>, Vec<String>), ManifestError> {
     let canonical_commands = decode_list_field(v, "canonical_commands")?;
     let entry_docs = decode_list_field(v, "entry_docs")?;
     Ok((canonical_commands, entry_docs))

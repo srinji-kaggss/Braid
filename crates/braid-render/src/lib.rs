@@ -39,10 +39,7 @@ pub struct Manifest {
 pub enum RenderError {
     /// A strand references a term the registry doesn't know — a manifest for
     /// an unverifiable capsule must not exist (fail-closed, L9).
-    UnknownTerm {
-        term: String,
-        at: &'static str,
-    },
+    UnknownTerm { term: String, at: &'static str },
 }
 
 impl fmt::Display for RenderError {
@@ -143,7 +140,11 @@ fn format_list_field(items: &[String]) -> String {
     if items.is_empty() {
         "(none)".into()
     } else {
-        items.iter().map(|item| escape_field(item)).collect::<Vec<_>>().join(", ")
+        items
+            .iter()
+            .map(|item| escape_field(item))
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 }
 
@@ -165,13 +166,21 @@ fn render_header_lines(m: &Manifest, out: &mut String) {
 fn render_strand_metrics(m: &Manifest, out: &mut String) {
     push_manifest_line(out, "capabilities", &format_list_field(&m.capabilities));
     push_manifest_line(out, "effects", &format_list_field(&m.effects));
-    push_manifest_line(out, "irreversible_strands", &m.irreversible_strands.to_string());
+    push_manifest_line(
+        out,
+        "irreversible_strands",
+        &m.irreversible_strands.to_string(),
+    );
     push_manifest_line(out, "egress_strands", &m.egress_strands.to_string());
 }
 
 fn render_policy_metrics(m: &Manifest, out: &mut String) {
     push_manifest_line(out, "strands", &m.strand_count.to_string());
-    push_manifest_line(out, "cost", &format!("{} / budget {}", m.total_cost, m.budget));
+    push_manifest_line(
+        out,
+        "cost",
+        &format!("{} / budget {}", m.total_cost, m.budget),
+    );
     let confirm_str = match m.confirm {
         ConfirmPolicy::None => "none",
         ConfirmPolicy::HumanConfirm => "human-confirm",
@@ -286,7 +295,11 @@ fn diff_meta_fields(old: &Manifest, new: &Manifest, deltas: &mut Vec<Delta>) {
         deltas.push(Delta {
             kind: DeltaKind::Neutral,
             field: "capsule",
-            detail: format!("{} -> {}", old.capsule_cid.to_hex(), new.capsule_cid.to_hex()),
+            detail: format!(
+                "{} -> {}",
+                old.capsule_cid.to_hex(),
+                new.capsule_cid.to_hex()
+            ),
         });
     }
     if old.intent != new.intent {

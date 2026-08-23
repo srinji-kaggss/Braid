@@ -162,7 +162,7 @@ jobs:
 
       - name: Record docs-only N/A
         if: needs.scope.outputs.code_changed != 'yes'
-        run: echo "scope: docs-only — tests skipped (explicit N/A)"
+        run: echo "scope docs-only — tests skipped (explicit N/A)"
 
   # ── Clippy ────────────────────────────────────────────────────────────────
   clippy:
@@ -181,7 +181,7 @@ jobs:
 
       - name: Record docs-only N/A
         if: needs.scope.outputs.code_changed != 'yes'
-        run: echo "scope: docs-only — clippy skipped (explicit N/A)"
+        run: echo "scope docs-only — clippy skipped (explicit N/A)"
 
   # ── Cleanup ───────────────────────────────────────────────────────────────
   cleanup:

@@ -29,10 +29,12 @@ impl std::error::Error for PatternError {}
 impl Regex {
     /// Compile a pattern. Returns an error if the syntax is invalid.
     pub fn new(pattern: &str) -> Result<Self, PatternError> {
-        regex::Regex::new(pattern).map(Self).map_err(|e| PatternError {
-            pattern: pattern.to_string(),
-            message: e.to_string(),
-        })
+        regex::Regex::new(pattern)
+            .map(Self)
+            .map_err(|e| PatternError {
+                pattern: pattern.to_string(),
+                message: e.to_string(),
+            })
     }
 
     /// Reports whether the pattern matches anywhere in `text`.

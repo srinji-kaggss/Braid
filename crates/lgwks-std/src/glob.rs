@@ -121,11 +121,7 @@ fn step_class(body: &[u8], negated: bool, path: &[u8], dp: &[bool], next: &mut [
     for j in 1..=path.len() {
         if dp[j - 1] && path[j - 1] != b'/' {
             let matches_body = scan_class_body(body, path[j - 1]);
-            let hit = if negated {
-                !matches_body
-            } else {
-                matches_body
-            };
+            let hit = if negated { !matches_body } else { matches_body };
             if hit {
                 next[j] = true;
             }

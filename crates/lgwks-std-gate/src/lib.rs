@@ -463,9 +463,8 @@ mod tests {
         {
             const APPROVED: &[&str] = &["blake3", "regex", "rkyv", "serde", "serde_json"];
 
-            let manifest =
-                std::fs::read_to_string(workspace.join("crates/lgwks-std/Cargo.toml"))
-                    .expect("std manifest missing");
+            let manifest = std::fs::read_to_string(workspace.join("crates/lgwks-std/Cargo.toml"))
+                .expect("std manifest missing");
             let after = manifest
                 .split("[dependencies]")
                 .nth(1)

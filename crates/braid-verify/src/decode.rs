@@ -230,7 +230,11 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    fn check_key_order(&self, prev_key: &Option<String>, next_key: &str) -> Result<(), DecodeError> {
+    fn check_key_order(
+        &self,
+        prev_key: &Option<String>,
+        next_key: &str,
+    ) -> Result<(), DecodeError> {
         if let Some(prev) = prev_key {
             if !key_lt(prev, next_key) {
                 Err(DecodeError::KeyOrder { at: self.offset })
