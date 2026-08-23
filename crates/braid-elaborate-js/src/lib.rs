@@ -27,6 +27,8 @@ use braid_sdk::{Builder, Strand};
 use braid_verify::{verify, Verdict};
 use braid_vocab_js::registry_v0;
 
+pub mod cli;
+
 /// Maximum source length accepted by the frontend.
 ///
 /// This is a whole-pipeline work ceiling: lexing, parsing, and emission are

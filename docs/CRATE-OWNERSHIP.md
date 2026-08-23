@@ -11,7 +11,9 @@ reuse does not.
 Measured at `af69f012a9298a817ee8c8863bf2d09cf1b046fe`: 17 workspace crates,
 66 Rust source files, and 17,075 lines in `crates/*/src/**/*.rs`. The original
 #28 census predated the `lgwks-*` crates, which are intentionally present as a
-separate authority surface rather than part of the Braid substrate.
+separate authority surface rather than part of the Braid substrate. The D5
+process-boundary extraction adds `braid-runtime`, so the current audited count
+is 18.
 
 ## Boundaries
 
@@ -28,6 +30,7 @@ separate authority surface rather than part of the Braid substrate.
 | `braid-vocab-rust` | The admitted-capsule-to-Rust emission contract and generated dependency-free API shape. | Change Rust emission strategy, naming, module layout, or generated-API compatibility. | **Lifecycle/cadence:** generated-Rust compatibility is distinct from source parsing, admission, and runtime execution. |
 | `braid-elaborate-js` | Untrusted JS text parsing, statement/expression elaboration, refusal typing, and depth bounds. | Expand accepted syntax, improve typed refusals, or harden resource limits. | **Security/failure mode:** hostile-source handling stays isolated from vocabulary authorities and cannot be bypassed by builder/runtime internals. |
 | `braid-project` | Whole-project admission: unique capsule names, independent per-capsule admission, no partial success, and a deterministic project CID. | Change project-manifest schema, aggregation policy, or project-CID framing. | **Failure mode/lifecycle:** project builds are toolchain artifacts and fail as a whole; they do not create a second capsule-admission authority. |
+| `braid-runtime` | The executable startup contract: validated OS arguments and one startup-failure path before any domain state exists. | Change process/platform input handling or the common startup diagnostic contract. | **Failure mode/lifecycle:** OS startup failures are handled once before partial domain work; each CLI retains its own policy/output semantics. |
 | `braid-cli` | The human-reconstructable command loop across encode, decode, verify, render, diff, catalog, and store workflows. | Add commands, alter output contracts, or improve operator recovery. | **Cadence/lifecycle:** operator UX and CLI compatibility move independently from library APIs. |
 | `braid-manifest` | The repository-manifest sibling artifact: closed dimensions, required fields, validation, canonical bytes, and CID domain. | Change the inventory schema, closed enums, validation rules, or manifest CID domain. | **Authority/lifecycle:** repository metadata uses Braid's encoding discipline but is deliberately not an admitted capsule. |
 | `braid-run` | Deterministic DAG evaluation, capability-gated effect dispatch, confirmation/budget enforcement, and journal evidence. | Change execution order guarantees, host dispatch, resource accounting, evidence records, or effect handling. | **Security/failure/scaling:** execution is a distinct trust and resource-control surface from static admission and authoring. |
@@ -37,7 +40,7 @@ separate authority surface rather than part of the Braid substrate.
 
 ## Outcome
 
-All 17 boundaries satisfy all three columns. Therefore this slice performs **no
-crate merges**. The next #28 slices are behavioral: remove non-test panics from
-`braid-vocab-web`, bound long-running elaboration work, consolidate common
-entrypoint setup, and enforce the swallowed-result ceiling in CI.
+All 18 boundaries satisfy all three columns. The earlier #28 behavioral slices
+removed the web-vocabulary panic surface, bounded JS elaboration input, and made
+the five-result swallow ceiling a CI gate. This slice completes issue #28's
+entrypoint consolidation without merging any existing crate.

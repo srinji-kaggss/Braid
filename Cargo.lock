@@ -88,6 +88,7 @@ dependencies = [
  "braid-ir",
  "braid-manifest",
  "braid-render",
+ "braid-runtime",
  "braid-sdk",
  "braid-verify",
  "braid-vocab-cms",
@@ -103,6 +104,7 @@ dependencies = [
  "braid-capability",
  "braid-ir",
  "braid-render",
+ "braid-runtime",
  "braid-sdk",
  "braid-verify",
  "braid-vocab-js",
@@ -147,6 +149,7 @@ dependencies = [
  "blake3",
  "braid-elaborate-js",
  "braid-ir",
+ "braid-runtime",
  "braid-verify",
  "braid-vocab-js",
  "braid-vocab-rust",
@@ -172,6 +175,10 @@ dependencies = [
  "braid-verify",
  "lgwks_std",
 ]
+
+[[package]]
+name = "braid-runtime"
+version = "0.1.0"
 
 [[package]]
 name = "braid-sdk"

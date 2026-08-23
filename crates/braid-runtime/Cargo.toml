@@ -1,0 +1,10 @@
+[package]
+name = "braid-runtime"
+version = "0.1.0"
+edition = "2021"
+description = "Shared process-entry contract for Braid's operator-facing executables"
+repository = "https://github.com/srinji-kaggss/Braid"
+homepage = "https://github.com/srinji-kaggss/Braid"
+license = "MIT"
+
+[dependencies]
