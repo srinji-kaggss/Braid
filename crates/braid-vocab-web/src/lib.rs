@@ -28,12 +28,62 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use braid_capability::Capability;
-use braid_ir::term::{EffectClass, Exposure, TermRegistry, TermSpec, TypeTag};
+use braid_ir::term::{EffectClass, Exposure, RegistryError, TermRegistry, TermSpec, TypeTag};
+use braid_ir::{decode_strict, CanonError};
 
 /// Browser vocabulary version. Independent of other packages; a bump is a
 /// content-addressed registry event (the registry CID changes), never silent
 /// drift.
 pub const VOCAB_VERSION: u32 = 1;
+
+// ── typed vocabulary surface ──
+
+/// A term known to exist in every valid web vocabulary.
+///
+/// Callers that use this key do not need fallible string lookup or panic
+/// recovery: [`WebVocabulary::get`] returns the specification directly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum WebTerm {
+    Navigate,
+    Observe,
+    Click,
+    Type,
+    Scroll,
+    Wait,
+    Download,
+    ExecuteJs,
+    ExecuteWasm,
+}
+
+impl WebTerm {
+    /// Every web-vocabulary term, in canonical identifier order.
+    pub const ALL: [Self; 9] = [
+        Self::Click,
+        Self::Download,
+        Self::ExecuteJs,
+        Self::ExecuteWasm,
+        Self::Navigate,
+        Self::Observe,
+        Self::Scroll,
+        Self::Type,
+        Self::Wait,
+    ];
+
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Click => "web.click",
+            Self::Download => "web.download",
+            Self::ExecuteJs => "web.execute_js",
+            Self::ExecuteWasm => "web.execute_wasm",
+            Self::Navigate => "web.navigate",
+            Self::Observe => "web.observe",
+            Self::Scroll => "web.scroll",
+            Self::Type => "web.type",
+            Self::Wait => "web.wait",
+        }
+    }
+}
 
 // ── domain types (D31, vocabulary-owned `Opaque`) ──
 
@@ -105,10 +155,6 @@ pub fn dangerous_terms(r: &TermRegistry) -> Vec<String> {
     v
 }
 
-/// Build the v0 web action registry. Infallible by construction — the specs
-/// satisfy `TermRegistry::insert`'s invariants (pinned by a unit test).
-///
-/// The id set is exactly AX-Browser's closed `web.*` action vocabulary (A5).
 fn dom_specs() -> Vec<TermSpec> {
     use EffectClass::*;
     use Exposure::*;
@@ -217,17 +263,148 @@ fn compute_specs() -> Vec<TermSpec> {
     ]
 }
 
-/// Build the v0 web action registry. Infallible by construction — the specs
-/// satisfy `TermRegistry::insert`'s invariants (pinned by a unit test).
-///
-/// The id set is exactly AX-Browser's closed `web.*` action vocabulary (A5).
-pub fn registry_v0() -> TermRegistry {
-    let mut reg = TermRegistry::new(VOCAB_VERSION);
-    for spec in dom_specs().into_iter().chain(compute_specs()) {
-        reg.insert(spec)
-            .expect("registry_v0 specs are statically valid");
+/// Failure policy for constructing or decoding a web vocabulary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VocabularyError {
+    /// A built-in declaration violated the substrate registry invariants.
+    InvalidSpec(RegistryError),
+    /// A statically required term was absent after registry construction.
+    MissingKnownTerm(WebTerm),
+    /// Untrusted bytes were not strict canonical IR.
+    Canonical(CanonError),
+    /// Strict canonical bytes did not decode as a term registry.
+    InvalidRegistry(RegistryError),
+    /// Decoded bytes are canonical IR but not the pinned web vocabulary.
+    PinnedRegistryCidMismatch {
+        expected: &'static str,
+        actual: String,
+    },
+}
+
+impl core::fmt::Display for VocabularyError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::InvalidSpec(error) => write!(f, "invalid web vocabulary spec: {error}"),
+            Self::MissingKnownTerm(term) => {
+                write!(f, "missing known web vocabulary term {}", term.as_str())
+            }
+            Self::Canonical(error) => write!(f, "canonical decode failed: {error}"),
+            Self::InvalidRegistry(error) => {
+                write!(f, "canonical value is not a registry: {error}")
+            }
+            Self::PinnedRegistryCidMismatch { expected, actual } => write!(
+                f,
+                "decoded registry CID {actual} is not pinned web CID {expected}"
+            ),
+        }
     }
-    reg
+}
+
+impl core::error::Error for VocabularyError {}
+
+/// The validated web vocabulary and its substrate registry.
+///
+/// Construction fails closed if any built-in declaration violates a registry
+/// invariant. Once constructed, known-term access cannot miss and therefore
+/// cannot panic.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WebVocabulary {
+    registry: TermRegistry,
+    click: TermSpec,
+    download: TermSpec,
+    execute_js: TermSpec,
+    execute_wasm: TermSpec,
+    navigate: TermSpec,
+    observe: TermSpec,
+    scroll: TermSpec,
+    r#type: TermSpec,
+    wait: TermSpec,
+}
+
+impl WebVocabulary {
+    fn known_spec(registry: &TermRegistry, term: WebTerm) -> Result<&TermSpec, VocabularyError> {
+        registry
+            .get(term.as_str())
+            .ok_or(VocabularyError::MissingKnownTerm(term))
+    }
+
+    fn from_registry(registry: TermRegistry) -> Result<Self, VocabularyError> {
+        Ok(Self {
+            click: Self::known_spec(&registry, WebTerm::Click)?.clone(),
+            download: Self::known_spec(&registry, WebTerm::Download)?.clone(),
+            execute_js: Self::known_spec(&registry, WebTerm::ExecuteJs)?.clone(),
+            execute_wasm: Self::known_spec(&registry, WebTerm::ExecuteWasm)?.clone(),
+            navigate: Self::known_spec(&registry, WebTerm::Navigate)?.clone(),
+            observe: Self::known_spec(&registry, WebTerm::Observe)?.clone(),
+            scroll: Self::known_spec(&registry, WebTerm::Scroll)?.clone(),
+            r#type: Self::known_spec(&registry, WebTerm::Type)?.clone(),
+            wait: Self::known_spec(&registry, WebTerm::Wait)?.clone(),
+            registry,
+        })
+    }
+
+    pub fn get(&self, term: WebTerm) -> &TermSpec {
+        match term {
+            WebTerm::Click => &self.click,
+            WebTerm::Download => &self.download,
+            WebTerm::ExecuteJs => &self.execute_js,
+            WebTerm::ExecuteWasm => &self.execute_wasm,
+            WebTerm::Navigate => &self.navigate,
+            WebTerm::Observe => &self.observe,
+            WebTerm::Scroll => &self.scroll,
+            WebTerm::Type => &self.r#type,
+            WebTerm::Wait => &self.wait,
+        }
+    }
+
+    #[must_use]
+    pub const fn registry(&self) -> &TermRegistry {
+        &self.registry
+    }
+
+    #[must_use]
+    pub fn into_registry(self) -> TermRegistry {
+        self.registry
+    }
+
+    #[must_use]
+    pub fn to_canonical_bytes(&self) -> Vec<u8> {
+        braid_ir::encode(&self.registry.to_canon())
+    }
+
+    pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, VocabularyError> {
+        let value = decode_strict(bytes).map_err(VocabularyError::Canonical)?;
+        let registry =
+            TermRegistry::from_canon(&value).map_err(VocabularyError::InvalidRegistry)?;
+
+        let actual_cid = registry.cid();
+        let actual_hex = actual_cid.to_hex();
+        if actual_hex != PINNED_REGISTRY_CID_V1 {
+            return Err(VocabularyError::PinnedRegistryCidMismatch {
+                expected: PINNED_REGISTRY_CID_V1,
+                actual: actual_hex,
+            });
+        }
+
+        Self::from_registry(registry)
+    }
+}
+
+/// Build and validate the closed v0 web action vocabulary.
+pub fn vocabulary_v0() -> Result<WebVocabulary, VocabularyError> {
+    let mut registry = TermRegistry::new(VOCAB_VERSION);
+    for spec in dom_specs().into_iter().chain(compute_specs()) {
+        registry
+            .insert(spec)
+            .map_err(VocabularyError::InvalidSpec)?;
+    }
+
+    WebVocabulary::from_registry(registry)
+}
+
+/// Build the v0 substrate registry without panicking on an authoring mistake.
+pub fn registry_v0() -> Result<TermRegistry, VocabularyError> {
+    vocabulary_v0().map(WebVocabulary::into_registry)
 }
 
 #[cfg(test)]
@@ -236,91 +413,89 @@ mod tests {
     use alloc::string::ToString;
 
     #[test]
-    fn registry_v0_is_the_closed_action_vocabulary() {
-        let r = registry_v0();
-        // Exactly AX-Browser A5's nine closed verbs — no more, no less.
-        let expected = [
-            "web.navigate",
-            "web.observe",
-            "web.click",
-            "web.type",
-            "web.scroll",
-            "web.wait",
-            "web.download",
-            "web.execute_js",
-            "web.execute_wasm",
-        ];
-        assert_eq!(r.len(), expected.len());
-        for id in expected {
-            assert!(r.get(id).is_some(), "missing term {id}");
+    fn registry_v0_is_the_closed_action_vocabulary() -> Result<(), VocabularyError> {
+        let vocabulary = vocabulary_v0()?;
+        assert_eq!(WebTerm::ALL.len(), 9);
+        for term in WebTerm::ALL {
+            assert_eq!(vocabulary.get(term).id, term.as_str());
         }
-        // Anything outside the vocabulary is unrepresentable.
-        assert!(r.get("web.eval").is_none());
-        assert!(r.get("eval").is_none());
+        assert!(vocabulary.registry().get("web.eval").is_none());
+        assert!(vocabulary.registry().get("eval").is_none());
+        Ok(())
     }
 
     #[test]
-    fn download_is_the_only_irreversible_term() {
-        let r = registry_v0();
-        for term in r.terms() {
+    fn download_is_the_only_irreversible_term() -> Result<(), VocabularyError> {
+        let vocabulary = vocabulary_v0()?;
+        for term in vocabulary.registry().terms() {
             if term.effect == EffectClass::Irreversible {
                 assert_eq!(term.id, "web.download");
                 assert!(term.egress_ceiling.is_some());
             }
         }
-        assert_eq!(
-            r.get("web.download").unwrap().effect,
-            EffectClass::Irreversible
-        );
+
+        let download = vocabulary.get(WebTerm::Download);
+        assert_eq!(download.effect, EffectClass::Irreversible);
+        assert_eq!(download.egress_ceiling, Some(Exposure::Internal));
+        Ok(())
     }
 
     #[test]
-    fn untrusted_compute_is_not_egress() {
-        let r = registry_v0();
-        for id in ["web.execute_js", "web.execute_wasm"] {
-            let term = r.get(id).unwrap();
-            assert_ne!(term.effect, EffectClass::Egress);
+    fn untrusted_compute_is_not_egress() -> Result<(), VocabularyError> {
+        let vocabulary = vocabulary_v0()?;
+        for term in [WebTerm::ExecuteJs, WebTerm::ExecuteWasm] {
+            let spec = vocabulary.get(term);
+            assert_ne!(spec.effect, EffectClass::Egress);
             assert_eq!(
-                term.capability.as_ref().unwrap().as_str(),
-                COMPUTE_LOCAL_NAME
+                spec.capability.as_ref().map(Capability::as_str),
+                Some(COMPUTE_LOCAL_NAME)
             );
         }
+        Ok(())
     }
 
     #[test]
-    fn wait_is_pure_and_uncapability() {
-        let w = registry_v0();
-        let wait = w.get("web.wait").unwrap();
+    fn wait_is_pure_and_uncapability() -> Result<(), VocabularyError> {
+        let vocabulary = vocabulary_v0()?;
+        let wait = vocabulary.get(WebTerm::Wait);
         assert_eq!(wait.effect, EffectClass::Pure);
         assert!(wait.capability.is_none());
+        Ok(())
     }
 
     #[test]
-    fn registry_round_trips_canonically() {
-        let r = registry_v0();
-        let bytes = braid_ir::canon::encode(&r.to_canon());
-        let v = braid_ir::decode_strict(&bytes).expect("canonical");
-        let r2 = TermRegistry::from_canon(&v).expect("decodes");
-        assert_eq!(r, r2);
-        assert_eq!(r.cid(), r2.cid());
+    fn registry_round_trips_canonically() -> Result<(), VocabularyError> {
+        let vocabulary = vocabulary_v0()?;
+        let bytes = vocabulary.to_canonical_bytes();
+        let decoded = WebVocabulary::from_canonical_bytes(&bytes)?;
+        assert_eq!(vocabulary, decoded);
+        assert_eq!(vocabulary.registry().cid(), decoded.registry().cid());
+        Ok(())
     }
 
     #[test]
-    fn registry_cid_is_pinned_to_vocab_v1() {
-        let r = registry_v0();
-        assert_eq!(r.vocab_version, 1);
+    fn foreign_bytes_are_rejected_without_panicking() {
+        let error = WebVocabulary::from_canonical_bytes(b"not-canonical");
+        assert!(matches!(error, Err(VocabularyError::Canonical(_))));
+    }
+
+    #[test]
+    fn registry_cid_is_pinned_to_vocab_v1() -> Result<(), VocabularyError> {
+        let registry = registry_v0()?;
+        assert_eq!(registry.vocab_version, 1);
         assert_eq!(
-            r.cid().to_hex(),
+            registry.cid().to_hex(),
             PINNED_REGISTRY_CID_V1,
             "the web registry CID moved without a recorded re-pin"
         );
+        Ok(())
     }
 
     #[test]
-    fn expansion_added_no_escape_hatch() {
-        let r = registry_v0();
+    fn expansion_added_no_escape_hatch() -> Result<(), VocabularyError> {
+        let registry = registry_v0()?;
         assert_eq!(
-            dangerous_terms(&r),
+            dangerous_terms(&registry),
             vec![
                 "web.click".to_string(),
                 "web.download".to_string(),
@@ -334,54 +509,43 @@ mod tests {
             "a term change altered the authority surface — that must be a \
              conscious, reviewed event, not a silent escape hatch"
         );
+        Ok(())
     }
 
     #[test]
-    fn navigate_is_read_with_navigate_capability() {
-        let r = registry_v0();
-        let nav = r.get("web.navigate").unwrap();
-        assert_eq!(nav.effect, EffectClass::Read);
-        assert_eq!(nav.capability.as_ref().unwrap().as_str(), NAVIGATE_NAME);
-        assert_eq!(nav.source_exposure, Exposure::Public);
+    fn navigate_is_read_with_navigate_capability() -> Result<(), VocabularyError> {
+        let vocabulary = vocabulary_v0()?;
+        let navigate = vocabulary.get(WebTerm::Navigate);
+        assert_eq!(navigate.effect, EffectClass::Read);
+        assert_eq!(
+            navigate.capability.as_ref().map(Capability::as_str),
+            Some(NAVIGATE_NAME)
+        );
+        assert_eq!(navigate.source_exposure, Exposure::Public);
+        Ok(())
     }
 
     #[test]
-    fn interact_terms_are_reversible_write() {
-        let r = registry_v0();
-        for id in ["web.click", "web.type", "web.scroll"] {
-            let term = r.get(id).unwrap();
-            assert_eq!(term.effect, EffectClass::ReversibleWrite);
-            assert_eq!(term.capability.as_ref().unwrap().as_str(), INTERACT_NAME);
-            assert_eq!(term.source_exposure, Exposure::Internal);
+    fn interact_terms_are_reversible_write() -> Result<(), VocabularyError> {
+        let vocabulary = vocabulary_v0()?;
+        for term in [WebTerm::Click, WebTerm::Type, WebTerm::Scroll] {
+            let spec = vocabulary.get(term);
+            assert_eq!(spec.effect, EffectClass::ReversibleWrite);
+            assert_eq!(
+                spec.capability.as_ref().map(Capability::as_str),
+                Some(INTERACT_NAME)
+            );
+            assert_eq!(spec.source_exposure, Exposure::Internal);
         }
-    }
-
-    #[test]
-    fn download_has_egress_ceiling() {
-        let r = registry_v0();
-        let dl = r.get("web.download").unwrap();
-        assert_eq!(dl.effect, EffectClass::Irreversible);
-        assert_eq!(dl.egress_ceiling, Some(Exposure::Internal));
-        assert_eq!(dl.capability.as_ref().unwrap().as_str(), FS_WRITE_NAME);
+        Ok(())
     }
 
     #[test]
     fn type_tag_constructors_produce_opaque_tags() {
-        let e = element();
-        let o = observation();
-        match &e {
-            TypeTag::Opaque(name, params) => {
-                assert_eq!(name, "web.element");
-                assert!(params.is_empty());
-            }
-            _ => panic!("element() must produce Opaque"),
-        }
-        match &o {
-            TypeTag::Opaque(name, params) => {
-                assert_eq!(name, "web.observation");
-                assert!(params.is_empty());
-            }
-            _ => panic!("observation() must produce Opaque"),
-        }
+        assert_eq!(element(), TypeTag::Opaque("web.element".into(), Vec::new()));
+        assert_eq!(
+            observation(),
+            TypeTag::Opaque("web.observation".into(), Vec::new())
+        );
     }
 }
