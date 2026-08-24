@@ -53,7 +53,7 @@ Default feature set: `core` (enabled by default).
 | `core` | `hex` | Hex encode/decode | `hex` |
 | `core` | `id` | UUID v4 generation and parsing | `uuid` |
 | `core` | `leb128` | LEB128 variable-length integer encoding | — |
-| `core` | `random` | OS entropy (`/dev/urandom`) | `getrandom` |
+| `core` | `random` | OS entropy | `getrandom` |
 | `core` | `task` | Minimal single-threaded async executor | — |
 | `core` | `time` | RFC 3339 timestamps, calendar math | `chrono` / `time` |
 | `hash` | `hash` | BLAKE3 content-addressable hashing | `blake3` |
@@ -79,7 +79,7 @@ Legacy module ownership map:
 | `time` | RFC 3339 timestamps, calendar math |
 | `encoding::base64` | Base64 encode/decode (RFC 4648) |
 | `encoding::percent` | Percent-encoding for URI components |
-| `random` | OS entropy (`/dev/urandom`) |
+| `random` | OS entropy |
 | `leb128` | LEB128 variable-length integer encoding |
 | `fs` | Recursive directory walking with sandbox enforcement |
 | `task` | Minimal single-threaded async executor |
@@ -102,6 +102,12 @@ features:
 
 The gate test `deps_are_approved_leaves` in `lgwks-std-gate` mechanically
 verifies no unapproved dependency appears in the manifest.
+
+## Contract source-of-truth
+
+- `crates/lgwks-std/Cargo.toml` is authoritative for dependency declarations.
+- `contract/APPROVED.toml` is authoritative for approved versions.
+- `crates/lgwks-std-gate/src/lib.rs` is authoritative for enforcement behavior.
 
 ## The gate
 

@@ -5,7 +5,7 @@ version = "0.3.0"
 edition = "2021"
 rust-version = "1.97"
 license = "MPL-2.0"
-repository = "https://github.com/logicalworks/lgwks-std"
+repository = "https://github.com/srinji-kaggss/Braid"
 categories = ["development-tools", "encoding", "asynchronous"]
 keywords = ["stdlib", "utilities", "zero-config", "async", "serialization"]
 
