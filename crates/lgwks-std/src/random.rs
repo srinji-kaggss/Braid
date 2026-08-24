@@ -1,7 +1,7 @@
 //! `random` owns every source of randomness in the estate and enforces
-//! INV-RANDOM-ONE-SOURCE: all randomness comes from the operating system's
-//! CSPRNG, and a failure to read it is an error the caller must handle — never
-//! a silent fall back to a clock, a counter, or a userspace PRNG.
+//! INV-RANDOM-ONE-SOURCE: all randomness comes from a single OS CSPRNG backend,
+//! and a failure to read it is an error the caller must handle — never a
+//! silent fallback to a clock, a counter, or userspace PRNG.
 //!
 //! Backs `uuid` v4 generation and is the intended home for the `rand` crate's
 //! work — but `rand` is declared in 4 manifests and reached from **43** call
@@ -12,47 +12,39 @@
 //! source of randomness would be a second source of truth for one concept,
 //! which Law 3 forbids.
 //!
-//! The entropy device is `/dev/urandom`, which is non-blocking and
-//! cryptographically seeded on both platforms the estate targets. A fallback
-//! path is deliberately absent: a hidden downgrade from CSPRNG bytes to
-//! timestamp bytes is the exact failure mode that makes generated identifiers
-//! predictable, so this module surfaces the fault instead.
+//! Supported targets are Linux, macOS, and Windows. For unsupported targets,
+//! the crate fails at compile time so callers do not get a runtime surprise.
 
 use std::error::Error;
 use std::fmt;
-use std::fs::File;
-use std::io::Read;
 
-const ENTROPY_DEVICE: &str = "/dev/urandom";
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+compile_error!("lgwks_std::random supports linux, macOS, and windows only.");
 
 /// The OS entropy source could not be read. There is no second source; a caller
 /// that cannot proceed without randomness must fail, not substitute.
 #[derive(Debug)]
 pub struct EntropyError {
-    device: &'static str,
-    cause: std::io::Error,
+    backend: &'static str,
+    cause: String,
 }
 
 impl EntropyError {
-    /// The device path that could not be read.
-    pub fn device(&self) -> &'static str {
-        self.device
+    /// The backend that could not provide entropy.
+    pub fn backend(&self) -> &'static str {
+        self.backend
     }
 }
 
 impl fmt::Display for EntropyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "could not read OS entropy from {}: {}",
-            self.device, self.cause
-        )
+        write!(f, "could not read OS entropy from {}: {}", self.backend, self.cause)
     }
 }
 
 impl Error for EntropyError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        Some(&self.cause)
+        None
     }
 }
 
@@ -61,13 +53,9 @@ pub fn fill_bytes(buf: &mut [u8]) -> Result<(), EntropyError> {
     if buf.is_empty() {
         return Ok(());
     }
-    let mut device = File::open(ENTROPY_DEVICE).map_err(|cause| EntropyError {
-        device: ENTROPY_DEVICE,
-        cause,
-    })?;
-    device.read_exact(buf).map_err(|cause| EntropyError {
-        device: ENTROPY_DEVICE,
-        cause,
+    getrandom::fill(buf).map_err(|cause| EntropyError {
+        backend: "getrandom",
+        cause: cause.to_string(),
     })
 }
 

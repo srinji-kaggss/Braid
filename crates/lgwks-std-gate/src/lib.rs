@@ -461,7 +461,7 @@ mod tests {
 
         // lgwks-std may only declare deps on this approved list.
         {
-            const APPROVED: &[&str] = &["blake3", "regex", "rkyv", "serde", "serde_json"];
+            const APPROVED: &[&str] = &["blake3", "getrandom", "regex", "rkyv", "serde", "serde_json"];
 
             let manifest = std::fs::read_to_string(workspace.join("crates/lgwks-std/Cargo.toml"))
                 .expect("std manifest missing");
