@@ -5,7 +5,7 @@ edition = "2021"
 description = "Fail-closed generation-time enforcement of Keel ChangeEnvelopes"
 
 [dependencies]
-lgwks_std = { path = "../lgwks-std" }
+lgwks_std = { workspace = true }
 serde = { workspace = true }
 serde_json = "1.0"
 sha2 = "0.10"
