@@ -6,6 +6,14 @@ has registered it in the semantic contract.
 
 This crate is the `+`. `lgwks-std-gate` is the "does not compile."
 
+## Supported Rust policy
+
+`lgwks_std` and `lgwks_std_gate` are governed by two Rust contracts:
+
+- **Current stable contract:** workspace and CI run against Rust 1.98.0.
+- **MSRV contract:** `Cargo.toml` `rust-version` fields are the minimum supported compiler, not the
+  active CI compiler. They move forward only when code or dependency requirements require it.
+
 ## What it provides
 
 Every module is a declarative primitive — one import, one function call, done.
