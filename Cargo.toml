@@ -35,6 +35,8 @@ resolver = "2"
 # `{ workspace = true }`.
 # ─────────────────────────────────────────────────────────────────────────────
 [workspace.dependencies]
+# Shared workspace crate pins.
+lgwks_std = { version = "0.3.0" }
 # Content-addressed hash chain (BLAKE3 CIDs under lw.braid.*).
 blake3 = { version = "1.8.5", default-features = false }
 
@@ -56,6 +58,11 @@ braid-render = { path = "crates/braid-render" }
 braid-sdk = { path = "crates/braid-sdk" }
 braid-manifest = { path = "crates/braid-manifest" }
 braid-runtime = { path = "crates/braid-runtime" }
+
+[patch.crates-io]
+# While developing against the in-repo implementation, keep the public contract
+# path (`lgwks_std = "0.3.0"`) while resolving to local source.
+lgwks_std = { path = "crates/lgwks-std" }
 
 [profile.release]
 opt-level = 3

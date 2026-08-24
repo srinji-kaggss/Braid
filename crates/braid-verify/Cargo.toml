@@ -13,5 +13,5 @@ braid-ir = { workspace = true }
 braid-capability = { workspace = true }
 
 [dev-dependencies]
-lgwks_std = { path = "../lgwks-std" }
+lgwks_std = { workspace = true }
 braid-vocab-cms = { workspace = true }
