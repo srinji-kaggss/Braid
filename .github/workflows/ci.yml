@@ -202,8 +202,6 @@ jobs:
         if: needs.scope.outputs.code_changed != 'yes'
         run: echo "scope docs-only — clippy skipped (explicit N/A)"
 
-%%%%%%% diff from: tssvtslw 1ad28dbb "Merge pull request #47 from srinji-kaggss/feat/lgwks-std-target-random" (parents of rebased revision)
-\\\\\\\        to: nquwoknt 3c867bb4 "Add lgwks-std MSRV + current-stable contracts (#48)" (rebase destination)
   lgwks-std-current-stable:
     name: lgwks-std current-stable Rust 1.98.0
     needs: [scope, stack-position]
