@@ -324,6 +324,30 @@ jobs:
       - name: Run package smoke test
         run: ./scripts/lgwks-std-package-smoke.sh
 
+  lgwks-std-consumption-contract:
+    name: lgwks-std public consumption contract
+    # Keep this job as an active regression gate for Braid consumption.
+    needs: [scope, stack-position]
+    runs-on: self-hosted
+    if: needs.scope.outputs.code_changed == 'yes'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure no in-repo path fallback for lgwks_std consumers
+        run: |
+          set -eu
+          if rg 'lgwks_std\s*=\s*\{\s*path\s*=\s*"../lgwks-std"\s*\}' -g '*.toml' crates; then
+            echo "Contract breach: path-based lgwks_std dependency remains." >&2
+            exit 1
+          fi
+          if ! rg '^lgwks_std\s*=\s*\{\s*version\s*=\s*"0\.3\.0"\s*\}' -g '*.toml' Cargo.toml crates; then
+            echo "Contract breach: workspace lgwks_std dependency pin missing or malformed." >&2
+            exit 1
+          fi
+          if ! rg '^lgwks_std\s*=\s*\{\s*path\s*=\s*"crates/lgwks-std"\s*\}' -g '*.toml' Cargo.toml; then
+            echo "Contract breach: local patch for in-repo lgwks_std is missing or malformed." >&2
+            exit 1
+          fi
+
   # ── std+ feature matrix ────────────────────────────────────────────────
   lgwks-std-feature-matrix:
     name: lgwks-std feature matrix
