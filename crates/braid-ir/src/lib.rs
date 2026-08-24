@@ -34,7 +34,7 @@ pub mod term;
 pub mod value;
 
 pub use crate::braid::{Braid, Strand};
-pub use crate::canon::{decode_strict, encode, CanonError};
+pub use crate::canon::{CanonError, decode_strict, encode};
 pub use crate::capsule::{Capsule, ConfirmPolicy, IR_VERSION};
 pub use crate::cid::Cid;
 pub use crate::term::{EffectClass, Exposure, TermRegistry, TermSpec, TypeTag};

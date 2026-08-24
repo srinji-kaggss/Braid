@@ -30,7 +30,7 @@
 
 use std::collections::BTreeSet;
 
-use braid_elaborate_js::{elaborate_and_admit, ElabError};
+use braid_elaborate_js::{ElabError, elaborate_and_admit};
 use braid_ir::{Capsule, Cid};
 use braid_verify::Verdict;
 use serde::Deserialize;
@@ -141,7 +141,7 @@ pub struct BuildReport {
 
 /// Deserializes a [`Project`] schema structure from a JSON string slice.
 pub fn parse_project(json: &str) -> Result<Project, ProjectError> {
-    serde_json::from_str(json).map_err(|json_err| ProjectError::Parse {
+    lgwks_std::json::from_str(json).map_err(|json_err| ProjectError::Parse {
         message: json_err.to_string(),
         at: "parse_project",
     })

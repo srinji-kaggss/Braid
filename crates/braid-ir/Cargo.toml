@@ -1,7 +1,7 @@
 [package]
 name = "braid-ir"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 description = "Braid machine-first framework — typed term-graph IR, canonical encoding, content addressing (ADR-088, spec/braid/, U1 #558)"
 repository = "https://github.com/srinji-kaggss/Braid"
 homepage = "https://github.com/srinji-kaggss/Braid"

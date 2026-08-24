@@ -358,7 +358,7 @@ mod tests {
     use braid_ir::braid::{Braid, Strand};
     use braid_ir::capsule::{Capsule, ConfirmPolicy, IR_VERSION};
     use braid_sdk::Builder;
-    use braid_verify::{verify, Stage, Verdict};
+    use braid_verify::{Stage, Verdict, verify};
 
     /// Pinned CID of `registry_v0()` at `VOCAB_VERSION = 2`. Re-pinned
     /// consciously whenever the term set changes (see the governance note).

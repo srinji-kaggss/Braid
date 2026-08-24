@@ -47,10 +47,10 @@ pub fn walk_dir(root: impl AsRef<Path>, options: &WalkOptions) -> io::Result<Vec
 }
 
 fn track_canonical_visit(dir: &Path, visited_canonical: &mut HashSet<PathBuf>) -> bool {
-    if let Ok(canonical) = dir.canonicalize() {
-        if !visited_canonical.insert(canonical) {
-            return false;
-        }
+    if let Ok(canonical) = dir.canonicalize()
+        && !visited_canonical.insert(canonical)
+    {
+        return false;
     }
     true
 }
@@ -74,16 +74,12 @@ fn resolve_symlink_path(dir: &Path, path: &Path) -> Option<PathBuf> {
 
 fn check_sandbox(resolved: &Path, canonical_root: &Option<PathBuf>) -> Option<PathBuf> {
     let canon = resolved.canonicalize().ok()?;
-    if let Some(canon_root) = canonical_root {
-        if !canon.starts_with(canon_root) {
-            return None;
-        }
+    if let Some(canon_root) = canonical_root
+        && !canon.starts_with(canon_root)
+    {
+        return None;
     }
-    if canon.is_dir() {
-        Some(canon)
-    } else {
-        None
-    }
+    if canon.is_dir() { Some(canon) } else { None }
 }
 
 fn resolve_symlink_target(
@@ -115,12 +111,25 @@ fn handle_symlink_entry(
     out: &mut Vec<PathBuf>,
     visited: &mut HashSet<PathBuf>,
 ) -> io::Result<()> {
-    if options.follow_symlinks {
-        if let Some(target_dir) = resolve_symlink_target(dir, path, canonical_root) {
-            walk_recursive(&target_dir, canonical_root, depth, options, out, visited)?;
-        }
+    if options.follow_symlinks
+        && let Some(target_dir) = resolve_symlink_target(dir, path, canonical_root)
+    {
+        walk_recursive(&target_dir, canonical_root, depth, options, out, visited)?;
     }
     Ok(())
+}
+
+fn symlink_is_within_sandbox(dir: &Path, path: &Path, canonical_root: &Option<PathBuf>) -> bool {
+    let Some(canon_root) = canonical_root else {
+        return true;
+    };
+    let Some(resolved) = resolve_symlink_path(dir, path) else {
+        return false;
+    };
+    let Ok(canon) = resolved.canonicalize() else {
+        return false;
+    };
+    canon.starts_with(canon_root)
 }
 
 fn process_entry(
@@ -136,10 +145,10 @@ fn process_entry(
     let Ok(file_type) = entry.file_type() else {
         return Ok(());
     };
-    out.push(path.clone());
 
     let next_depth = current_depth + 1;
     if file_type.is_dir() {
+        out.push(path.clone());
         handle_directory_entry(
             &path,
             canonical_root,
@@ -149,6 +158,9 @@ fn process_entry(
             visited_canonical,
         )?;
     } else if file_type.is_symlink() {
+        if symlink_is_within_sandbox(dir, &path, canonical_root) {
+            out.push(path.clone());
+        }
         handle_symlink_entry(
             dir,
             &path,
@@ -158,6 +170,8 @@ fn process_entry(
             out,
             visited_canonical,
         )?;
+    } else {
+        out.push(path.clone());
     }
     Ok(())
 }
@@ -278,6 +292,28 @@ mod tests {
         assert!(
             escaped.is_empty(),
             "sandbox escape: symlink outside root must be rejected"
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn symlink_outside_root_excluded_from_output() {
+        let inner = tempfile::tempdir().unwrap();
+        let outer = tempfile::tempdir().unwrap();
+        stdfs::write(outer.path().join("secret.txt"), b"secret").unwrap();
+        std::os::unix::fs::symlink(outer.path(), inner.path().join("escape")).unwrap();
+        let opts = WalkOptions {
+            follow_symlinks: false,
+            ..Default::default()
+        };
+        let entries = walk_dir(inner.path(), &opts).unwrap();
+        let escape_entry: Vec<_> = entries
+            .iter()
+            .filter(|p| p.to_string_lossy().contains("escape"))
+            .collect();
+        assert!(
+            escape_entry.is_empty(),
+            "symlink pointing outside sandbox must not appear in output"
         );
     }
 

@@ -1,7 +1,7 @@
 [package]
 name = "braid-vocab-rust"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 description = "Braid vocabulary package — Rust elaboration target: an admitted capsule emits a deterministic, dependency-free Rust API surface (W1)"
 repository = "https://github.com/srinji-kaggss/Braid"
 homepage = "https://github.com/srinji-kaggss/Braid"

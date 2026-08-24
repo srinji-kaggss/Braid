@@ -235,7 +235,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        msrv: ["1.97.0"]
+        msrv: ["1.98.0"]
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -286,13 +286,13 @@ jobs:
           manifest_deps = set(parsed["dependencies"].keys())
 
           text = readme.read_text(encoding="utf-8")
-          marker = "The crate declares six external crates, all vetted leaf stacks, enabled by"
+          marker = "## Dependency philosophy"
           start = text.find(marker)
           if start == -1:
-              raise SystemExit("README contract section missing")
+              raise SystemExit("README dependency philosophy section missing")
 
           section = text[start:start + 1800]
-          readme_deps = set(re.findall(r"- \\*\\*`([a-zA-Z0-9_]+)`", section))
+          readme_deps = set(re.findall(r"- \*\*([a-zA-Z0-9_]+)\*\*", section))
 
           missing_from_readme = sorted(manifest_deps - readme_deps)
           missing_from_manifest = sorted(readme_deps - manifest_deps)
@@ -339,7 +339,7 @@ jobs:
             echo "Contract breach: path-based lgwks_std dependency remains." >&2
             exit 1
           fi
-          if ! rg '^lgwks_std\s*=\s*\{\s*version\s*=\s*"0\.3\.0"\s*\}' -g '*.toml' Cargo.toml crates; then
+          if ! rg '^lgwks_std\s*=\s*\{\s*version\s*=\s*"0\.5\.1"\s*\}' -g '*.toml' Cargo.toml crates; then
             echo "Contract breach: workspace lgwks_std dependency pin missing or malformed." >&2
             exit 1
           fi
@@ -363,13 +363,13 @@ jobs:
       - name: Check all requested feature combinations
         run: |
           set -eu
-          cargo test -p lgwks-std --no-default-features --all-targets
-          cargo test -p lgwks-std --all-targets
-          cargo test -p lgwks-std --features hash --no-default-features --all-targets
-          cargo test -p lgwks-std --features pattern --no-default-features --all-targets
-          cargo test -p lgwks-std --features json --no-default-features --all-targets
-          cargo test -p lgwks-std --features wire --no-default-features --all-targets
-          cargo test -p lgwks-std --all-features --all-targets
+          cargo test -p lgwks_std --no-default-features --all-targets
+          cargo test -p lgwks_std --all-targets
+          cargo test -p lgwks_std --features hash --no-default-features --all-targets
+          cargo test -p lgwks_std --features pattern --no-default-features --all-targets
+          cargo test -p lgwks_std --features json --no-default-features --all-targets
+          cargo test -p lgwks_std --features wire --no-default-features --all-targets
+          cargo test -p lgwks_std --all-features --all-targets
 
   # ── Cleanup ───────────────────────────────────────────────────────────────
   cleanup:

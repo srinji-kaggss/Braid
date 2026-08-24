@@ -1,8 +1,8 @@
 use braid_capability::Capability;
 use braid_ir::braid::{Braid, Strand};
 use braid_ir::term::{EffectClass, Exposure, TermRegistry, TermSpec, TypeTag};
-use braid_ir::{Capsule, ConfirmPolicy, Value, IR_VERSION};
-use braid_run::{execute_capsule, ExecutionError, Host};
+use braid_ir::{Capsule, ConfirmPolicy, IR_VERSION, Value};
+use braid_run::{ExecutionError, Host, execute_capsule};
 use braid_verify::verify;
 
 fn insert_math_specs(reg: &mut TermRegistry) {

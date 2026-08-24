@@ -14,7 +14,7 @@ pub mod decode;
 use braid_capability::Capability;
 use braid_ir::braid::Strand;
 use braid_ir::term::{EffectClass, Exposure};
-use braid_ir::{Capsule, Cid, ConfirmPolicy, TermRegistry, TypeTag, IR_VERSION};
+use braid_ir::{Capsule, Cid, ConfirmPolicy, IR_VERSION, TermRegistry, TypeTag};
 
 /// Pipeline stages, in locked order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

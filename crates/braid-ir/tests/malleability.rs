@@ -1,7 +1,7 @@
 //! T3 — the A4.8 exploit set, replayed against the canonical decoder: every
 //! non-canonical byte form is a REJECT, never a normalize-and-accept.
 
-use braid_ir::{decode_strict, encode, CanonError, Value};
+use braid_ir::{CanonError, Value, decode_strict, encode};
 
 #[test]
 fn non_minimal_int_head_rejected() {

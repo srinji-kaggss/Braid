@@ -1,19 +1,7 @@
-//! `encoding` owns the two byte-to-text encodings the estate uses outside hex
-//! and enforces INV-ENCODING-STRICT-DECODE: both decoders refuse malformed
-//! input with a typed error rather than skipping bytes, so a corrupted value
-//! cannot round-trip into something plausible.
-//!
-//! Retires `percent-encoding`, declared in 1 manifest and reached from 1 call
-//! site. Both encodings are table-driven transcoders with no
-//! correctness-critical security property of their own, which is what puts them
-//! in the ELIMINATE tier rather than VENDOR.
-//!
-//! `base64` has **no caller in the estate today** — 0 manifests, 0 call sites.
-//! It is here anyway, and deliberately: the purpose of a stdlib+ is that the
-//! answer at rung 2 of the admission ladder is already "yes", so the question
-//! "can I add `base64`?" never reaches rung 6. That is the one case where
-//! building before the third caller is correct, and it is stated rather than
-//! disguised as demand.
+//! `encoding` owns base64 and percent-encoding, enforcing
+//! INV-ENCODING-STRICT-DECODE: both decoders refuse malformed input with a
+//! typed error rather than skipping bytes, so a corrupted value cannot
+//! round-trip into something plausible.
 
 // ── base64 ──────────────────────────────────────────────────────────────────
 

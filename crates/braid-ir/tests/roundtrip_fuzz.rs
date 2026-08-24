@@ -3,7 +3,7 @@
 //! direction — arbitrary bytes — is covered by malleability.rs rejects and
 //! the decoder's strictness.)
 
-use braid_ir::{decode_strict, encode, Value};
+use braid_ir::{Value, decode_strict, encode};
 use proptest::prelude::*;
 use std::collections::BTreeMap;
 

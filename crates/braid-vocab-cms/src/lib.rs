@@ -424,11 +424,13 @@ mod tests {
         let reg = registry_v0();
         let publish_term = reg.get("cms.publish").unwrap();
         assert_eq!(publish_term.effect, EffectClass::Irreversible);
-        assert!(capsule
-            .braid
-            .strands
-            .iter()
-            .any(|s| s.term == "cms.publish"));
+        assert!(
+            capsule
+                .braid
+                .strands
+                .iter()
+                .any(|s| s.term == "cms.publish")
+        );
         assert_eq!(capsule.confirm, ConfirmPolicy::HumanConfirm);
         assert!(capsule.grants.contains(&cap!(INTENT_EMIT_NAME)));
     }

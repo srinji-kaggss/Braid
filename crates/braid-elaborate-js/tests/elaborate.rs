@@ -6,7 +6,7 @@
 //! - The 10+ refusal corpus (fail-closed rejections)
 //! - The 10+ golden corpus (pinned deterministic capsule CIDs)
 
-use braid_elaborate_js::{elaborate_and_admit, elaborate_js, ElabError, MAX_SOURCE_CHARS};
+use braid_elaborate_js::{ElabError, MAX_SOURCE_CHARS, elaborate_and_admit, elaborate_js};
 use braid_verify::Verdict;
 
 fn terms(capsule: &braid_ir::Capsule) -> Vec<&str> {

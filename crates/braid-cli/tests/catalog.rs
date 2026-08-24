@@ -145,8 +145,8 @@ fn catalog_denies_on_inventory_mismatch() {
     // Undeclared repo: an edited document whose name is not in the inventory
     // must be denied by the declared-set gate.
     let edited = vectors().join("manifests/braid.json");
-    let mut doc: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(&edited).unwrap()).unwrap();
+    let mut doc: lgwks_std::json::Value =
+        lgwks_std::json::from_str(&std::fs::read_to_string(&edited).unwrap()).unwrap();
     doc["name"] = "mystery-repo".into();
     let dir = std::env::temp_dir().join(format!("braid-w5-undeclared-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
@@ -306,8 +306,8 @@ fn duplicate_put_is_denied_then_replace_updates() {
     let dir = std::env::temp_dir().join(format!("braid-w5-replace-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let edited = dir.join("braid.json");
-    let mut doc: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(&p).unwrap()).unwrap();
+    let mut doc: lgwks_std::json::Value =
+        lgwks_std::json::from_str(&std::fs::read_to_string(&p).unwrap()).unwrap();
     doc["owner"] = "Director (updated)".into();
     std::fs::write(&edited, doc.to_string()).unwrap();
 

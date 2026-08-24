@@ -3,7 +3,7 @@
 
 use crate::braid::Braid;
 use crate::canon::{self, CanonError};
-use crate::cid::{Cid, CAPSULE_DOMAIN};
+use crate::cid::{CAPSULE_DOMAIN, Cid};
 use crate::term::RegistryError;
 use crate::value::Value;
 use alloc::string::{String, ToString};

@@ -2,7 +2,7 @@
 //! emitted API surface compiles as a dependency-free crate.
 
 use braid_vocab_cms::{edit_section_capsule, registry_v0};
-use braid_vocab_rust::{elaborate, ElabError, RustCrate};
+use braid_vocab_rust::{ElabError, RustCrate, elaborate};
 
 /// Same input → byte-identical output (emission is deterministic; BTreeMap
 /// registry order + strand order, no wall-clock anywhere).
@@ -18,7 +18,7 @@ fn elaboration_is_deterministic() {
 #[test]
 fn opaque_newtypes_carry_dimensions() {
     use braid_ir::braid::{Braid, Strand};
-    use braid_ir::{Capsule, EffectClass, Exposure, TermRegistry, TermSpec, TypeTag, IR_VERSION};
+    use braid_ir::{Capsule, EffectClass, Exposure, IR_VERSION, TermRegistry, TermSpec, TypeTag};
     let mut reg = TermRegistry::new(1);
     reg.insert(TermSpec {
         id: "dim.dur".into(),

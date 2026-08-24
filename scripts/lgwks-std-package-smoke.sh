@@ -28,10 +28,10 @@ cat >"$SMOKE/Cargo.toml" <<EOF2
 [package]
 name = "lgwks-std-consumer-smoke"
 version = "0.0.1"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-lgwks_std = { path = "../${PKG_BASENAME}" }
+lgwks_std = { path = "../${PKG_BASENAME}", features = ["random"] }
 EOF2
 
 cat >"$SMOKE/src/main.rs" <<'EOF3'

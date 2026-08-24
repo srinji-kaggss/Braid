@@ -1,7 +1,7 @@
 [package]
 name = "braid-vocab-cms"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 description = "Braid vocabulary package — the kernel/landing-port CMS term registry (ADR-088 D7, D16; the first vocabulary over the global IR)"
 repository = "https://github.com/srinji-kaggss/Braid"
 homepage = "https://github.com/srinji-kaggss/Braid"

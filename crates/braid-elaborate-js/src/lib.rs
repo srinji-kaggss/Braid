@@ -24,7 +24,7 @@ use std::collections::BTreeMap;
 use braid_ir::Capsule;
 use braid_render::{manifest, render_text};
 use braid_sdk::{Builder, Strand};
-use braid_verify::{verify, Verdict};
+use braid_verify::{Verdict, verify};
 use braid_vocab_js::registry_v0;
 
 pub mod cli;
@@ -363,7 +363,9 @@ fn lex(src: &str) -> Result<Vec<Token>, ElabError> {
                             '"' => '"',
                             '\'' => '\'',
                             other => {
-                                return Err(ElabError::Lex(format!("unsupported escape \\{other}")))
+                                return Err(ElabError::Lex(format!(
+                                    "unsupported escape \\{other}"
+                                )));
                             }
                         });
                         i += 1;
@@ -595,7 +597,7 @@ impl Parser {
                         other => {
                             return Err(ElabError::Parse(format!(
                                 "expected ')' after call args, found {other:?}"
-                            )))
+                            )));
                         }
                     }
                 } else {
@@ -611,14 +613,14 @@ impl Parser {
                 match self.bump() {
                     Some(Token::RParen) => inner,
                     other => {
-                        return Err(ElabError::Parse(format!("expected ')', found {other:?}")))
+                        return Err(ElabError::Parse(format!("expected ')', found {other:?}")));
                     }
                 }
             }
             other => {
                 return Err(ElabError::Parse(format!(
                     "expected an expression, found {other:?}"
-                )))
+                )));
             }
         };
 
@@ -643,7 +645,7 @@ impl Parser {
                     other => {
                         return Err(ElabError::Parse(format!(
                             "expected identifier after declaration, found {other:?}"
-                        )))
+                        )));
                     }
                 };
                 match self.bump() {
@@ -651,7 +653,7 @@ impl Parser {
                     other => {
                         return Err(ElabError::Parse(format!(
                             "expected '=' after variable name, found {other:?}"
-                        )))
+                        )));
                     }
                 }
                 let expr = self.expr_bp(0)?;
@@ -760,7 +762,7 @@ fn resolve_binary(
             return Err(ElabError::TypeError {
                 op: op.symbol().to_string(),
                 operands: vec![lt, rt],
-            })
+            });
         }
     };
     Ok(picked)

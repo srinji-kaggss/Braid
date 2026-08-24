@@ -20,7 +20,7 @@
 use braid_capability::Capability;
 use braid_ir::braid::{Braid, Strand as IrStrand};
 use braid_ir::term::{TermSpec, TypeTag};
-use braid_ir::{Capsule, ConfirmPolicy, EffectClass, TermRegistry, IR_VERSION};
+use braid_ir::{Capsule, ConfirmPolicy, EffectClass, IR_VERSION, TermRegistry};
 use std::fmt;
 
 /// A typed reference to a strand already placed in the braid. Carries its

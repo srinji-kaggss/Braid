@@ -11,8 +11,8 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use lgwks_std_gate::{
-    check_dependencies, check_dependencies_against, contract::Contract, repository_root, Refusal,
-    CONTRACT_PATH,
+    CONTRACT_PATH, Refusal, check_dependencies, check_dependencies_against, contract::Contract,
+    repository_root,
 };
 
 const USAGE: &str = "\

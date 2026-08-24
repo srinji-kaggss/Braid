@@ -4,7 +4,7 @@
 //! zero-copy deserialization — archived data is accessed directly from the
 //! byte buffer without allocation.
 //!
-//! This is the estate's internal wire format. For external JSON APIs, use
+//! This is the internal binary wire format. For external JSON APIs, use
 //! [`crate::json`]. Callers use the rkyv derive macros (`Archive`,
 //! `Serialize`, `Deserialize`) on their types, then call the functions
 //! here with the error type already pinned.
@@ -13,8 +13,8 @@
 
 pub use rkyv::rancor::Error as WireError;
 pub use rkyv::util::AlignedVec;
-pub use rkyv::{access, from_bytes, to_bytes};
 pub use rkyv::{Archive, Deserialize, Serialize};
+pub use rkyv::{access, from_bytes, to_bytes};
 
 // ── Tests ───────────────────────────────────────────────────────────────────
 

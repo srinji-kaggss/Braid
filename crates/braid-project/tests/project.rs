@@ -3,7 +3,7 @@
 //! the one verifier.
 
 use braid_elaborate_js::elaborate_js;
-use braid_project::{build, build_from_json, parse_project, ProjectError};
+use braid_project::{ProjectError, build, build_from_json, parse_project};
 
 const DEMO: &str = include_str!("fixtures/demo.json");
 

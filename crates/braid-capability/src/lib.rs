@@ -98,9 +98,9 @@ mod tests {
     #[test]
     fn serde_round_trips_the_name() {
         let cap = Capability::new("motion.schedule");
-        let j = serde_json::to_string(&cap).unwrap();
+        let j = lgwks_std::json::to_string(&cap).unwrap();
         assert_eq!(j, "\"motion.schedule\"");
-        let back: Capability = serde_json::from_str(&j).unwrap();
+        let back: Capability = lgwks_std::json::from_str(&j).unwrap();
         assert_eq!(back, cap);
     }
 }

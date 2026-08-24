@@ -1,7 +1,7 @@
 [package]
 name = "braid-project"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 description = "Multi-capsule Braid project toolchain (U13). A project is a set of named JS-expression capsules; `braid-project build` elaborates + admits every one through the one braid-verify, fail-closed, and emits a deterministic project CID. The first step toward a `braid build` for projects of many capsules (D-TOOLCHAIN)."
 repository = "https://github.com/srinji-kaggss/Braid"
 homepage = "https://github.com/srinji-kaggss/Braid"
@@ -25,6 +25,5 @@ braid-verify = { workspace = true }
 braid-elaborate-js = { path = "../braid-elaborate-js" }
 braid-vocab-js = { workspace = true }
 braid-vocab-rust = { path = "../braid-vocab-rust" }
+lgwks_std = { workspace = true, features = ["json"] }
 serde = { workspace = true }
-serde_json = "1.0.140"
-blake3 = { workspace = true }

@@ -338,7 +338,7 @@ fn read_store(root: &Path) -> Result<Vec<(RepoManifest, Cid)>, String> {
                          (`braid store put` prints it); the catalog denies until re-pinned",
                         d.name,
                         inv_path.display()
-                    )))
+                    )));
                 }
                 Some(pinned) if pinned != *actual => {
                     return Err(denied(format!(
@@ -346,7 +346,7 @@ fn read_store(root: &Path) -> Result<Vec<(RepoManifest, Cid)>, String> {
                         d.name,
                         pinned.to_hex(),
                         actual.to_hex()
-                    )))
+                    )));
                 }
                 Some(_) => {}
             },

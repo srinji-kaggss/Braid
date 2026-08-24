@@ -18,7 +18,7 @@
 //! (D9): this crate refuses to elaborate anything `braid-verify` rejects.
 
 use braid_ir::{Capsule, TermRegistry, TypeTag};
-use braid_verify::{verify, Verdict};
+use braid_verify::{Verdict, verify};
 use std::fmt;
 
 /// Failure modes of elaboration. None of these emit code.

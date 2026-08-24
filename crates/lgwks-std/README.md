@@ -1,145 +1,100 @@
-# lgwks-std — the `+` in `std+`
+# lgwks_std — zero-config primitives that replace a dozen crates
 
-**The rule, in the Director's words:** if a library is not in `std` or `std+`,
-it is not an approved dependency, and the code does not compile until a human
-has registered it in the semantic contract.
+The standard library gets you 90% of the way. This crate is the last 10% —
+hex, base64, timestamps, UUIDs, hashing, glob matching, regex, JSON, async — as
+single-import, zero-config calls backed by a dependency stack that bottoms out
+at zero external deps.
 
-This crate is the `+`. `lgwks-std-gate` is the "does not compile."
+Pick exactly what you need. The default feature compiles with **zero external
+dependencies**. Each optional feature unlocks one capability with one vetted
+stack beneath it — no transitive surprises, no feature flag archaeology.
 
-## Supported Rust policy
-
-`lgwks_std` and `lgwks_std_gate` are governed by two Rust contracts:
-
-- **Current stable contract:** workspace and CI run against Rust 1.98.0.
-- **MSRV contract:** `Cargo.toml` `rust-version` fields are the minimum supported compiler, not the
-  active CI compiler. They move forward only when code or dependency requirements require it.
-
-## What it provides
-
-Every module is a declarative primitive — one import, one function call, done.
-The crate wraps a vetted dependency stack that bottoms out at zero external deps.
-Core modules are in the default feature set; heavier stacks are optional features
-so path-only consumers do not pull heavyweight transitive dependencies.
+## Usage
 
 ```rust
-use lgwks_std::hex;
-use lgwks_std::id::Uuid;
-#[cfg(feature = "hash")]
-use lgwks_std::hash;
-#[cfg(feature = "pattern")]
-use lgwks_std::pattern::Regex;
-use lgwks_std::time;
+// Core — zero external deps, always available
+use lgwks_std::{hex, time, encoding, glob};
 
-#[cfg(feature = "hash")]
-{
-let digest = lgwks_std::hash::blake3(b"hello world");
-let hex_str = hex::encode(digest.as_bytes());
-}
-let id = Uuid::new_v4().unwrap();
+let digest = hex::encode(b"hello");
 let now = time::now_rfc3339();
-#[cfg(feature = "pattern")]
-let re = Regex::new(r"\d+").unwrap();
+let encoded = encoding::base64::encode(b"payload");
+let matches = glob::matches("src/**/*.rs", "src/lib.rs");
 ```
-
-## Modules
-
-Default feature set: `core` (enabled by default).
-
-| feature | module | what it owns | replaces |
-|---------|--------|-------------|----------|
-| `core` | `encoding` | Encoding helpers and base64/percent primitives | `base64`, `percent-encoding` |
-| `core` | `fs` | Recursive directory walking with sandbox enforcement | `walkdir` |
-| `core` | `glob` | Shell-style path pattern matching (DP, O(M×N)) | `glob` |
-| `core` | `hex` | Hex encode/decode | `hex` |
-| `core` | `id` | UUID v4 generation and parsing | `uuid` |
-| `core` | `leb128` | LEB128 variable-length integer encoding | — |
-| `core` | `random` | OS entropy | `getrandom` |
-| `core` | `task` | Minimal single-threaded async executor | — |
-| `core` | `time` | RFC 3339 timestamps, calendar math | `chrono` / `time` |
-| `hash` | `hash` | BLAKE3 content-addressable hashing | `blake3` |
-| `pattern` | `pattern` | Compiled regex matching (linear-time) | `regex` |
-| `json` | `json` | JSON encoding and decoding | `serde`, `serde_json` |
-| `wire` | `wire` | Internal binary wire serialization | `rkyv` |
-
-Feature presets:
-
-- `core` (default): lightweight primitives above.
-- `hash`, `pattern`, `json`, `wire`: each unlocks one capability stack.
-- `full`: all optional stacks.
-
-Legacy module ownership map:
-
-| module | what it owns |
-|--------|-------------|
-| `hash` | BLAKE3 content-addressable hashing |
-| `pattern` | Compiled regex matching (linear-time) |
-| `hex` | Hex encode/decode |
-| `id` | UUID v4 generation and parsing |
-| `glob` | Shell-style path pattern matching (DP, O(M×N)) |
-| `time` | RFC 3339 timestamps, calendar math |
-| `encoding::base64` | Base64 encode/decode (RFC 4648) |
-| `encoding::percent` | Percent-encoding for URI components |
-| `random` | OS entropy |
-| `leb128` | LEB128 variable-length integer encoding |
-| `fs` | Recursive directory walking with sandbox enforcement |
-| `task` | Minimal single-threaded async executor |
-
-## INV-STDPLUS-APPROVED-ONLY
-
-The crate declares six external crates, all vetted leaf stacks, enabled by
-features:
-
-- **`blake3`** (feature `hash`; 3 zero-dep leaves: arrayvec, cfg-if,
-  constant_time_eq)
-- **`regex`** (feature `pattern`; 4 crates, all BurntSushi, all internal:
-  memchr, regex-syntax, aho-corasick, regex-automata — zero external deps)
-- **`serde`** (feature `json`; derive stack shared with serde_json)
-- **`serde_json`** (feature `json`)
-- **`rkyv`** (feature `wire`; 5 djkoloski crates: rend, ptr_meta, rancor,
-  munge + derive; zero external deps)
-- **`getrandom`** (default path for `random`; supported on linux/macOS/windows in
-  this crate)
-
-The gate test `deps_are_approved_leaves` in `lgwks-std-gate` mechanically
-verifies no unapproved dependency appears in the manifest.
-
-## Contract source-of-truth
-
-- `crates/lgwks-std/Cargo.toml` is authoritative for dependency declarations.
-- `contract/APPROVED.toml` is authoritative for approved versions.
-- `crates/lgwks-std-gate/src/lib.rs` is authoritative for enforcement behavior.
-
-## Distribution lane
-
-`lgwks_std` is prepared as a normal Cargo package artifact:
-
-- distribution lane: **crates.io (public package) / manifest-only dependency**.
-- package entrypoint: `crates/lgwks-std/Cargo.toml`.
-- release check: `cargo package --manifest-path crates/lgwks-std/Cargo.toml`.
-
-### Smoke-test fixture
-
-Run the package smoke test from this repo root:
-
-```bash
-./scripts/lgwks-std-package-smoke.sh
-```
-
-The script packages the crate, unpacks the produced `.crate`, and consumes it as a
-standalone dependency from outside the Braid workspace dependency graph.
-
-## The gate
-
-Three lines in a consumer's `build.rs` turn INV-DEP-REGISTERED into a compile
-error:
 
 ```rust
-// build.rs
-fn main() {
-    lgwks_std_gate::enforce();
-}
+// Opt-in features — each adds exactly one vetted dependency
+use lgwks_std::id::Uuid;       // feature = "random"
+use lgwks_std::hash;            // feature = "hash"
+use lgwks_std::pattern::Regex;  // feature = "pattern"
+use lgwks_std::json;            // feature = "json"
+
+let id = Uuid::new_v4().unwrap();
+let blake3 = hash::blake3(b"content-addressable");
+let re = Regex::new(r"\d+").unwrap();
+let value: MyStruct = json::from_str(&data)?;
 ```
+
+## Feature map
+
+```toml
+[dependencies]
+lgwks_std = "0.5"                       # core only, zero deps
+lgwks_std = { version = "0.5", features = ["hash", "json"] }  # pick what you need
+lgwks_std = { version = "0.5", features = ["full"] }           # everything
+```
+
+| Feature | Modules | What it adds | External deps |
+|---------|---------|-------------|---------------|
+| `core` (default) | encoding, fs, glob, hex, leb128, task, time | — | **0** |
+| `random` | random, id | UUID v4, OS entropy | getrandom |
+| `hash` | hash | BLAKE3 content-addressable hashing | blake3 |
+| `pattern` | pattern | Linear-time compiled regex | regex |
+| `json` | json | JSON serialization | serde, serde_json |
+| `ron` | ron | Rusty Object Notation | serde, ron |
+| `wire` | wire | Zero-copy binary serialization | rkyv |
+| `full` | all of the above | — | all of the above |
+
+## Module reference
+
+| Module | What it does | Replaces |
+|--------|-------------|----------|
+| `encoding` | Base64 and percent-encoding | `base64`, `percent-encoding` |
+| `fs` | Recursive directory walking with sandbox enforcement | `walkdir` |
+| `glob` | Shell-style glob matching (DP algorithm, O(M*N)) | `glob` |
+| `hex` | Hex encode and decode | `hex` |
+| `leb128` | LEB128 variable-length integer encoding | — |
+| `task` | Minimal single-threaded async executor | — |
+| `time` | RFC 3339 timestamps, calendar math | `chrono`, `time` |
+| `random` | OS entropy via `getrandom` | `getrandom` |
+| `id` | UUID v4 generation and parsing | `uuid` |
+| `hash` | BLAKE3 content-addressable hashing | `blake3` |
+| `pattern` | Compiled regex matching (linear-time guarantee) | `regex` |
+| `json` | JSON encoding and decoding via serde | `serde_json` |
+| `ron` | RON encoding and decoding via serde | `ron` |
+| `wire` | Zero-copy binary wire serialization via rkyv | `rkyv` |
+
+## Dependency philosophy
+
+Every dependency is a vetted leaf or single-purpose stack with zero further
+external deps. The full transitive tree is audited and mechanically enforced —
+an unapproved dependency fails the build.
+
+- **blake3** — 3 zero-dep leaves (arrayvec, cfg-if, constant_time_eq)
+- **regex** — 4 BurntSushi-internal crates, zero external deps
+- **serde** — derive stack (proc-macro2, quote, syn)
+- **serde_json** — 2 leaves beyond serde (itoa, ryu)
+- **ron** — 1 leaf beyond serde (bitflags)
+- **rkyv** — 5 djkoloski crates, zero external deps
+- **getrandom** — zero deps in std-only mode
+
+The `core` feature carries zero external dependencies. You choose what you pull
+in; every feature flag is one capability, one stack, no surprises.
+
+## Minimum supported Rust version
+
+Rust **1.98.0**. The MSRV moves forward only when code or dependency
+requirements demand it.
 
 ## License
 
-MPL-2.0
+BSD-3-Clause — Copyright 2026 Logical Works Incorporated

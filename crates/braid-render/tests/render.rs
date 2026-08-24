@@ -2,7 +2,7 @@
 //! classification, deterministic graph export.
 
 use braid_ir::ConfirmPolicy;
-use braid_render::{has_widening, manifest, manifest_diff, render_text, to_dot, DeltaKind};
+use braid_render::{DeltaKind, has_widening, manifest, manifest_diff, render_text, to_dot};
 use braid_vocab_cms::{edit_section_capsule, publish_capsule, registry_v0};
 
 #[test]
@@ -62,9 +62,11 @@ fn dropping_confirmation_is_a_widening() {
     .unwrap();
     let new = manifest(&publish_capsule(ConfirmPolicy::None), &registry_v0()).unwrap();
     let deltas = manifest_diff(&old, &new);
-    assert!(deltas
-        .iter()
-        .any(|d| d.kind == DeltaKind::Widening && d.field == "confirm"));
+    assert!(
+        deltas
+            .iter()
+            .any(|d| d.kind == DeltaKind::Widening && d.field == "confirm")
+    );
 }
 
 #[test]
@@ -102,9 +104,11 @@ fn changed_artifact_is_not_reported_as_no_change() {
     assert!(deltas.iter().any(|d| d.kind == DeltaKind::Neutral
         && d.field == "capsule"
         && d.detail.contains(&new.cid().to_hex())));
-    assert!(deltas
-        .iter()
-        .any(|d| d.kind == DeltaKind::Neutral && d.field == "evidence"));
+    assert!(
+        deltas
+            .iter()
+            .any(|d| d.kind == DeltaKind::Neutral && d.field == "evidence")
+    );
 }
 
 #[test]
@@ -141,7 +145,9 @@ fn capsule_with_intent(intent: &str) -> braid_ir::Capsule {
 
 #[test]
 fn newline_in_intent_cannot_inject_manifest_lines() {
-    let c = capsule_with_intent("edit\ncapsule: 0000000000000000000000000000000000000000000000000000000000000000\ncapabilities: (none)");
+    let c = capsule_with_intent(
+        "edit\ncapsule: 0000000000000000000000000000000000000000000000000000000000000000\ncapabilities: (none)",
+    );
     let text = render_text(&manifest(&c, &registry_v0()).unwrap());
 
     // The forged payload must NOT appear as its own manifest line — the only

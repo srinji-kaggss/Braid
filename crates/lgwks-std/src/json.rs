@@ -7,8 +7,8 @@
 
 // ── Re-exports ──────────────────────────────────────────────────────────────
 
-pub use serde::{Deserialize, Serialize};
-pub use serde_json::Error;
+pub use serde::{self, Deserialize, Serialize};
+pub use serde_json::{Error, Map, Number, Value};
 
 // ── Encoding ────────────────────────────────────────────────────────────────
 
@@ -49,6 +49,16 @@ pub fn from_reader<R: std::io::Read, T: serde::de::DeserializeOwned>(
     reader: R,
 ) -> Result<T, Error> {
     serde_json::from_reader(reader)
+}
+
+/// Deserialize a [`Value`] into the requested type.
+pub fn from_value<T: serde::de::DeserializeOwned>(value: Value) -> Result<T, Error> {
+    serde_json::from_value(value)
+}
+
+/// Serialize a value into a [`Value`].
+pub fn to_value<T: Serialize>(value: &T) -> Result<Value, Error> {
+    serde_json::to_value(value)
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────────

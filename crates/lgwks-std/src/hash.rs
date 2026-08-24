@@ -1,10 +1,30 @@
 //! `hash` owns content-addressable hashing and enforces INV-HASH-DETERMINISTIC:
 //! the same input bytes always produce the same digest, and the digest is the
-//! BLAKE3 algorithm — the estate's sole content-identity hash.
+//! BLAKE3 algorithm — the sole content-identity hash in this crate.
 
 /// A 32-byte BLAKE3 digest.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+///
+/// Equality is constant-time to prevent timing side-channels.
+#[derive(Clone, Copy, PartialOrd, Ord)]
 pub struct Digest([u8; 32]);
+
+impl std::hash::Hash for Digest {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl PartialEq for Digest {
+    fn eq(&self, other: &Self) -> bool {
+        let mut acc = 0u8;
+        for (a, b) in self.0.iter().zip(other.0.iter()) {
+            acc |= a ^ b;
+        }
+        acc == 0
+    }
+}
+
+impl Eq for Digest {}
 
 impl Digest {
     /// The raw 32-byte digest.

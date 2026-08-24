@@ -1,9 +1,25 @@
-//! `lgwks_bot` owns automation semantics and the bot ontology.
+//! Capability-gated automation bots built on four verbs: Observe, Evaluate,
+//! Execute, Query.
+//!
+//! Bots are assembled from `(condition, action)` chains that bind observed
+//! sources to side effects. Capabilities are validated at build time — a bot
+//! that requires `bot.net` without a grant fails before it runs, not after.
+//!
+//! # Quick start
+//!
+//! ```rust,no_run
+//! use lgwks_bot::{Bot, Cap, GrantSet};
+//!
+//! let bot = Bot::builder("my-bot")
+//!     // .observe(source).on(condition, action)
+//!     .build(&GrantSet::all_shipped())
+//!     .unwrap();
+//!
+//! let fired = bot.tick().unwrap();
+//! ```
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
-
-use lgwks_std as _;
 
 pub mod cap;
 pub mod domain {

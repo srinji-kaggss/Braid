@@ -29,7 +29,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 use braid_capability::Capability;
 use braid_ir::term::{EffectClass, Exposure, RegistryError, TermRegistry, TermSpec, TypeTag};
-use braid_ir::{decode_strict, CanonError};
+use braid_ir::{CanonError, decode_strict};
 
 /// Browser vocabulary version. Independent of other packages; a bump is a
 /// content-addressed registry event (the registry CID changes), never silent

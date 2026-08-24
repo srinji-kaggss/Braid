@@ -1,7 +1,7 @@
 [package]
 name = "braid-vocab-js"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 description = "Braid vocabulary package — JavaScript elaboration target (D31: Braid as a global IR). JS source elaborates into these terms; the one braid-verify admits them. The seed of 'renders JS useless': JS stops being a runtime surface and becomes an authoring frontend over the verified substrate."
 repository = "https://github.com/srinji-kaggss/Braid"
 homepage = "https://github.com/srinji-kaggss/Braid"

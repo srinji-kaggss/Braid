@@ -1,7 +1,7 @@
 [package]
 name = "braid-sdk"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 description = "Braid authoring SDK — typed capsule builder over braid-ir (ADR-088 D5 'rust day 1', U10 #557)"
 repository = "https://github.com/srinji-kaggss/Braid"
 homepage = "https://github.com/srinji-kaggss/Braid"

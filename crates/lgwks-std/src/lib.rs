@@ -1,27 +1,22 @@
-//! `lgwks_std` owns the estate's one approved non-`std` surface.
+//! Zero-config primitives that replace a dozen crates.
 //!
-//! Every module is a declarative primitive — identity, hashing, encoding,
-//! pattern matching, time, filesystem, regex — built on a vetted dependency
-//! stack that bottoms out at zero external deps. A consumer that takes this
-//! crate gets one import path for the operations every repo needs, instead of
-//! seven different crates with seven different APIs.
+//! Every module is a single-import, single-call primitive — hex, base64,
+//! timestamps, UUIDs, hashing, glob matching, regex, JSON, async — backed by
+//! a vetted dependency stack that bottoms out at zero external deps.
 //!
-//! ## Dependency contract
+//! The default `core` feature compiles with **zero external dependencies**.
+//! Each optional feature unlocks one capability with one audited stack.
 //!
-//! INV-STDPLUS-APPROVED-ONLY: every dependency is a vetted leaf or
-//! single-purpose stack with zero further external deps:
+//! ## Feature map
 //!
-//! - `blake3` (arrayvec, cfg-if, constant_time_eq — all zero-dep leaves)
-//! - `regex` (memchr, regex-syntax, aho-corasick, regex-automata — all
-//!   BurntSushi, all internal to the regex stack, no external deps)
-//! - `rkyv` (rend, ptr_meta, rancor, munge + derive — all djkoloski, zero
-//!   external deps; proc-macro stack shared with serde)
-//! - `serde` + `serde_json` (itoa, ryu — zero-dep leaves; proc-macro stack
-//!   is proc-macro2, quote, syn)
-//!
-//! What is *not* here is as much of the contract as what is. `tokio`,
-//! `rusqlite`, and `ed25519-dalek` are BOUNDARY tier: they stay direct
-//! dependencies in consumer crates, declared in `contract/APPROVED.toml`.
+//! - `core` (default) — encoding, fs, glob, hex, leb128, task, time. Zero deps.
+//! - `random` — random, id. Adds `getrandom`.
+//! - `hash` — hash. Adds `blake3`.
+//! - `pattern` — pattern. Adds `regex`.
+//! - `json` — json. Adds `serde`, `serde_json`.
+//! - `ron` — ron. Adds `serde`, `ron`.
+//! - `wire` — wire. Adds `rkyv`.
+//! - `full` — all of the above.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
@@ -31,13 +26,17 @@ pub mod glob;
 #[cfg(feature = "hash")]
 pub mod hash;
 pub mod hex;
+#[cfg(feature = "random")]
 pub mod id;
 #[cfg(feature = "json")]
 pub mod json;
 pub mod leb128;
 #[cfg(feature = "pattern")]
 pub mod pattern;
+#[cfg(feature = "random")]
 pub mod random;
+#[cfg(feature = "ron")]
+pub mod ron;
 pub mod task;
 pub mod time;
 #[cfg(feature = "wire")]

@@ -22,7 +22,7 @@ extern crate alloc;
 use braid_capability::Capability;
 use braid_ir::braid::Strand;
 use braid_ir::term::EffectClass;
-use braid_ir::{Capsule, Cid, ConfirmPolicy, TermRegistry, TermSpec, TypeTag, Value, IR_VERSION};
+use braid_ir::{Capsule, Cid, ConfirmPolicy, IR_VERSION, TermRegistry, TermSpec, TypeTag, Value};
 
 /// Why a capsule execution failed.
 #[derive(Debug, Clone, PartialEq, Eq)]

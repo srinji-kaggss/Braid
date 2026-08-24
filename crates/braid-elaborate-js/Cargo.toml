@@ -1,7 +1,7 @@
 [package]
 name = "braid-elaborate-js"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 description = "A thin JavaScript-expression frontend that elaborates JS source into Braid IR (D31, U11). The first real frontend over the global IR: JS text in, an admitted Capsule out, via the one braid-verify — JS as an authoring frontend over the verified substrate, not a runtime authority."
 repository = "https://github.com/srinji-kaggss/Braid"
 homepage = "https://github.com/srinji-kaggss/Braid"

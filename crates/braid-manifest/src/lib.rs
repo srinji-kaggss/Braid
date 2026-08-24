@@ -21,9 +21,9 @@
 //! consumer (`braid store put`, `braid catalog`, `braid summary`) shares this
 //! one `validate()` and one codec: one concept, one implementation.
 
-use braid_ir::canon::{decode_strict, encode, CanonError};
-use braid_ir::cid::Cid;
 use braid_ir::Value;
+use braid_ir::canon::{CanonError, decode_strict, encode};
+use braid_ir::cid::Cid;
 use serde::Deserialize;
 
 use std::collections::BTreeMap;
@@ -360,7 +360,7 @@ fn parse_ci_status_field(val: &str) -> Result<CiStatus, ManifestError> {
 /// Validate an authored repo-manifest JSON document. Fail-closed: any
 /// violation names the field, nothing is produced.
 pub fn validate(json: &str) -> Result<RepoManifest, ManifestError> {
-    let j: JsonManifest = serde_json::from_str(json).map_err(|e| ManifestError::Parse {
+    let j: JsonManifest = lgwks_std::json::from_str(json).map_err(|e| ManifestError::Parse {
         message: e.to_string(),
         at: "validate",
     })?;
@@ -559,7 +559,7 @@ fn check_raw_not_empty(is_empty: bool) -> Result<(), ManifestError> {
 /// set is declared.
 pub fn parse_inventory(json: &str) -> Result<Vec<InventoryEntry>, ManifestError> {
     let raw: BTreeMap<String, Option<String>> =
-        serde_json::from_str(json).map_err(|e| ManifestError::Parse {
+        lgwks_std::json::from_str(json).map_err(|e| ManifestError::Parse {
             message: e.to_string(),
             at: "parse_inventory",
         })?;

@@ -1,7 +1,7 @@
 //! `pattern` owns compiled regular expression matching and enforces
 //! INV-PATTERN-SAFE: patterns compile once, match in linear time, and never
 //! panic on untrusted input. Wraps the `regex` crate behind a narrow API so
-//! the estate has one import path for regex operations.
+//! consumers have one import path for regex operations.
 
 /// A compiled regular expression.
 ///

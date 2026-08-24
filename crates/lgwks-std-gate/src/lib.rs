@@ -87,7 +87,11 @@ impl fmt::Display for Refusal {
                 f,
                 "{krate} {version} is not in std, not in lgwks_std, and not approved in {CONTRACT_PATH}"
             ),
-            Self::VersionDrift { krate, approved, resolved } => write!(
+            Self::VersionDrift {
+                krate,
+                approved,
+                resolved,
+            } => write!(
                 f,
                 "{krate} resolved to {resolved} but {CONTRACT_PATH} approves {approved}"
             ),
@@ -461,7 +465,15 @@ mod tests {
 
         // lgwks-std may only declare deps on this approved list.
         {
-            const APPROVED: &[&str] = &["blake3", "getrandom", "regex", "rkyv", "serde", "serde_json"];
+            const APPROVED: &[&str] = &[
+                "blake3",
+                "getrandom",
+                "regex",
+                "rkyv",
+                "ron",
+                "serde",
+                "serde_json",
+            ];
 
             let manifest = std::fs::read_to_string(workspace.join("crates/lgwks-std/Cargo.toml"))
                 .expect("std manifest missing");

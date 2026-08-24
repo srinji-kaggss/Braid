@@ -461,8 +461,8 @@ mod tests {
 
     #[test]
     fn tick_fires_matching_actions() {
-        use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
 
         struct CountSource;
         impl crate::verb::Observe for CountSource {

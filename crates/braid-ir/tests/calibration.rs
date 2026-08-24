@@ -14,7 +14,7 @@
 //!   no floats/tags/null — those are out of the subset by D8).
 //! - `blake3_kat.json` — the 35 BLAKE3 known-answer cases.
 
-use braid_ir::{decode_strict, encode, Value};
+use braid_ir::{Value, decode_strict, encode};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;

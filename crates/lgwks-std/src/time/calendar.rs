@@ -9,13 +9,17 @@ pub fn is_leap(year: i64) -> bool {
 }
 
 /// Returns the number of days in the specified month (1..=12) for a given year.
+///
+/// # Panics
+///
+/// Panics if `month` is not in `1..=12`.
 pub fn days_in_month(year: i64, month: u32) -> u32 {
     match month {
         1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
         4 | 6 | 9 | 11 => 30,
         2 if is_leap(year) => 29,
         2 => 28,
-        _ => 31,
+        _ => panic!("month must be 1..=12, got {month}"),
     }
 }
 

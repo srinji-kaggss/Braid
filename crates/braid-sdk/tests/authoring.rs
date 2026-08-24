@@ -5,10 +5,10 @@
 use braid_capability::Capability;
 use braid_ir::ConfirmPolicy;
 use braid_sdk::{BuildError, Builder};
-use braid_verify::{verify, Verdict};
+use braid_verify::{Verdict, verify};
 use braid_vocab_cms::{
-    cap, edit_section_capsule, publish_capsule, registry_v0, INTENT_EMIT_NAME, REMOTE_COMPUTE_NAME,
-    SIGNAL_EMIT_NAME, TAPE_READ_NAME,
+    INTENT_EMIT_NAME, REMOTE_COMPUTE_NAME, SIGNAL_EMIT_NAME, TAPE_READ_NAME, cap,
+    edit_section_capsule, publish_capsule, registry_v0,
 };
 
 fn ambient() -> Vec<Capability> {

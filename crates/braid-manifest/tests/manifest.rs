@@ -1,6 +1,6 @@
 use braid_manifest::{
-    parse_inventory, safe_name_component, validate, Archetype, CiStatus, ManifestError,
-    RepoManifest,
+    Archetype, CiStatus, ManifestError, RepoManifest, parse_inventory, safe_name_component,
+    validate,
 };
 
 const VALID: &str = r#"{

@@ -3,10 +3,10 @@
 
 use braid_capability::Capability;
 use braid_ir::ConfirmPolicy;
-use braid_verify::{verify, Stage, Verdict};
+use braid_verify::{Stage, Verdict, verify};
 use braid_vocab_cms::{
-    cap, edit_section_capsule, laundering_capsule, publish_capsule, registry_v0, INTENT_EMIT_NAME,
-    REMOTE_COMPUTE_NAME, SIGNAL_EMIT_NAME, TAPE_READ_NAME,
+    INTENT_EMIT_NAME, REMOTE_COMPUTE_NAME, SIGNAL_EMIT_NAME, TAPE_READ_NAME, cap,
+    edit_section_capsule, laundering_capsule, publish_capsule, registry_v0,
 };
 
 fn full_ambient() -> Vec<Capability> {
@@ -242,7 +242,7 @@ fn egress_below_ceiling_with_confirm_admits() {
 #[test]
 fn dimension_mismatch_rejected() {
     use braid_ir::braid::{Braid, Strand};
-    use braid_ir::{Capsule, EffectClass, Exposure, TermRegistry, TermSpec, TypeTag, IR_VERSION};
+    use braid_ir::{Capsule, EffectClass, Exposure, IR_VERSION, TermRegistry, TermSpec, TypeTag};
     let mut reg = TermRegistry::new(1);
     for (id, dim) in [("dim.dur", "dur.ms"), ("dim.bytes", "bytes")] {
         reg.insert(TermSpec {
@@ -300,7 +300,7 @@ fn dimension_mismatch_rejected() {
 fn unordered_irreversible_pair_rejected() {
     use braid_capability::Capability;
     use braid_ir::braid::{Braid, Strand};
-    use braid_ir::{Capsule, EffectClass, Exposure, TermRegistry, TermSpec, TypeTag, IR_VERSION};
+    use braid_ir::{Capsule, EffectClass, Exposure, IR_VERSION, TermRegistry, TermSpec, TypeTag};
     let mut reg = TermRegistry::new(1);
     for (id, out) in [("irr.a", "a"), ("irr.b", "b")] {
         reg.insert(TermSpec {
@@ -350,7 +350,7 @@ fn unordered_irreversible_pair_rejected() {
 fn ordered_irreversible_pair_admits() {
     use braid_capability::Capability;
     use braid_ir::braid::{Braid, Strand};
-    use braid_ir::{Capsule, EffectClass, Exposure, TermRegistry, TermSpec, TypeTag, IR_VERSION};
+    use braid_ir::{Capsule, EffectClass, Exposure, IR_VERSION, TermRegistry, TermSpec, TypeTag};
     let mut reg = TermRegistry::new(1);
     reg.insert(TermSpec {
         id: "irr.a".into(),

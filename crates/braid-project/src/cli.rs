@@ -1,6 +1,6 @@
 //! CLI adapter for `braid-project build`.
 
-use crate::{build_from_json, build_rust, parse_project, Project, RustCrate};
+use crate::{Project, RustCrate, build_from_json, build_rust, parse_project};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 

@@ -234,7 +234,7 @@ impl ChangeEnvelope {
 
     pub fn digest_sha256(&self) -> Result<String, GovernanceError> {
         self.validate()?;
-        let bytes = serde_json::to_vec(self)
+        let bytes = lgwks_std::json::to_vec(self)
             .map_err(|error| GovernanceError::Serialization(error.to_string()))?;
         let mut hasher = Sha256::new();
         hasher.update(DIGEST_DOMAIN);
@@ -295,7 +295,7 @@ impl ChangeEnvelope {
 
 impl SignedChangeEnvelope {
     pub fn from_json_and_verify(bytes: &[u8]) -> Result<Self, GovernanceError> {
-        let signed: SignedChangeEnvelope = serde_json::from_slice(bytes)
+        let signed: SignedChangeEnvelope = lgwks_std::json::from_slice(bytes)
             .map_err(|error| GovernanceError::Serialization(error.to_string()))?;
         signed.verify()?;
         Ok(signed)
@@ -562,9 +562,11 @@ mod tests {
     #[test]
     fn undeclared_effect_is_blocked_before_execution() {
         let mut session = GovernanceSession::admit(signed_envelope()).unwrap();
-        assert!(session
-            .authorize(GenerationAction::UseEffect("ledger.atomic-write"))
-            .is_ok());
+        assert!(
+            session
+                .authorize(GenerationAction::UseEffect("ledger.atomic-write"))
+                .is_ok()
+        );
         assert_eq!(
             session.authorize(GenerationAction::UseEffect("network.egress")),
             Err(GovernanceError::Denied(
@@ -576,9 +578,11 @@ mod tests {
     #[test]
     fn evidence_is_read_only_to_implementation_author() {
         let mut session = GovernanceSession::admit(signed_envelope()).unwrap();
-        assert!(session
-            .authorize(GenerationAction::ReadEvidencePath("spec/auth.md"))
-            .is_ok());
+        assert!(
+            session
+                .authorize(GenerationAction::ReadEvidencePath("spec/auth.md"))
+                .is_ok()
+        );
         assert_eq!(
             session.authorize(GenerationAction::ModifyEvidencePath("spec/auth.md")),
             Err(GovernanceError::Denied(
@@ -590,18 +594,22 @@ mod tests {
     #[test]
     fn budgets_are_enforced_incrementally() {
         let mut session = GovernanceSession::admit(signed_envelope()).unwrap();
-        assert!(session
-            .authorize(GenerationAction::InvokeTool {
-                name: "read",
-                effectful: false,
-            })
-            .is_ok());
-        assert!(session
-            .authorize(GenerationAction::InvokeTool {
-                name: "write",
-                effectful: true,
-            })
-            .is_ok());
+        assert!(
+            session
+                .authorize(GenerationAction::InvokeTool {
+                    name: "read",
+                    effectful: false,
+                })
+                .is_ok()
+        );
+        assert!(
+            session
+                .authorize(GenerationAction::InvokeTool {
+                    name: "write",
+                    effectful: true,
+                })
+                .is_ok()
+        );
         assert_eq!(
             session.authorize(GenerationAction::InvokeTool {
                 name: "write",
@@ -614,9 +622,11 @@ mod tests {
     #[test]
     fn write_path_denied_outside_allowed_set() {
         let mut session = GovernanceSession::admit(signed_envelope()).unwrap();
-        assert!(session
-            .authorize(GenerationAction::WritePath("src/auth.rs"))
-            .is_ok());
+        assert!(
+            session
+                .authorize(GenerationAction::WritePath("src/auth.rs"))
+                .is_ok()
+        );
         assert_eq!(
             session.authorize(GenerationAction::WritePath("src/sneak.rs")),
             Err(GovernanceError::Denied(
@@ -650,12 +660,16 @@ mod tests {
     #[test]
     fn max_files_changed_budget_enforced() {
         let mut session = GovernanceSession::admit(envelope_with_file_budget(2)).unwrap();
-        assert!(session
-            .authorize(GenerationAction::WritePath("a.rs"))
-            .is_ok());
-        assert!(session
-            .authorize(GenerationAction::WritePath("b.rs"))
-            .is_ok());
+        assert!(
+            session
+                .authorize(GenerationAction::WritePath("a.rs"))
+                .is_ok()
+        );
+        assert!(
+            session
+                .authorize(GenerationAction::WritePath("b.rs"))
+                .is_ok()
+        );
         assert_eq!(
             session.authorize(GenerationAction::WritePath("c.rs")),
             Err(GovernanceError::BudgetExceeded("max_files_changed"))
@@ -665,9 +679,11 @@ mod tests {
     #[test]
     fn touch_symbol_denied_outside_allowed_set() {
         let mut session = GovernanceSession::admit(signed_envelope()).unwrap();
-        assert!(session
-            .authorize(GenerationAction::TouchSymbol("redeem"))
-            .is_ok());
+        assert!(
+            session
+                .authorize(GenerationAction::TouchSymbol("redeem"))
+                .is_ok()
+        );
         assert_eq!(
             session.authorize(GenerationAction::TouchSymbol("sneak_fn")),
             Err(GovernanceError::Denied(
@@ -679,9 +695,11 @@ mod tests {
     #[test]
     fn use_capability_denied_outside_allowed_set() {
         let mut session = GovernanceSession::admit(signed_envelope()).unwrap();
-        assert!(session
-            .authorize(GenerationAction::UseCapability("fs.read"))
-            .is_ok());
+        assert!(
+            session
+                .authorize(GenerationAction::UseCapability("fs.read"))
+                .is_ok()
+        );
         assert_eq!(
             session.authorize(GenerationAction::UseCapability("network.egress")),
             Err(GovernanceError::Denied(
@@ -719,12 +737,14 @@ mod tests {
     fn max_tool_calls_budget_enforced() {
         let mut session = GovernanceSession::admit(signed_envelope()).unwrap();
         for i in 0..4 {
-            assert!(session
-                .authorize(GenerationAction::InvokeTool {
-                    name: &format!("tool_{i}"),
-                    effectful: false,
-                })
-                .is_ok());
+            assert!(
+                session
+                    .authorize(GenerationAction::InvokeTool {
+                        name: &format!("tool_{i}"),
+                        effectful: false,
+                    })
+                    .is_ok()
+            );
         }
         assert_eq!(
             session.authorize(GenerationAction::InvokeTool {
@@ -885,9 +905,11 @@ mod tests {
     #[test]
     fn add_dependency_budget_enforced_when_not_forbidden() {
         let mut session = GovernanceSession::admit(envelope_allowing_deps(1)).unwrap();
-        assert!(session
-            .authorize(GenerationAction::AddDependency("serde"))
-            .is_ok());
+        assert!(
+            session
+                .authorize(GenerationAction::AddDependency("serde"))
+                .is_ok()
+        );
         assert_eq!(
             session.authorize(GenerationAction::AddDependency("tokio")),
             Err(GovernanceError::BudgetExceeded("max_new_dependencies"))
@@ -897,30 +919,38 @@ mod tests {
     #[test]
     fn effectful_calls_also_count_toward_total_tool_budget() {
         let mut session = GovernanceSession::admit(signed_envelope()).unwrap();
-        assert!(session
-            .authorize(GenerationAction::InvokeTool {
-                name: "write",
-                effectful: true,
-            })
-            .is_ok());
-        assert!(session
-            .authorize(GenerationAction::InvokeTool {
-                name: "read1",
-                effectful: false,
-            })
-            .is_ok());
-        assert!(session
-            .authorize(GenerationAction::InvokeTool {
-                name: "read2",
-                effectful: false,
-            })
-            .is_ok());
-        assert!(session
-            .authorize(GenerationAction::InvokeTool {
-                name: "read3",
-                effectful: false,
-            })
-            .is_ok());
+        assert!(
+            session
+                .authorize(GenerationAction::InvokeTool {
+                    name: "write",
+                    effectful: true,
+                })
+                .is_ok()
+        );
+        assert!(
+            session
+                .authorize(GenerationAction::InvokeTool {
+                    name: "read1",
+                    effectful: false,
+                })
+                .is_ok()
+        );
+        assert!(
+            session
+                .authorize(GenerationAction::InvokeTool {
+                    name: "read2",
+                    effectful: false,
+                })
+                .is_ok()
+        );
+        assert!(
+            session
+                .authorize(GenerationAction::InvokeTool {
+                    name: "read3",
+                    effectful: false,
+                })
+                .is_ok()
+        );
         assert_eq!(
             session.authorize(GenerationAction::InvokeTool {
                 name: "read4",
@@ -973,7 +1003,7 @@ mod tests {
     #[test]
     fn from_json_and_verify_round_trips() {
         let signed = signed_envelope();
-        let json = serde_json::to_vec(&signed).unwrap();
+        let json = lgwks_std::json::to_vec(&signed).unwrap();
         let recovered = SignedChangeEnvelope::from_json_and_verify(&json).unwrap();
         assert_eq!(recovered.envelope.change_id, signed.envelope.change_id);
     }

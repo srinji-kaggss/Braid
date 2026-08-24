@@ -1,19 +1,12 @@
-//! `random` owns every source of randomness in the estate and enforces
+//! `random` owns every source of randomness and enforces
 //! INV-RANDOM-ONE-SOURCE: all randomness comes from a single OS CSPRNG backend,
 //! and a failure to read it is an error the caller must handle — never a
 //! silent fallback to a clock, a counter, or userspace PRNG.
 //!
-//! Backs `uuid` v4 generation and is the intended home for the `rand` crate's
-//! work — but `rand` is declared in 4 manifests and reached from **43** call
-//! sites, by far the widest of the phase-1 targets, and those sites include
-//! distributions and seeded generators this module does not provide. `rand` is
-//! therefore a phase-3 CONSOLIDATE item, not a phase-1 ELIMINATE one; what is
-//! here now is the single OS-entropy owner the rest will be built on. A second
-//! source of randomness would be a second source of truth for one concept,
-//! which Law 3 forbids.
+//! Backs [`crate::id`] UUID v4 generation. Uses `getrandom` for OS entropy.
 //!
-//! Supported targets are Linux, macOS, and Windows. For unsupported targets,
-//! the crate fails at compile time so callers do not get a runtime surprise.
+//! Supported targets: Linux, macOS, and Windows. Unsupported targets fail at
+//! compile time.
 
 use std::error::Error;
 use std::fmt;
@@ -38,7 +31,11 @@ impl EntropyError {
 
 impl fmt::Display for EntropyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "could not read OS entropy from {}: {}", self.backend, self.cause)
+        write!(
+            f,
+            "could not read OS entropy from {}: {}",
+            self.backend, self.cause
+        )
     }
 }
 
@@ -53,7 +50,7 @@ pub fn fill_bytes(buf: &mut [u8]) -> Result<(), EntropyError> {
     if buf.is_empty() {
         return Ok(());
     }
-    getrandom::getrandom(buf).map_err(|cause| EntropyError {
+    getrandom::fill(buf).map_err(|cause| EntropyError {
         backend: "getrandom",
         cause: cause.to_string(),
     })

@@ -70,7 +70,7 @@ impl Runtime {
                     return Err(StartupError::InvalidArgument {
                         position,
                         value: arg.to_string_lossy().into_owned(),
-                    })
+                    });
                 }
             }
         }

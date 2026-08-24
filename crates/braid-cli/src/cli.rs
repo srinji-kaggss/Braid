@@ -37,9 +37,9 @@
 use std::process::ExitCode;
 
 use braid_ir::{Capsule, ConfirmPolicy};
-use braid_render::{has_widening, manifest, manifest_diff, render_text, DeltaKind};
+use braid_render::{DeltaKind, has_widening, manifest, manifest_diff, render_text};
 use braid_sdk::Builder;
-use braid_verify::{verify, Verdict};
+use braid_verify::{Verdict, verify};
 use braid_vocab_cms::registry_v0;
 use serde::{Deserialize, Serialize};
 
@@ -171,7 +171,7 @@ fn cmd_encode(args: &[String]) -> CliResult {
     let path = input.ok_or("encode needs <input.json>")?;
     let text = read_text(path)?;
     let jc: JsonCapsule =
-        serde_json::from_str(&text).map_err(|e| format!("{path}: invalid JSON-of-IR: {e}"))?;
+        lgwks_std::json::from_str(&text).map_err(|e| format!("{path}: invalid JSON-of-IR: {e}"))?;
 
     let capsule = build_from_json(jc)?;
     let bytes = capsule.to_bytes();
@@ -264,7 +264,7 @@ fn cmd_decode(args: &[String]) -> CliResult {
             .collect(),
         outputs: capsule.braid.outputs.clone(),
     };
-    let json = serde_json::to_string_pretty(&out).map_err(|e| format!("serialize: {e}"))?;
+    let json = lgwks_std::json::to_string_pretty(&out).map_err(|e| format!("serialize: {e}"))?;
     println!("{json}");
     Ok(())
 }

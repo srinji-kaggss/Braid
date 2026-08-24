@@ -1,15 +1,18 @@
 [package]
 name = "lgwks_bot"
-description = "Automation bot ontology and four-verb execution model."
-version = "0.1.0"
-edition = "2021"
-rust-version = "1.97"
-license = "MPL-2.0"
-repository = "https://github.com/srinji-kaggss/afternow"
+description = "Capability-gated automation bots built on four verbs: Observe, Evaluate, Execute, Query."
+version = "0.1.1"
+edition = "2024"
+rust-version = "1.98"
+license = "BSD-3-Clause"
+repository = "https://github.com/srinji-kaggss/Braid"
+homepage = "https://github.com/srinji-kaggss/Braid/tree/main/crates/lgwks-bot"
+readme = "README.md"
+categories = ["development-tools", "config"]
+keywords = ["automation", "bot", "capabilities", "observe", "execute"]
 
 [dependencies]
-lgwks_std = { workspace = true }
+lgwks_std = { workspace = true, features = ["json"] }
 serde = { workspace = true }
-serde_json = { workspace = true }
 
 [dev-dependencies]
