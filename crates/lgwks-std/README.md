@@ -109,6 +109,25 @@ verifies no unapproved dependency appears in the manifest.
 - `contract/APPROVED.toml` is authoritative for approved versions.
 - `crates/lgwks-std-gate/src/lib.rs` is authoritative for enforcement behavior.
 
+## Distribution lane
+
+`lgwks_std` is prepared as a normal Cargo package artifact:
+
+- distribution lane: **crates.io (public package) / manifest-only dependency**.
+- package entrypoint: `crates/lgwks-std/Cargo.toml`.
+- release check: `cargo package --manifest-path crates/lgwks-std/Cargo.toml`.
+
+### Smoke-test fixture
+
+Run the package smoke test from this repo root:
+
+```bash
+./scripts/lgwks-std-package-smoke.sh
+```
+
+The script packages the crate, unpacks the produced `.crate`, and consumes it as a
+standalone dependency from outside the Braid workspace dependency graph.
+
 ## The gate
 
 Three lines in a consumer's `build.rs` turn INV-DEP-REGISTERED into a compile
