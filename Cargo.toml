@@ -20,9 +20,9 @@ members = [
     # the IR and the verifier — `lgwks_std` is the estate's one approved
     # non-`std` surface, and `lgwks_std_gate` enforces INV-DEP-REGISTERED, that
     # nothing outside `std` and `std+` compiles without a human's approval in
-    # `contract/APPROVED.toml`. Both declare zero dependencies, so neither can
-    # widen this workspace's lock file. See `crates/lgwks-std/README.md`.
+    # `contract/APPROVED.toml`. See `crates/lgwks-std/README.md`.
     "crates/lgwks-std",
+    "crates/lgwks-bot",
     "crates/lgwks-std-gate",
 ]
 resolver = "2"

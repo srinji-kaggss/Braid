@@ -1,8 +1,8 @@
 //! `sys` owns the system process domain. Requires `bot.sys`.
 
-use crate::bot::cap::Cap;
-use crate::bot::error::BotError;
-use crate::bot::verb;
+use crate::cap::Cap;
+use crate::error::BotError;
+use crate::verb;
 
 /// Observe or execute a system process. Supports Observe, Execute, Query.
 pub struct Process {

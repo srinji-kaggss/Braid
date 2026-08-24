@@ -1,9 +1,9 @@
 //! `flow` owns composition domains — pipeline, branch, fan-out. These are
 //! Execute impls that chain other Execute actions. No new verb needed.
 
-use crate::bot::cap::Cap;
-use crate::bot::error::BotError;
-use crate::bot::verb;
+use crate::cap::Cap;
+use crate::error::BotError;
+use crate::verb;
 
 /// Execute actions in sequence. Each action's output feeds the next.
 /// Capabilities are inherited from the contained actions.

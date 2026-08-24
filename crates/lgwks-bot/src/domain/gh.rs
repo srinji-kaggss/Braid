@@ -1,9 +1,9 @@
 //! `gh` owns the GitHub domain and enforces INV-BOT-CAP-GATED: every
 //! GitHub operation requires `bot.net`.
 
-use crate::bot::cap::Cap;
-use crate::bot::error::BotError;
-use crate::bot::verb;
+use crate::cap::Cap;
+use crate::error::BotError;
+use crate::verb;
 
 // ── pr_status ──────────────────────────────────────────────────────────────
 

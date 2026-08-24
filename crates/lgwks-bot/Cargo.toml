@@ -1,0 +1,15 @@
+[package]
+name = "lgwks_bot"
+description = "Automation bot ontology and four-verb execution model."
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.97"
+license = "MPL-2.0"
+repository = "https://github.com/srinji-kaggss/afternow"
+
+[dependencies]
+lgwks_std = { path = "../lgwks-std" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]

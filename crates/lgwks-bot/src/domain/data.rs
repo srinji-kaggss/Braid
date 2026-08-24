@@ -1,8 +1,8 @@
 //! `data` owns the data store domain. Requires `bot.fs`.
 
-use crate::bot::cap::Cap;
-use crate::bot::error::BotError;
-use crate::bot::verb::{self, Observe};
+use crate::cap::Cap;
+use crate::error::BotError;
+use crate::verb::{self, Observe};
 
 /// A JSON store backed by a file path. Supports Observe, Execute, Query.
 pub struct JsonStore {

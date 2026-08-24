@@ -1,8 +1,8 @@
 //! `net` owns the network endpoint domain. Requires `bot.net`.
 
-use crate::bot::cap::Cap;
-use crate::bot::error::BotError;
-use crate::bot::verb;
+use crate::cap::Cap;
+use crate::error::BotError;
+use crate::verb;
 
 /// Observe or query a network endpoint. Supports Observe, Execute, Query.
 pub struct Endpoint {
