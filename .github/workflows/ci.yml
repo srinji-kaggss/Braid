@@ -202,6 +202,64 @@ jobs:
         if: needs.scope.outputs.code_changed != 'yes'
         run: echo "scope docs-only — clippy skipped (explicit N/A)"
 
+  lgwks-std-current-stable:
+    name: lgwks-std current-stable Rust 1.98.0
+    needs: [scope, stack-position]
+    runs-on: self-hosted
+    if: needs.scope.outputs.code_changed == 'yes'
+    env:
+      CARGO_TARGET_DIR: /Users/srinji/.braid-ci/targets/${{ github.run_id }}-std-stable
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pin Rust 1.98.0
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.98.0"
+          components: clippy
+
+      - name: Workspace test on current stable
+        run: cargo test --workspace --all-targets
+
+      - name: Workspace clippy on current stable
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+  lgwks-std-msrv:
+    name: lgwks-std MSRV
+    needs: [scope, stack-position]
+    runs-on: self-hosted
+    if: needs.scope.outputs.code_changed == 'yes'
+    env:
+      CARGO_TARGET_DIR: /Users/srinji/.braid-ci/targets/${{ github.run_id }}-msrv
+    strategy:
+      fail-fast: false
+      matrix:
+        msrv: ["1.97.0"]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pin MSRV
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "${{ matrix.msrv }}"
+          components: ""
+
+      - name: Check lgwks-std feature matrix at MSRV
+        run: |
+          set -eu
+          cargo check --manifest-path crates/lgwks-std/Cargo.toml --all-targets --no-default-features
+          cargo check --manifest-path crates/lgwks-std/Cargo.toml --all-targets
+          cargo check --manifest-path crates/lgwks-std/Cargo.toml --all-targets --features hash --no-default-features
+          cargo check --manifest-path crates/lgwks-std/Cargo.toml --all-targets --features pattern --no-default-features
+          cargo check --manifest-path crates/lgwks-std/Cargo.toml --all-targets --features json --no-default-features
+          cargo check --manifest-path crates/lgwks-std/Cargo.toml --all-targets --features wire --no-default-features
+          cargo check --manifest-path crates/lgwks-std/Cargo.toml --all-targets --all-features
+
+      - name: Check lgwks-std-gate at MSRV
+        run: cargo check --manifest-path crates/lgwks-std-gate/Cargo.toml --all-targets
+
   # ── std+ feature matrix ────────────────────────────────────────────────
   lgwks-std-feature-matrix:
     name: lgwks-std feature matrix

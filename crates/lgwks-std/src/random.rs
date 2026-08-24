@@ -53,7 +53,7 @@ pub fn fill_bytes(buf: &mut [u8]) -> Result<(), EntropyError> {
     if buf.is_empty() {
         return Ok(());
     }
-    getrandom::fill(buf).map_err(|cause| EntropyError {
+    getrandom::getrandom(buf).map_err(|cause| EntropyError {
         backend: "getrandom",
         cause: cause.to_string(),
     })
