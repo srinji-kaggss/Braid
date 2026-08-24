@@ -311,6 +311,7 @@ jobs:
 
   lgwks-std-consumption-contract:
     name: lgwks-std public consumption contract
+    # Keep this job as an active regression gate for Braid consumption.
     needs: [scope, stack-position]
     runs-on: self-hosted
     if: needs.scope.outputs.code_changed == 'yes'
