@@ -6,6 +6,8 @@ edition = "2021"
 rust-version = "1.97"
 license = "MPL-2.0"
 repository = "https://github.com/srinji-kaggss/Braid"
+readme = "README.md"
+homepage = "https://github.com/srinji-kaggss/Braid/tree/main/crates/lgwks-std"
 categories = ["development-tools", "encoding", "asynchronous"]
 keywords = ["stdlib", "utilities", "zero-config", "async", "serialization"]
 
