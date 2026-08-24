@@ -2,9 +2,9 @@
 
 use std::path::PathBuf;
 
-use crate::bot::cap::Cap;
-use crate::bot::error::BotError;
-use crate::bot::verb::{self, Observe};
+use crate::cap::Cap;
+use crate::error::BotError;
+use crate::verb::{self, Observe};
 
 /// Observe a filesystem path for changes. Supports Observe, Evaluate, Execute, Query.
 pub struct Path {

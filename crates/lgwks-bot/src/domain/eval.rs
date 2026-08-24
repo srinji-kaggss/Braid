@@ -1,7 +1,7 @@
 //! `eval` owns shipped evaluators — composable conditions for the Evaluate verb.
 
-use crate::bot::error::BotError;
-use crate::bot::verb::Evaluate;
+use crate::error::BotError;
+use crate::verb::Evaluate;
 
 /// True when a value has changed since last check. Requires the observed type
 /// to implement `PartialEq + Clone`.

@@ -378,7 +378,7 @@ mod tests {
                 Self(vec![Cap::net()])
             }
         }
-        impl crate::bot::verb::Observe for FakeSource {
+        impl crate::verb::Observe for FakeSource {
             type Output = u32;
             fn required_caps(&self) -> &[Cap] {
                 &self.0
@@ -392,7 +392,7 @@ mod tests {
         }
 
         struct FakeAction;
-        impl crate::bot::verb::Execute for FakeAction {
+        impl crate::verb::Execute for FakeAction {
             type Input = u32;
             type Output = ();
             fn required_caps(&self) -> &[Cap] {
@@ -421,7 +421,7 @@ mod tests {
                 Self(vec![Cap::net()])
             }
         }
-        impl crate::bot::verb::Observe for FakeSource {
+        impl crate::verb::Observe for FakeSource {
             type Output = u32;
             fn required_caps(&self) -> &[Cap] {
                 &self.0
@@ -435,7 +435,7 @@ mod tests {
         }
 
         struct FakeAction;
-        impl crate::bot::verb::Execute for FakeAction {
+        impl crate::verb::Execute for FakeAction {
             type Input = u32;
             type Output = ();
             fn required_caps(&self) -> &[Cap] {
@@ -465,7 +465,7 @@ mod tests {
         use std::sync::Arc;
 
         struct CountSource;
-        impl crate::bot::verb::Observe for CountSource {
+        impl crate::verb::Observe for CountSource {
             type Output = u32;
             fn required_caps(&self) -> &[Cap] {
                 &[]
@@ -480,7 +480,7 @@ mod tests {
 
         #[derive(Clone)]
         struct CountAction(Arc<AtomicUsize>);
-        impl crate::bot::verb::Execute for CountAction {
+        impl crate::verb::Execute for CountAction {
             type Input = u32;
             type Output = ();
             fn required_caps(&self) -> &[Cap] {

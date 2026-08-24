@@ -4,9 +4,9 @@
 //! replies), and a Query surface (read history). It is NOT a separate verb —
 //! it is where triggers come from.
 
-use crate::bot::cap::Cap;
-use crate::bot::error::BotError;
-use crate::bot::verb;
+use crate::cap::Cap;
+use crate::error::BotError;
+use crate::verb;
 
 /// An incoming chat message.
 #[derive(Debug, Clone)]
