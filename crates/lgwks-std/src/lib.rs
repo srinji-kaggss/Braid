@@ -28,13 +28,17 @@
 pub mod encoding;
 pub mod fs;
 pub mod glob;
+#[cfg(feature = "hash")]
 pub mod hash;
 pub mod hex;
 pub mod id;
+#[cfg(feature = "json")]
 pub mod json;
 pub mod leb128;
+#[cfg(feature = "pattern")]
 pub mod pattern;
 pub mod random;
 pub mod task;
 pub mod time;
+#[cfg(feature = "wire")]
 pub mod wire;

@@ -202,6 +202,29 @@ jobs:
         if: needs.scope.outputs.code_changed != 'yes'
         run: echo "scope docs-only — clippy skipped (explicit N/A)"
 
+  # ── std+ feature matrix ────────────────────────────────────────────────
+  lgwks-std-feature-matrix:
+    name: lgwks-std feature matrix
+    needs: [scope, stack-position]
+    runs-on: self-hosted
+    if: needs.scope.outputs.code_changed == 'yes'
+    env:
+      CARGO_TARGET_DIR: /Users/srinji/.braid-ci/targets/${{ github.run_id }}-std
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check all requested feature combinations
+        run: |
+          set -eu
+          cargo test -p lgwks-std --no-default-features --all-targets
+          cargo test -p lgwks-std --all-targets
+          cargo test -p lgwks-std --features hash --no-default-features --all-targets
+          cargo test -p lgwks-std --features pattern --no-default-features --all-targets
+          cargo test -p lgwks-std --features json --no-default-features --all-targets
+          cargo test -p lgwks-std --features wire --no-default-features --all-targets
+          cargo test -p lgwks-std --all-features --all-targets
+
   # ── Cleanup ───────────────────────────────────────────────────────────────
   cleanup:
     name: Cleanup
