@@ -78,7 +78,7 @@ Legacy module ownership map:
 
 ## INV-STDPLUS-APPROVED-ONLY
 
-The crate declares five external crates, all vetted leaf stacks, enabled by
+The crate declares six external crates, all vetted leaf stacks, enabled by
 features:
 
 - **`blake3`** (feature `hash`; 3 zero-dep leaves: arrayvec, cfg-if,
@@ -89,6 +89,8 @@ features:
 - **`serde_json`** (feature `json`)
 - **`rkyv`** (feature `wire`; 5 djkoloski crates: rend, ptr_meta, rancor,
   munge + derive; zero external deps)
+- **`getrandom`** (default path for `random`; supported on linux/macOS/windows in
+  this crate)
 
 The gate test `deps_are_approved_leaves` in `lgwks-std-gate` mechanically
 verifies no unapproved dependency appears in the manifest.

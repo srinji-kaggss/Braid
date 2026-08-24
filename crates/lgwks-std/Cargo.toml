@@ -22,6 +22,7 @@ keywords = ["stdlib", "utilities", "zero-config", "async", "serialization"]
 #   serde         — 1 crate + derive (proc-macro2, quote, syn — same stack)
 #   serde_json    — 2 crates beyond serde (itoa, ryu — both zero-dep leaves)
 #                   reuses memchr from regex tree
+#   getrandom     — 0-dep leaves in std-only mode for supported OSes
 [features]
 default = ["core"]
 core = []
@@ -37,6 +38,7 @@ regex = { version = "1.13", optional = true }
 rkyv = { version = "0.8", default-features = false, features = ["alloc", "bytecheck"], optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
+getrandom = "0.2"
 
 [dev-dependencies]
 tempfile = "3.20"
