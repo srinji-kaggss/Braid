@@ -413,10 +413,10 @@ fn scenario_6b_nested_submap_smuggle_rejected() {
     use braid_ir::Value;
     let clean = edit_section_capsule();
     let mut v = clean.to_canon();
-    if let Value::Map(top) = &mut v {
-        if let Some(Value::Map(braid)) = top.get_mut("braid") {
-            braid.insert("zz".into(), Value::Int(7));
-        }
+    if let Value::Map(top) = &mut v
+        && let Some(Value::Map(braid)) = top.get_mut("braid")
+    {
+        braid.insert("zz".into(), Value::Int(7));
     }
     let dirty = braid_ir::canon::encode(&v);
     assert_ne!(dirty, clean.to_bytes());

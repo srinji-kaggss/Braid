@@ -1,0 +1,10 @@
+# INV-NIGHTLY-ISOLATION — nightly-only experiments live here; nothing here is
+# promoted into `crates/` without stabilizing first. Not a workspace member.
+[package]
+name = "nightly-playground"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Detached from the repo workspace on purpose.
+[workspace]

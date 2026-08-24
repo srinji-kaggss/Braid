@@ -216,10 +216,10 @@ impl<'r> Builder<'r> {
     }
 
     fn record_effects(&mut self, spec: &TermSpec) {
-        if let Some(cap) = &spec.capability {
-            if !self.grants.iter().any(|g| g.to_string() == cap.to_string()) {
-                self.grants.push(cap.clone());
-            }
+        if let Some(cap) = &spec.capability
+            && !self.grants.iter().any(|g| g.to_string() == cap.to_string())
+        {
+            self.grants.push(cap.clone());
         }
         if matches!(spec.effect, EffectClass::Irreversible | EffectClass::Egress) {
             self.has_dangerous = true;

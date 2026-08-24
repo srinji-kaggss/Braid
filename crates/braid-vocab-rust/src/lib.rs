@@ -120,10 +120,10 @@ fn newtype_name(label: &str) -> String {
 }
 
 fn collect_opaque_tag(t: &TypeTag, seen: &mut Vec<(String, Vec<TypeTag>)>) {
-    if let TypeTag::Opaque(label, args) = t {
-        if !seen.iter().any(|(l, _)| l == label) {
-            seen.push((label.clone(), args.clone()));
-        }
+    if let TypeTag::Opaque(label, args) = t
+        && !seen.iter().any(|(l, _)| l == label)
+    {
+        seen.push((label.clone(), args.clone()));
     }
 }
 

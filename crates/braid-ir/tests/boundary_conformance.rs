@@ -78,10 +78,8 @@ fn scan_toml_lines(toml: &str, section: &str) -> Vec<String> {
             in_section = matches_section;
             continue;
         }
-        if in_section {
-            if let Some(key_name) = parse_key_value(line_text) {
-                keys.push(key_name);
-            }
+        if in_section && let Some(key_name) = parse_key_value(line_text) {
+            keys.push(key_name);
         }
     }
     keys

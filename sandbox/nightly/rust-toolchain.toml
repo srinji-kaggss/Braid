@@ -1,0 +1,6 @@
+# INV-NIGHTLY-ISOLATION — this file scopes ONLY the sandbox/nightly subtree
+# to the nightly toolchain. The repo root pin stays 1.98 stable; nothing
+# outside this directory may compile under nightly.
+[toolchain]
+channel = "nightly"
+profile = "minimal"

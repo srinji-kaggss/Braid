@@ -168,20 +168,17 @@ fn install(root: &Path, m: &RepoManifest, replace: bool) -> CliResult {
     // denies until the new cid is recorded — an org-metadata change is a
     // recorded event in the org database, never silent drift.
     let inv_path = root.join(INVENTORY_FILE);
-    if inv_path.exists() {
-        if let Ok(inv) = std::fs::read_to_string(&inv_path) {
-            if let Ok(declared) = braid_manifest::parse_inventory(&inv) {
-                if let Some(entry) = declared.iter().find(|d| d.name == m.name) {
-                    if entry.cid != Some(m.cid()) {
-                        eprintln!(
-                            "note: the inventory pin for `{}` is now stale — record its new \
-                             cid there; `braid catalog` denies until re-pinned",
-                            m.name
-                        );
-                    }
-                }
-            }
-        }
+    if inv_path.exists()
+        && let Ok(inv) = std::fs::read_to_string(&inv_path)
+        && let Ok(declared) = braid_manifest::parse_inventory(&inv)
+        && let Some(entry) = declared.iter().find(|d| d.name == m.name)
+        && entry.cid != Some(m.cid())
+    {
+        eprintln!(
+            "note: the inventory pin for `{}` is now stale — record its new \
+             cid there; `braid catalog` denies until re-pinned",
+            m.name
+        );
     }
     Ok(())
 }

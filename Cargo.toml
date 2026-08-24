@@ -27,6 +27,11 @@ members = [
 ]
 resolver = "2"
 
+# INV-NIGHTLY-ISOLATION — sandbox code may run on any toolchain it likes;
+# keeping it out of the workspace keeps Cargo.lock and every member's
+# rust-version honest at 1.98.
+exclude = ["sandbox"]
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Braid workspace dependencies.
 #

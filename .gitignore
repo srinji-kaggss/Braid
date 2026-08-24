@@ -4,6 +4,10 @@ Cargo.lock.orig
 .DS_Store
 .keel/
 
+# INV-NIGHTLY-ISOLATION — sandbox build outputs never track
+sandbox/**/target/
+sandbox/**/Cargo.lock
+
 # CodeGraph generated index — never track
 .codegraph/
 

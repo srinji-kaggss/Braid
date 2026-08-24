@@ -200,10 +200,10 @@ fn assert_nested_smuggle_rejected(mutate: impl Fn(&mut braid_ir::Value)) {
 fn smuggled_key_in_braid_map_rejected() {
     use braid_ir::Value;
     assert_nested_smuggle_rejected(|v| {
-        if let Value::Map(top) = v {
-            if let Some(Value::Map(braid)) = top.get_mut("braid") {
-                braid.insert("zz".into(), Value::Int(7));
-            }
+        if let Value::Map(top) = v
+            && let Some(Value::Map(braid)) = top.get_mut("braid")
+        {
+            braid.insert("zz".into(), Value::Int(7));
         }
     });
 }
@@ -212,14 +212,12 @@ fn smuggled_key_in_braid_map_rejected() {
 fn smuggled_key_in_strand_map_rejected() {
     use braid_ir::Value;
     assert_nested_smuggle_rejected(|v| {
-        if let Value::Map(top) = v {
-            if let Some(Value::Map(braid)) = top.get_mut("braid") {
-                if let Some(Value::List(strands)) = braid.get_mut("strands") {
-                    if let Some(Value::Map(s0)) = strands.get_mut(0) {
-                        s0.insert("zz".into(), Value::Int(7));
-                    }
-                }
-            }
+        if let Value::Map(top) = v
+            && let Some(Value::Map(braid)) = top.get_mut("braid")
+            && let Some(Value::List(strands)) = braid.get_mut("strands")
+            && let Some(Value::Map(s0)) = strands.get_mut(0)
+        {
+            s0.insert("zz".into(), Value::Int(7));
         }
     });
 }
@@ -229,12 +227,11 @@ fn smuggled_key_in_registry_term_rejected() {
     use braid_ir::{TermRegistry, Value};
     let reg = braid_vocab_cms::registry_v0();
     let mut v = reg.to_canon();
-    if let Value::Map(top) = &mut v {
-        if let Some(Value::List(terms)) = top.get_mut("terms") {
-            if let Some(Value::Map(t0)) = terms.get_mut(0) {
-                t0.insert("zz".into(), Value::Int(7));
-            }
-        }
+    if let Value::Map(top) = &mut v
+        && let Some(Value::List(terms)) = top.get_mut("terms")
+        && let Some(Value::Map(t0)) = terms.get_mut(0)
+    {
+        t0.insert("zz".into(), Value::Int(7));
     }
     let bytes = braid_ir::canon::encode(&v);
     assert!(braid_ir::decode_strict(&bytes).is_ok());
