@@ -29,6 +29,7 @@ the ADR's extraction addendum for what changed in the move.
 3. `PRD.md` — product requirements: identity, users, goals/non-goals, the IR model, phases, acceptance scenarios.
 4. `threat-model.md` — the failure-mode and abuse catalogue (T1–T16). Every unit's acceptance criteria cite the threats it closes.
 5. `units.md` — the issue-ready execution plan (U0–U10) with acceptance criteria and verification commands.
+6. `BRAID_FRONTIER_FLOW.okf.md` — proposed inter-capsule Flow IR, justified frontier planner, cross-repository runtime boundary, falsification matrix, and Codex continuation contract.
 
 ## The one-paragraph mental model
 
