@@ -1,14 +1,28 @@
 # Braid Graph-Based DSL: Specification & Lowering Architecture
 
-**Date:** 2026-08-21  
-**Status:** Approved Specification  
-**Authority:** Braid Architecture Specification  
+**Date:** 2026-08-21
+**Status:** Approved Specification
+**Authority:** Braid Architecture Specification
 
 ---
 
+## ADR-099 reconciliation
+
+This document predates the ratified outer Flow boundary. Its `graph` form
+describes the inner per-capsule strand DAG. Its `statechart` form is an
+authoring projection only: bounded inter-capsule transitions lower to Braid
+Frontier Flow, while durable state, journals, resumption, retries, and effects
+belong to forge-harness. `~>` recurrence must statically expand within declared
+bounds or be rejected by Flow v0. Nothing in this document creates a second
+Flow wire format or scheduler.
+
+The visual grammar remains illustrative and is not identity-bearing. In
+particular, its `f64` examples must lower to registered fixed-point types or be
+rejected under D8; they do not amend Braid's no-float IR rule.
+
 ## 1. Overview
 
-Braid's internal Intermediate Representation (IR) is an immutable, content-addressed Directed Acyclic Graph (DAG) of compute strands. 
+Braid's internal Intermediate Representation (IR) is an immutable, content-addressed Directed Acyclic Graph (DAG) of compute strands.
 
 The **Braid Graph DSL** exposes this native graph topology directly in the syntax, providing a visually intuitive, hierarchical, and declarative language for both human developers and LLM autoregressive token generation.
 

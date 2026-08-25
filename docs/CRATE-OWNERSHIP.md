@@ -38,6 +38,26 @@ is 18.
 | `lgwks-std` | The estate's one approved non-`std` primitive surface, including platform, encoding, automation, and serialization primitives. | Add a primitive, revise its platform contract, or change an approved dependency-backed implementation. | **Authority/security/cadence:** this is a governed alternative to `std`, reviewed by dependency and primitive rather than through Braid IR releases. |
 | `lgwks-std-gate` | Build-time proof that `lgwks-std` dependencies match the human-approved contract. | Change the approval contract format, lockfile audit, refusal taxonomy, or gate entry point. | **Security/failure mode:** unauthorized dependency growth fails the build through a dedicated gate rather than relying on review memory. |
 
+## Ratified Frontier Flow boundaries (planned; not in the current crate count)
+
+ADR-099 ratifies four implementation crates but does not create them in P0.
+They land through Braid #57, #60, #59, and #58; after #59, the SDK work in #58
+may proceed in parallel with the separately owned Forge runtime adapter.
+
+| Planned crate | Invariant owned | Legitimate reason to change | Split justification |
+| --- | --- | --- | --- |
+| `braid-flow-ir` | The closed outer graph shape, deterministic encoding, domain-separated semantic Flow identity, bounded source normalization, and predicate AST. | Change identity-bearing Flow semantics, encoding, bounds, or the closed v0 graph vocabulary. | **Authority/security:** semantic bytes and CID remain a small `no_std + alloc` trust base independent of source parsers and runtimes. |
+| `braid-flow-verify` | Independent canonical decoding and fail-closed static admission of Flow structure, types, reachability, joins, choices, terminals, justification, and authority non-aggregation. | Add or tighten a Flow admission obligation or typed refusal. | **Authority/failure mode:** a builder or importer cannot make its own graph admissible. |
+| `braid-flow-plan` | Deterministic, immutable-snapshot-bound satiation and next-frontier derivation plus Plan identity. | Change trusted readiness, satiation, invalidation, selection, or planning-context semantics. | **Failure mode/cadence:** trusted planning is distinct from graph admission and from Forge's durable scheduling lifecycle. |
+| `braid-flow-sdk` | Rust builder state, first-class RON authoring, normalized JSON interoperability, source diagnostics, and lowering to the one Flow AST. | Improve authoring ergonomics, source schema versions, diagnostics, or importer-facing conversion. | **Lifecycle/security:** textual parsing and friendly recovery evolve without entering canonical IR or verifier trust bases. |
+
+Existing integration ownership is also frozen: `braid-render` owns deterministic
+Flow manifest and full DOT projection; `braid-project` may consume admitted
+Flows after P2 but owns neither admission nor execution; `braid-run` executes
+one admitted capsule selected by a plan step and never becomes a durable
+scheduler. RON/JSON/YAML parsing stays out of `braid-flow-ir`,
+`braid-flow-verify`, and `braid-flow-plan`.
+
 ## Outcome
 
 All 18 boundaries satisfy all three columns. The earlier #28 behavioral slices

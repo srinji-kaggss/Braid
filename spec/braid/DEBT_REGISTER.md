@@ -28,8 +28,49 @@
 - ✅ **Multi-capsule project build** (U13, D-TOOLCHAIN.1) — `braid-project`:
   manifest → elaborate + admit all (fail-closed) → deterministic project CID;
   cross-capsule anti-dredging guards (no rewrite/aggregation, no shadowing).
+- ✅ **Frontier Flow P0 authority and wire contract** (ADR-099,
+  D-FLOW.1–D-FLOW.9) — Braid/Forge/experience-as-code authority split,
+  RON-first authoring with JSON interoperability, v0 graph/wire decisions,
+  crate ownership, and the dependency-ordered P1–P6 issue DAG are ratified.
 
 ## Open debts (the Java-ecosystem gap)
+
+### D-FLOW — Inter-capsule Flow is ratified but not implemented
+
+P0 is complete; the implementation is intentionally empty until the following
+dependency DAG lands:
+
+1. [Braid #57](https://github.com/srinji-kaggss/Braid/issues/57) — canonical
+   Flow AST/IR, encoding, bounds, domains, and KATs.
+2. [Braid #60](https://github.com/srinji-kaggss/Braid/issues/60) — independent
+   admission and the invariant/falsification matrix.
+3. [Braid #59](https://github.com/srinji-kaggss/Braid/issues/59) — deterministic
+   snapshot-bound satiation and frontier planning.
+4. [Braid #58](https://github.com/srinji-kaggss/Braid/issues/58) — Rust/RON SDK,
+   normalized JSON interoperability, full graph rendering, and CI import.
+5. [forge-harness #123](https://github.com/srinji-kaggss/forge-harness/issues/123)
+   — durable instances and execution.
+6. [experience-as-code #66](https://github.com/srinji-kaggss/experience-as-code/issues/66)
+   — domain compilation/reconciliation and fair performance proof.
+
+The edges are P1 -> P2 -> P3; P3 forks to the sibling P4 and P5 workstreams,
+and P6 depends on both. Forge P5 does not depend on the authoring SDK in P4.
+
+The unresolved technical debts are explicit: bounded proof completeness for
+choice predicates; canonical materialization bindings when satiation supplies
+demanded outputs; safe secret-version cache identity; commutativity/resource
+proofs before parallel frontier execution; a bounded patch protocol before
+runtime expansion; and fixture/host hashes before performance thresholds become
+normative. None may be guessed by an implementation phase.
+
+### D-FLOW-REGISTRATION — ADR-099 is not yet in the constellation index
+
+ADR numbers are constellation-wide. A filesystem scan found ADR-096 through
+ADR-098 already allocated even though the canonical governance `ARCHIVE.md`
+index stops at ADR-095, so this record correctly uses ADR-099. The
+logic-os-kernel-owned governance map and archive must add ADR-096 through
+ADR-099 in an authorized cross-repo governance change. Braid records the debt
+but does not mutate another repository's authority from this P0 change.
 
 ### D-RUN — No runtime / no VM (the single biggest gap)
 A verified capsule does not *run*. U7 (WASM codegen + runtime admission) is

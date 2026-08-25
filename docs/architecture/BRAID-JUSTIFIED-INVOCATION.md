@@ -1,8 +1,22 @@
 # Braid Justified Invocation
 
-**Status:** design note / research thesis, not yet a normative protocol  
-**Date:** 2026-08-25  
+**Status:** thesis ratified for Frontier Flow readiness by ADR-099
+**Date:** 2026-08-25
 **Scope:** machine-first representation and verification of *why an invocation should exist at all*.
+
+## ADR-099 reconciliation
+
+ADR-099 and `spec/braid/BRAID_FRONTIER_FLOW.okf.md` sections 8–14 are the
+normative v0 protocol derived from this thesis. An `InvokeCapsule` becomes ready
+only after independent Flow admission, predecessor completion, a `True` guard
+and `needed_when`, and failure to prove `satisfied_when` with all demanded
+outputs canonically materialized. `Unknown` never authorizes action or
+satiation, and every proof is bound to the exact immutable snapshot.
+
+Braid owns this readiness decision and deterministic next-step derivation. It
+does not persist instances, execute effects, lease workers, retry, compensate,
+or issue receipts; those durable concerns belong to forge-harness. This note
+does not create another wire format or authority.
 
 ## Thesis
 
