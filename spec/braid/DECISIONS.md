@@ -502,3 +502,79 @@ D6-gated. Braid becomes a dependency by being the verified IR that languages ela
 by authoring a competing textual syntax. "Replace Java" = Java elaborates to Braid IR and the
 JVM stops being the authority surface; it does NOT mean Braid ships a Java-syntax grammar in v0.
 (Enriches D5/D14/D17; sharpens D6; generalizes D20's "anchor" framing to a multi-language anchor.)
+
+## Amendments — 2026-08-25 (Director ratification of Frontier Flow P0)
+
+Canonical detail and authority diagram:
+`../../docs/adr-099-braid-frontier-flow.md`. These entries are **LOCKED** by
+the Director's instruction to make RON first-class and finish P0 for Issue #56.
+
+### D-FLOW.1 — Braid owns semantic Flow; Forge owns durable execution — **LOCKED**
+
+Braid owns the inter-capsule Flow AST/IR, deterministic encoding and content
+identity, independent static admission, and snapshot-bound next-step
+derivation. Forge-harness owns durable instances, leases/fencing, event
+history, retries, workers, crash recovery, effects, evidence persistence, and
+replay. Experience-as-code owns domain declaration/observation/reconciliation;
+`lgwks_bot` remains a leaf adapter. No owner may silently absorb another row.
+
+### D-FLOW.2 — Outer Flow and inner strand DAG are distinct — **LOCKED**
+
+Flow connects already-admitted capsule CIDs. It does not inline or rewrite a
+capsule and cannot aggregate capsule authority. The existing `Braid` remains
+the topologically ordered computation graph inside one capsule.
+
+### D-FLOW.3 — Flow and Plan identities are distinct — **LOCKED**
+
+`lw.braid.flow.v0` identifies source-order-independent semantic graph meaning.
+`lw.braid.flow.plan.v0` additionally binds target profile, cache manifest,
+planner version, immutable snapshot, and the selected step. Related v0 domains
+are frozen in ADR-099. Every domain uses the existing `braid_ir::Cid`; wrappers
+may prevent confusion but may not create a second CID implementation.
+
+### D-FLOW.4 — v0 graph constructs are closed and bounded — **LOCKED**
+
+Normalized nodes are `InvokeCapsule`, `Choice`, `JoinAll`, and `Terminal`;
+edges are typed `Data` or explicit `After`. Source `MapStatic` must expand
+before canonical encoding. Arbitrary cycles, runtime-unbounded expansion,
+`JoinAny`, races, cancellation, and learned trusted scheduling are rejected.
+
+### D-FLOW.5 — RON is first-class Flow authoring; JSON is interop — **LOCKED**
+
+Ordinary Rust builders and RON lower to one typed Flow source AST. Normalized
+JSON exists only for interoperability/inspection; YAML exists only behind
+strict importers. Source text is never identity-bearing: accepted spelling,
+comment, whitespace, and field-order differences that yield the same validated
+AST yield the same canonical bytes and Flow CID. The existing capsule JSON
+contract in D19 remains unchanged.
+
+### D-FLOW.6 — Satiation precedes invocation and Unknown fails closed — **LOCKED**
+
+Proofs are immutable-snapshot-bound. Cache/retry eligibility is derived from
+the admitted capsule and term registry, never a Flow-authored boolean. Braid
+selects at most one executable node in sequential v0; it does not execute or
+persist the workflow lifecycle.
+
+### D-FLOW.7 — Statecharts are projections, not a second runtime — **LOCKED**
+
+Graph-DSL `statechart`/`orchestration` forms may lower bounded inter-capsule
+semantics to Flow. Durable state, journals, receipts, compensation, replay,
+and resumption belong to Forge. This entry supersedes conflicting runtime
+language in the 2026-08-21 architecture blueprints.
+
+### D-FLOW.8 — Flow crate boundaries follow invariant ownership — **LOCKED**
+
+`braid-flow-ir` owns semantic bytes/CID; `braid-flow-verify` owns independent
+admission; `braid-flow-plan` owns deterministic snapshot-bound frontier
+derivation; `braid-flow-sdk` owns Rust/RON authoring, JSON interop, and
+diagnostics. `braid-render` gains Flow manifest/DOT projection;
+`braid-project` may consume admitted Flow after P2; `braid-run` executes one
+selected capsule. No Flow crate may mint constellation-owned authority types.
+
+### D-FLOW.9 — P1–P6 form a dependency DAG — **LOCKED**
+
+The dependency edges are Braid #57 (IR) -> Braid #60 (verification) -> Braid
+#59 (planning). Planning then forks to sibling successors Braid #58
+(SDK/RON/interop/render/import) and forge-harness #123 (durable runtime); both
+join at experience-as-code #66 (domain integration and performance proof).
+Each boundary lands independently with its own negative evidence.

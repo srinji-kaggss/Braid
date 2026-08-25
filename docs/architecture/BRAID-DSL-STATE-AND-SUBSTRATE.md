@@ -1,10 +1,25 @@
 # Braid DSL, Stateful Orchestration & Substrate Architecture
 
-**Date:** 2026-08-21  
-**Status:** Approved Architectural Blueprint  
-**Method:** Deep Cross-Estate Audit, crates.io Dependency Dredge & Adversarial Falsification Analysis  
+**Date:** 2026-08-21
+**Status:** Approved Architectural Blueprint
+**Method:** Deep Cross-Estate Audit, crates.io Dependency Dredge & Adversarial Falsification Analysis
 
 ---
+
+## ADR-099 authority reconciliation
+
+ADR-099 supersedes this blueprint wherever “stateful orchestration” implied
+that Braid owns durable instances, journals, receipts, leases, retries, crash
+recovery, or resumption. Braid owns the typed Flow AST/IR, independent
+admission, semantic CID, and deterministic snapshot-bound next-step
+derivation. Forge-harness owns every durable lifecycle and effect concern.
+
+The DSL examples below are authoring sketches, not a canonical wire or runtime
+contract. `orchestration`/`state` declarations may lower to bounded Flow source
+AST; RON is the first-class v0 textual source; unsupported recurrence or floats
+must fail admission. Type names such as `CommitReceipt` and `EvidenceLog` are
+illustrative and may not duplicate constellation-owned Receipt/evidence
+authority.
 
 ## 1. Executive Summary & Core Thesis
 
@@ -13,7 +28,9 @@ Braid is a deterministic, content-addressed compiler, verifier, and runtime subs
 This document establishes the four pillars that govern Braid and its standard library (`lgwks_std`):
 1. **The Low-Dependency Crate Substrate:** Curating battle-tested, zero/near-zero-transitive crates instead of naive hand-rolling.
 2. **The Braid Declarative DSL:** Combining Rust-style `::` namespacing with natural, left-to-right dataflow pipelines to maximize human readability and AI next-token predictability while avoiding the pitfalls that killed AppleScript.
-3. **Stateful Orchestration & AI Memory:** Eliminating LLM statelessness and multi-agent coordination churn by making state machines, cryptographic journals, and deterministic resumption first-class language primitives.
+3. **Stateful Flow Authoring:** Declaring bounded state machines that lower to
+   Braid Flow while forge-harness supplies cryptographic journals and
+   deterministic resumption.
 4. **Adversarial Dredge & Falsification Analysis:** Rigorously verifying all structural claims, boundary limits, and edge-case behaviors.
 
 ---
@@ -90,7 +107,7 @@ capsule lw::telemetry::process_metrics version 1.0 {
     step evaluate(stream: Stream<EventRecord>, inout state: MetricsSession) -> CommitReceipt {
         let scores = stream |> lw::math::compute_anomaly(weight: 1.4);
         state.records_processed += scores.len();
-        
+
         scores |> lw::db::atomic_commit(table: "analytics.scores")
     }
 }
@@ -105,7 +122,7 @@ capsule lw::telemetry::process_metrics version 1.0 {
 
 ---
 
-## 4. Stateful Orchestration: Solving AI Statelessness & Amnesia
+## 4. Stateful Flow authoring: solving AI statelessness without runtime duplication
 
 ### 4.1 The Problem: The Stateless Prompting Churn
 Modern AI agent frameworks (LangChain, CrewAI, AutoGen) treat execution as ephemeral string conversations. If step 4 of an agent workflow fails or needs confirmation, the agent:
@@ -113,7 +130,7 @@ Modern AI agent frameworks (LangChain, CrewAI, AutoGen) treat execution as ephem
 - Re-writes or re-executes earlier steps.
 - Cannot cryptographically guarantee that previous steps were not silently mutated.
 
-### 4.2 The Solution: Content-Addressed State Machines & Journals
+### 4.2 The solution: content-addressed declarations over Forge-owned journals
 
 ```rust
 orchestration lw::deploy::safe_rollout {
@@ -141,10 +158,14 @@ orchestration lw::deploy::safe_rollout {
 ```
 
 ### 4.3 Key Orchestration Invariants
-1. **State Snapshots as Merkle Nodes:** Every state transition calculates a new anchor:
+1. **Snapshot-bound planning:** Forge supplies an immutable snapshot CID to the
+   Braid planner; material state transitions create a new snapshot and Plan CID:
    $$\text{CID}_{\text{state}_{n}} = \text{BLAKE3}(\text{CID}_{\text{state}_{n-1}} \parallel \text{CID}_{\text{transition}} \parallel \text{CID}_{\text{evidence}})$$
-2. **Zero-Amnesia Deterministic Resumption:** An AI agent resuming an orchestration loads the exact `CID` state anchor. It cannot bypass verification gates or hallucinate past steps.
-3. **Audit Evidence Log:** All effectful tool calls emit structured receipts into an append-only journal (`EvidenceLog`), creating an immutable proof chain.
+2. **Zero-amnesia deterministic resumption:** Forge resumes the durable
+   instance from its fenced history and asks Braid for a plan under the exact
+   snapshot. It cannot bypass admission or invent a ready node.
+3. **Audit evidence:** Forge records effect evidence in its append-only journal;
+   Flow carries only opaque references required for deterministic planning.
 
 ---
 
@@ -216,8 +237,9 @@ A rigorous engineering review of the architectural claims identifies and resolve
 2. **Braid DSL Parser & Elaborator (`braid-elaborate-dsl`):**
    - Implement the recursive descent parser for `capsule`, `schema`, `state`, and `step` blocks with `::` scoping and `|>` pipelines.
    - Lower DSL AST into canonical `braid-ir::Capsule` representations.
-3. **Execution Engine (`braid-run`):**
-   - Implement the unbranched, sequentially unfolded DAG interpreter over contiguous flat buffers.
-   - Wire state machine transition journaling and deterministic replay.
+3. **Execution boundaries:**
+   - `braid-run` executes one admitted capsule over the inner DAG.
+   - `braid-flow-plan` selects at most one next capsule under an immutable snapshot.
+   - forge-harness owns transition journaling, fencing, retries, and deterministic replay.
 4. **Cross-Repo Rollout:**
    - Enforce `lgwks_std_gate` across `forge-sdk`, `forge-harness`, and `rust-ai-stack`.

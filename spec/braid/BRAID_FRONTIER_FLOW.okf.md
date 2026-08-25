@@ -13,9 +13,10 @@ tags:
   - incremental-computation
 timestamp: 2026-08-25T00:00:00-04:00
 okf_version: "0.1"
-status: proposed
+status: accepted
 concept_id: spec/braid/BRAID_FRONTIER_FLOW
 source_commit: 111f9f8abcf43b05d134ccd89f05ae91acc2b4ef
+ratification: docs/adr-099-braid-frontier-flow.md
 authority:
   canonical_flow_ir: Braid
   static_admission: Braid
@@ -29,19 +30,19 @@ codex:
 
 # Braid Frontier Flow
 
-> **Status: proposed, implementation-ready specification.**
+> **Status: accepted by ADR-099; P1 is the next implementation unit.**
 >
-> This document does not ratify a new authority by itself. Codex MUST complete
-> P0 before freezing public wire names or merging implementation crates.
+> P0 was ratified on 2026-08-25 through Issue #56 and ADR-099. Public v0 wire
+> domains and authority boundaries are frozen by that ADR.
 
 ## 1. Decision
 
-Braid SHOULD own a canonical **inter-capsule Flow IR** and its independent
+Braid owns a canonical **inter-capsule Flow IR** and its independent
 static verifier. The Flow IR sits one level above the existing Braid
 `Capsule -> Braid -> Strand` compute graph:
 
 ```text
-machine-authored Rust AST / importer / future DSL
+Rust AST / RON source / strict importer
                          |
                          v
              canonical Braid Flow IR
@@ -88,8 +89,9 @@ that public crate name. The canonical protocol names are `braid.flow.*`.
 
 ## 2. Reality check: where the speed can actually come from
 
-Replacing YAML with an AST improves typing, normalization, refusal quality, and
-machine authoring. It does **not**, by itself, make CI materially faster.
+Lowering Rust, RON, and strict importers into one typed AST improves typing,
+normalization, refusal quality, and machine authoring. It does **not**, by
+itself, make CI materially faster.
 GitHub Actions already represents dependencies through jobs and `needs`; the
 expensive parts are usually runner acquisition, checkout, process/container
 startup, dependency transfer, repeated environment construction, and work that
@@ -191,8 +193,8 @@ authority and makes cache identity compositional.
 
 ### 5.2 Canonical concept identifiers
 
-The following identifiers are conceptual protocol domains, not Rust type names
-until P0 ratifies them:
+The following identifiers are ratified protocol domains, not necessarily Rust
+type names:
 
 | Concept | Domain separator |
 |---|---|
@@ -236,21 +238,37 @@ or target profile merely because the Flow CID is unchanged.
 
 ## 6. Source forms and AST-first authoring
 
-v0 MUST support two authoring paths:
+v0 MUST support three paths into the same typed source AST:
 
 1. an ordinary Rust builder/AST for trusted code generation and IDE use;
-2. a normalized JSON representation for machine-to-machine interchange and
-   cheap debugging.
+2. RON as the first-class textual authoring and review form;
+3. normalized JSON strictly for machine-to-machine interoperability and
+   inspection.
 
-The canonical wire form SHOULD remain Braid's deterministic binary encoding.
-JSON is an authoring and inspection format, not the identity-bearing wire
-authority.
+The canonical wire form remains Braid's deterministic binary encoding. RON and
+JSON are decoded, normalized, and validated before encoding; their source bytes
+never carry Flow identity.
 
-A future textual Flow DSL MAY lower to the same AST. YAML MAY be imported, but
-MUST never become the canonical representation.
+The RON schema MUST carry an explicit version and reject unknown or duplicate
+fields, implicit environment interpolation, includes, aliases, and inputs that
+exceed the v0 source envelope: at most 16 MiB of source bytes and nesting depth
+64. These limits are checked before constructing the semantic AST; declared
+node, edge, port, and expansion bounds are then enforced incrementally before
+reserving their collections. Comments, whitespace, field order, optional
+commas, and any other accepted spelling difference are non-semantic: if two
+RON documents decode to the same validated AST, they MUST produce identical
+canonical bytes and Flow CID. The SDK MAY emit one stable pretty-RON projection
+for review, but it MUST NOT hash that text.
 
-Procedural macros are deferred. Ordinary Rust types and builders are easier to
-audit, cheaper to compile, and less likely to create a second hidden language.
+A future textual Flow DSL MAY lower to the same AST. YAML MAY be imported by a
+strict adapter, but MUST never become the preferred authoring or canonical
+representation. Every importer emits a semantic-loss report and refuses
+unsupported semantics.
+
+Procedural macros are deferred. Ordinary Rust types, serde-derived source
+structures, and builders are easier to audit, cheaper to compile, and less
+likely to create a second hidden language. Text parsing belongs in the SDK/CLI
+boundary; the core IR and independent verifier do not depend on RON or JSON.
 
 ## 7. Normalized graph model
 
@@ -274,14 +292,13 @@ order.
 
 ### 7.1 Node kinds
 
-v0 canonical normalized IR SHOULD contain this closed set:
+v0 canonical normalized IR MUST contain this closed set:
 
 ```rust
 pub enum FlowNodeKind {
     /// Executes one already-admitted Braid capsule.
     InvokeCapsule {
         capsule: Cid,
-        inputs: Vec<InputBinding>,
     },
 
     /// Selects exactly one branch using total, verified predicates.
@@ -340,9 +357,15 @@ identity may depend on the stable key.
 ### 7.3 Edge kinds
 
 ```rust
+pub enum ValueSource {
+    Root(InputKey),
+    Node(OutputPort),
+    Literal(CanonicalValue),
+}
+
 pub enum FlowEdge {
     Data {
-        from: OutputPort,
+        from: ValueSource,
         to: InputPort,
         value_type: TypeTag,
     },
@@ -353,6 +376,11 @@ pub enum FlowEdge {
     },
 }
 ```
+
+Data edges are the only input-binding mechanism. Exactly one `Data` edge MUST
+bind each required capsule input; a duplicate or missing binding is rejected.
+A node-origin data edge implies precedence from its output owner. Root and
+literal sources bind values without introducing node precedence.
 
 `CompletionClass` is closed and explicit:
 
@@ -797,7 +825,7 @@ identity exists, result caching is disabled for that node.
 
 ## 15. Rust API strawman
 
-Names are provisional until P0, but the shape is normative.
+Names and shape are ratified by ADR-099.
 
 ```rust
 use braid_ir::{Cid, TypeTag, Value};
@@ -907,8 +935,7 @@ A machine-readable inspection projection MAY look like:
       "key": "build",
       "kind": {
         "invoke_capsule": {
-          "capsule_cid": "b3:...",
-          "inputs": [{"port": "change_set", "root": "change_set"}]
+          "capsule_cid": "b3:..."
         }
       },
       "guard": {"const": true},
@@ -922,6 +949,13 @@ A machine-readable inspection projection MAY look like:
     }
   ],
   "edges": [
+    {
+      "data": {
+        "from": {"root": "change_set"},
+        "to": {"node": "build", "port": "change_set"},
+        "value_type": "opaque:lw.change_set"
+      }
+    },
     {
       "after": {
         "from": "scope",
@@ -1065,8 +1099,8 @@ the graph; the verifier checks only explicit registered behavior.
 ### 21.1 Purpose
 
 The first real fixture SHOULD be Braid's `.github/workflows/ci.yml`. The importer
-is a migration and differential-testing tool, not a claim that GitHub Actions
-YAML is Braid's desired source language.
+is a migration and differential-testing tool; GitHub Actions YAML does not
+become a Braid authoring or wire language.
 
 ### 21.2 Supported v0 subset
 
@@ -1181,6 +1215,12 @@ Initial hard limits SHOULD be conservative and configurable downward:
 | Identifier bytes | 128 |
 | Diagnostic bytes per refusal | 8,192 |
 
+The `braid-flow-sdk` RON boundary additionally MUST reject input above 16 MiB
+or nesting deeper than 64 before semantic AST allocation. It MUST validate
+declared collection bounds incrementally before reserving node, edge, port, or
+expansion storage. These parser ceilings are fixed for the v0 source schema;
+lower deployment limits MAY fail closed.
+
 The verifier MUST:
 
 - use checked arithmetic;
@@ -1199,7 +1239,7 @@ The verifier MUST:
 ## 25. Performance acceptance and benchmark design
 
 The first implementation has provisional absolute control-plane targets. They
-become normative only after P0 records the benchmark host and fixture hashes.
+become normative only after P6 records the benchmark host and fixture hashes.
 
 ### 25.1 Provisional targets
 
@@ -1207,7 +1247,8 @@ On a warm local release build:
 
 | Operation | Graph size | Target |
 |---|---:|---:|
-| Parse inspection JSON + normalize | 1,000 nodes / 5,000 edges | p50 <= 25 ms; p99 <= 100 ms |
+| Parse RON source + normalize | 1,000 nodes / 5,000 edges | p50 <= 25 ms; p99 <= 100 ms |
+| Import or emit normalized JSON | 1,000 nodes / 5,000 edges | p50 <= 25 ms; p99 <= 100 ms |
 | Static verify + Flow CID | 1,000 / 5,000 | p50 <= 25 ms; p99 <= 100 ms |
 | Static verify + Flow CID | 10,000 / 50,000 | p50 <= 250 ms; p99 <= 1 s |
 | One-node completion frontier update | 10,000 / 50,000 | p50 <= 100 us; p99 <= 1 ms |
@@ -1276,7 +1317,7 @@ The implementation is not accepted until these attacks have executable tests.
 | `F-FLOW-15` | Success path leaves join token stranded | soundness rejection |
 | `F-FLOW-16` | Failure has no terminal route | failure-path rejection |
 | `F-FLOW-17` | Flow tries to pool grants from two capsules | authority non-aggregation rejection |
-| `F-FLOW-18` | Secret literal appears in inspection JSON | redaction/validation rejection |
+| `F-FLOW-18` | Secret literal appears in RON or inspection JSON | redaction/validation rejection |
 | `F-FLOW-19` | Raw shell imported in strict mode | typed importer refusal |
 | `F-FLOW-20` | Runner crashes after external effect | Forge replay does not duplicate without proof |
 | `F-FLOW-21` | Circular justification | vacuity/cycle rejection |
@@ -1290,10 +1331,11 @@ The implementation is not accepted until these attacks have executable tests.
 | `F-FLOW-29` | Cache manifest changes only | Flow CID same; Plan CID changes |
 | `F-FLOW-30` | No ready nodes, no terminal, no Unknown | typed deadlock witness |
 | `F-FLOW-31` | Satiated producer has a demanded output but no materialization | successor remains blocked and verification/planning reports the missing binding |
+| `F-FLOW-32` | RON exceeds 16 MiB or nesting depth 64 by one | SDK refuses before semantic AST allocation |
 
 ## 27. Implementation layout
 
-Recommended crates:
+Ratified crates:
 
 ```text
 crates/
@@ -1311,7 +1353,7 @@ braid-project
 braid-run
   -> executes one InvokeCapsule plan step
 braid-render
-  -> gains Flow manifest/DOT projection or a sibling renderer after ownership review
+  -> gains deterministic Flow manifest and full DOT projection
 braid-cli
   -> gains flow encode|decode|verify|plan|render|import-gh commands
 lgwks-bot
@@ -1323,14 +1365,14 @@ explicit invariant and mutation-resistant tests.
 
 ## 28. Implementation phases
 
-### P0 — Ratify authority and wire decisions
+### P0 — Ratify authority and wire decisions — COMPLETE
 
 **Files**
 
-- `docs/adr-XXX-braid-frontier-flow.md`
+- `docs/adr-099-braid-frontier-flow.md`
 - `spec/braid/DECISIONS.md`
 - `spec/braid/DEBT_REGISTER.md`
-- GitHub issues for P1-P6
+- dependency-ordered GitHub issues for P1-P6
 
 **Decisions to freeze**
 
@@ -1343,14 +1385,23 @@ explicit invariant and mutation-resistant tests.
 7. effect cache/retry rules derive from existing registry authority;
 8. no new Receipt/Capability/Verdict/etc. types.
 
-**Done when**
+**Evidence**
 
-- decision register updated;
-- no authority collision remains;
-- issue graph exists;
-- this OKF concept links the ADR and issues.
+- ADR-099 and `D-FLOW.1` through `D-FLOW.9` freeze the decisions;
+- `docs/CRATE-OWNERSHIP.md` states each proposed invariant;
+- graph/statechart/durable-runtime conflicts are reconciled in the architecture
+  documents;
+- issue DAG: [P1 #57](https://github.com/srinji-kaggss/Braid/issues/57) ->
+  [P2 #60](https://github.com/srinji-kaggss/Braid/issues/60) ->
+  [P3 #59](https://github.com/srinji-kaggss/Braid/issues/59); P3 then forks to
+  [P4 #58](https://github.com/srinji-kaggss/Braid/issues/58) and
+  [P5 forge-harness #123](https://github.com/srinji-kaggss/forge-harness/issues/123);
+  both join at
+  [P6 experience-as-code #66](https://github.com/srinji-kaggss/experience-as-code/issues/66).
 
 ### P1 — `braid-flow-ir`
+
+**Issue:** [#57](https://github.com/srinji-kaggss/Braid/issues/57)
 
 **Deliver**
 
@@ -1379,6 +1430,8 @@ cargo clippy -p braid-flow-ir --all-targets -- -D warnings
 
 ### P2 — `braid-flow-verify`
 
+**Issue:** [#60](https://github.com/srinji-kaggss/Braid/issues/60), blocked by #57.
+
 **Deliver**
 
 - independent canonical decoder;
@@ -1405,6 +1458,8 @@ cargo clippy -p braid-flow-verify --all-targets -- -D warnings
 ```
 
 ### P3 — `braid-flow-plan`
+
+**Issue:** [#59](https://github.com/srinji-kaggss/Braid/issues/59), blocked by #60.
 
 **Deliver**
 
@@ -1433,10 +1488,13 @@ cargo bench -p braid-flow-plan
 
 ### P4 — SDK, CLI, and GitHub Actions importer
 
+**Issue:** [#58](https://github.com/srinji-kaggss/Braid/issues/58), blocked by #59.
+
 **Deliver**
 
 - Rust builder;
-- normalized JSON inspection I/O;
+- first-class RON parsing and stable pretty-RON output;
+- normalized JSON interoperability and inspection I/O;
 - `braid flow encode|decode|verify|plan|render`;
 - strict and audit GitHub Actions import modes;
 - Braid `ci.yml` topology fixture;
@@ -1450,11 +1508,17 @@ cargo bench -p braid-flow-plan
 - floating action reference refusal;
 - matrix bound refusal;
 - import -> verify -> render loop;
-- source permutation does not change Flow CID.
+- source permutation does not change Flow CID;
+- equivalent RON spellings do not change canonical bytes or Flow CID;
+- unknown RON/JSON fields and lossy YAML constructs fail closed;
+- RON above 16 MiB or nesting depth 64 fails before semantic AST allocation;
+- declared node, edge, port, and expansion bounds fail before collection
+  reservation.
 
 ### P5 — Forge runtime adapter
 
 **Repository: forge-harness**
+**Issue:** [#123](https://github.com/srinji-kaggss/forge-harness/issues/123), blocked by Braid #59.
 
 **Deliver**
 
@@ -1480,6 +1544,8 @@ cargo bench -p braid-flow-plan
 Braid MUST remain buildable and testable without Forge.
 
 ### P6 — experience-as-code integration and performance proof
+
+**Issue:** [#66](https://github.com/srinji-kaggss/experience-as-code/issues/66), blocked by Braid #58 and forge-harness #123.
 
 **Deliver**
 
@@ -1513,14 +1579,15 @@ Codex MUST read, in order:
 1. `AGENTS.md`
 2. `spec/braid/README.md`
 3. `spec/braid/DECISIONS.md`
-4. `docs/architecture/BRAID-GRAPH-DSL.md`
-5. `docs/architecture/BRAID-DSL-STATE-AND-SUBSTRATE.md`
-6. `docs/architecture/BRAID-JUSTIFIED-INVOCATION.md`
-7. `docs/CRATE-OWNERSHIP.md`
-8. `crates/braid-ir/src/braid.rs`
-9. `crates/braid-run/src/lib.rs`
-10. `crates/braid-project/src/lib.rs`
-11. this document
+4. `docs/adr-099-braid-frontier-flow.md`
+5. `docs/architecture/BRAID-GRAPH-DSL.md`
+6. `docs/architecture/BRAID-DSL-STATE-AND-SUBSTRATE.md`
+7. `docs/architecture/BRAID-JUSTIFIED-INVOCATION.md`
+8. `docs/CRATE-OWNERSHIP.md`
+9. `crates/braid-ir/src/braid.rs`
+10. `crates/braid-run/src/lib.rs`
+11. `crates/braid-project/src/lib.rs`
+12. this document
 
 Codex MUST NOT:
 
@@ -1571,6 +1638,8 @@ assert "okf_version: \"0.1\"" in frontmatter
 assert "# Citations" in body
 assert "INV-FLOW-025" in body
 assert "P0 — Ratify authority" in body
+assert "docs/adr-099-braid-frontier-flow.md" in body
+assert "first-class textual authoring" in body
 assert "Codex continuation contract" in body
 print("OK: OKF envelope and continuation anchors present")
 PY
@@ -1607,19 +1676,20 @@ git diff --check
 # Proposed CLI after P4:
 braid flow verify spec/braid/vectors/frontier-flow/valid.cbor
 braid flow decode spec/braid/vectors/frontier-flow/valid.cbor \
-  > /tmp/flow.json
-braid flow encode /tmp/flow.json \
+  --format ron > /tmp/flow.ron
+braid flow encode /tmp/flow.ron \
   > /tmp/flow.roundtrip.cbor
 cmp spec/braid/vectors/frontier-flow/valid.cbor /tmp/flow.roundtrip.cbor
 ```
 
-## 31. Open decisions with recommended defaults
+## 31. Ratified P0 decisions
 
-| Decision | Recommended default | Reason |
+| Decision | Ratified value | Reason |
 |---|---|---|
 | Public product name | Braid Frontier Flow | Describes the outer graph and ready antichain without reusing `bot`. |
 | Crate names | `braid-flow-ir`, `braid-flow-verify`, `braid-flow-plan`, `braid-flow-sdk` | Matches existing authority separation. |
-| Canonical source | Rust AST + normalized JSON | Machine-friendly without making YAML authoritative. |
+| Authoring source | Rust AST + first-class RON | Typed, enum-friendly authoring over one AST. |
+| Interoperability | normalized JSON | External tools can exchange/inspect Flow without owning identity. |
 | Wire form | existing Braid canonical encoding | Preserves CID and verifier discipline. |
 | Source order | non-semantic | Machine generation and diffs should not alter identity. |
 | v0 executor | sequential | Smallest deterministic kernel; speed initially comes from less work. |
@@ -1689,3 +1759,7 @@ The distinctive Braid move is not “a DAG in Rust.” It is:
 [16] [`lgwks_bot`](../../crates/lgwks-bot/README.md) — existing condition/action boilerplate library, explicitly not a scheduler or orchestration runtime.
 
 [17] [`braid-project`](../../crates/braid-project/src/lib.rs) — existing independent multi-capsule admission and project CID without cross-capsule wiring.
+
+[18] [`lgwks_std::ron`](../../crates/lgwks-std/src/ron.rs) — repository-approved serde-based RON boundary; RON is preferred for human-facing configuration while JSON remains the external-interoperability default.
+
+[19] [ADR-099](../../docs/adr-099-braid-frontier-flow.md) — ratified authority, RON/JSON source boundary, v0 wire domains, crate ownership, and P1-P6 issue graph.

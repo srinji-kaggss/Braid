@@ -29,7 +29,8 @@ the ADR's extraction addendum for what changed in the move.
 3. `PRD.md` — product requirements: identity, users, goals/non-goals, the IR model, phases, acceptance scenarios.
 4. `threat-model.md` — the failure-mode and abuse catalogue (T1–T16). Every unit's acceptance criteria cite the threats it closes.
 5. `units.md` — the issue-ready execution plan (U0–U10) with acceptance criteria and verification commands.
-6. `BRAID_FRONTIER_FLOW.okf.md` — proposed inter-capsule Flow IR, justified frontier planner, cross-repository runtime boundary, falsification matrix, and Codex continuation contract.
+6. `../../docs/adr-099-braid-frontier-flow.md` — ratified inter-capsule authority, wire/source forms, and implementation boundaries.
+7. `BRAID_FRONTIER_FLOW.okf.md` — accepted inter-capsule Flow IR, justified frontier planner, falsification matrix, and Codex continuation contract.
 
 ## The one-paragraph mental model
 
@@ -46,6 +47,11 @@ the manifest diff. Execution happens only through the kernel's three-syscall
 surface; Braid adds zero authority.
 
 ## Status
+
+- **Frontier Flow P0 ratified** (ADR-099 / Issue #56): RON is the first-class
+  textual authoring form, normalized JSON is interoperability/inspection,
+  Braid owns semantic Flow and deterministic planning, and forge-harness owns
+  durable execution. P1 is [#57](https://github.com/srinji-kaggss/Braid/issues/57).
 
 - Phase: **P1–P2 core landed on branch** (2026-06-12, Director-directed):
   `crates/braid-ir` (U1 #558 — types, canonical encoding + bijection
