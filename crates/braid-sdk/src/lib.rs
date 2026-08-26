@@ -6,16 +6,14 @@
 //! a typed error at construction instead of a `Reject` later — but the
 //! verifier remains the sole authority (D9: the SDK never decides admission).
 //!
-//! Two invariants the SDK makes *unrepresentable* (stronger than a check):
-//! - **No forward reference / no cycle**: [`Strand`] handles are returned by
-//!   [`Builder::strand`] and can only reference already-added strands, so the
-//!   DAG's index order — the verifier's topological order — holds by
-//!   construction.
-//! - **No undeclared capability**: grants are *collected* from the terms used,
-//!   not declared separately, so a capsule cannot use a capability it failed
-//!   to request (the omission that scenario #4b rejects can't be authored).
+//! The SDK removes two common authoring errors inside one builder: handles
+//! reference already-added strands, and grants are collected from the terms
+//! used. The independent verifier still repeats topology and authority checks;
+//! an SDK handle is never an admission proof.
 //!
 //! Boundary (D3): depends only on `braid-ir` + `braid-capability`.
+
+#![forbid(unsafe_code)]
 
 use braid_capability::Capability;
 use braid_ir::braid::{Braid, Strand as IrStrand};
@@ -66,11 +64,19 @@ pub enum BuildError {
     NoOutputs {
         at: &'static str,
     },
-    /// A declared budget below the composed cost (the SDK refuses to author an
-    /// over-budget capsule rather than emit one the verifier will reject).
+    /// A declared budget below the composed cost.
     BudgetTooLow {
         needed: u64,
         set: u64,
+        at: &'static str,
+    },
+    /// Static term costs overflowed the u64 budget algebra.
+    CostOverflow {
+        at: &'static str,
+    },
+    /// A strand index cannot fit the canonical u32 graph representation.
+    TooManyStrands {
+        count: usize,
         at: &'static str,
     },
     /// Irreversible/egress term used without a confirm policy set.
@@ -112,6 +118,10 @@ impl fmt::Display for BuildError {
             Self::BudgetTooLow { needed, set, at } => {
                 write!(f, "budget too low at {at}: needed {needed}, set {set}")
             }
+            Self::CostOverflow { at } => write!(f, "static term cost overflow at {at}"),
+            Self::TooManyStrands { count, at } => {
+                write!(f, "{count} strands exceed the u32 graph limit at {at}")
+            }
             Self::ConfirmRequired { at } => {
                 write!(f, "human confirmation required for dangerous terms at {at}")
             }
@@ -127,12 +137,9 @@ pub struct Builder<'r> {
     intent: String,
     strands: Vec<IrStrand>,
     outputs: Vec<u32>,
-    /// Parallel to `strands`: the interned output type of each.
-    out_types: Vec<TypeTag>,
     type_interner: Vec<TypeTag>,
-    // //why a Vec + membership check, not a set: `Capability` is not `Ord`
-    // (kernel contract — D3 forbids us adding a derive to it), so we dedup by
-    // the protocol-stable name and sort on emit to hit the canonical order.
+    // Capability is protocol-ordered. Keep one canonical value rather than
+    // allocating temporary Strings for equality and sorting.
     grants: Vec<Capability>,
     cost: u64,
     has_dangerous: bool,
@@ -148,7 +155,6 @@ impl<'r> Builder<'r> {
             intent: intent.into(),
             strands: Vec::new(),
             outputs: Vec::new(),
-            out_types: Vec::new(),
             type_interner: Vec::new(),
             grants: Vec::new(),
             cost: 0,
@@ -160,8 +166,8 @@ impl<'r> Builder<'r> {
     }
 
     fn intern(&mut self, ty: &TypeTag) -> TypeTagId {
-        if let Some(i) = self.type_interner.iter().position(|t| t == ty) {
-            TypeTagId(i)
+        if let Some(index) = self.type_interner.iter().position(|item| item == ty) {
+            TypeTagId(index)
         } else {
             self.type_interner.push(ty.clone());
             TypeTagId(self.type_interner.len() - 1)
@@ -215,16 +221,26 @@ impl<'r> Builder<'r> {
         Ok(())
     }
 
-    fn record_effects(&mut self, spec: &TermSpec) {
-        if let Some(cap) = &spec.capability
-            && !self.grants.iter().any(|g| g.to_string() == cap.to_string())
+    fn record_effects(&mut self, spec: &TermSpec) -> Result<(), BuildError> {
+        let next_cost = self
+            .cost
+            .checked_add(spec.cost)
+            .ok_or(BuildError::CostOverflow {
+                at: "Builder::strand",
+            })?;
+        if let Some(capability) = &spec.capability
+            && !self.grants.contains(capability)
         {
-            self.grants.push(cap.clone());
+            self.grants.push(capability.clone());
         }
-        if matches!(spec.effect, EffectClass::Irreversible | EffectClass::Egress) {
+        if matches!(
+            spec.effect,
+            EffectClass::Irreversible | EffectClass::Egress
+        ) {
             self.has_dangerous = true;
         }
-        self.cost = self.cost.saturating_add(spec.cost);
+        self.cost = next_cost;
+        Ok(())
     }
 
     /// Place a strand, type- and arity-checking its inputs against the
@@ -238,38 +254,39 @@ impl<'r> Builder<'r> {
                 at: "Builder::strand",
             })?;
         self.validate_inputs(term_id, inputs, spec)?;
-        self.record_effects(spec);
-
-        let index = self.strands.len() as u32;
+        let index =
+            u32::try_from(self.strands.len()).map_err(|_| BuildError::TooManyStrands {
+                count: self.strands.len(),
+                at: "Builder::strand",
+            })?;
+        self.record_effects(spec)?;
         let ty = self.intern(&spec.output);
         self.strands.push(IrStrand {
             term: term_id.to_string(),
-            inputs: inputs.iter().map(|h| h.index).collect(),
+            inputs: inputs.iter().map(|handle| handle.index).collect(),
         });
-        self.out_types.push(self.type_interner[ty.0].clone());
         Ok(Strand { index, ty })
     }
 
     /// Mark a strand as a capsule output.
-    pub fn output(&mut self, s: Strand) -> &mut Self {
-        self.outputs.push(s.index);
+    pub fn output(&mut self, strand: Strand) -> &mut Self {
+        self.outputs.push(strand.index);
         self
     }
 
-    pub fn budget(&mut self, b: u64) -> &mut Self {
-        self.budget = Some(b);
+    pub fn budget(&mut self, budget: u64) -> &mut Self {
+        self.budget = Some(budget);
         self
     }
 
-    /// Size the budget exactly to the composed cost (convenience for tight
-    /// authoring; the verifier still checks).
+    /// Size the budget exactly to the composed cost.
     pub fn budget_tight(&mut self) -> &mut Self {
         self.budget = Some(self.cost);
         self
     }
 
-    pub fn confirm(&mut self, c: ConfirmPolicy) -> &mut Self {
-        self.confirm = Some(c);
+    pub fn confirm(&mut self, confirm: ConfirmPolicy) -> &mut Self {
+        self.confirm = Some(confirm);
         self
     }
 
@@ -320,7 +337,8 @@ impl<'r> Builder<'r> {
         let confirm = self.resolve_confirm()?;
 
         let mut grants = self.grants;
-        grants.sort_by_key(|c| c.to_string());
+        grants.sort();
+        grants.dedup();
 
         Ok(Capsule {
             ir_version: IR_VERSION,
