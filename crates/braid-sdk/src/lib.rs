@@ -20,12 +20,22 @@ use braid_ir::braid::{Braid, Strand as IrStrand};
 use braid_ir::term::{TermSpec, TypeTag};
 use braid_ir::{Capsule, ConfirmPolicy, EffectClass, IR_VERSION, TermRegistry};
 use std::fmt;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static NEXT_BUILDER_ID: AtomicU64 = AtomicU64::new(1);
+
+fn allocate_builder_id() -> u64 {
+    let id = NEXT_BUILDER_ID.fetch_add(1, Ordering::Relaxed);
+    assert_ne!(id, 0, "exhausted SDK builder identity space");
+    id
+}
 
 /// A typed reference to a strand already placed in the braid. Carries its
 /// output type so wiring is type-checked the moment it is used as an input.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Strand {
     index: u32,
+    owner: u64,
     // //why store the type here and not look it up: the handle is the only way
     // to reference a strand, so carrying the type makes a mis-wire a
     // compile-adjacent error at the call site, not a deferred verdict.
@@ -79,6 +89,11 @@ pub enum BuildError {
         count: usize,
         at: &'static str,
     },
+    /// A strand handle came from another builder or no longer names an
+    /// already-authored strand.
+    ForeignStrand {
+        at: &'static str,
+    },
     /// Irreversible/egress term used without a confirm policy set.
     ConfirmRequired {
         at: &'static str,
@@ -122,6 +137,9 @@ impl fmt::Display for BuildError {
             Self::TooManyStrands { count, at } => {
                 write!(f, "{count} strands exceed the u32 graph limit at {at}")
             }
+            Self::ForeignStrand { at } => {
+                write!(f, "strand handle belongs to another builder at {at}")
+            }
             Self::ConfirmRequired { at } => {
                 write!(f, "human confirmation required for dangerous terms at {at}")
             }
@@ -133,10 +151,12 @@ impl std::error::Error for BuildError {}
 
 /// Capsule builder bound to a registry.
 pub struct Builder<'r> {
+    id: u64,
     registry: &'r TermRegistry,
     intent: String,
     strands: Vec<IrStrand>,
     outputs: Vec<u32>,
+    foreign_output: bool,
     type_interner: Vec<TypeTag>,
     // Capability is protocol-ordered. Keep one canonical value rather than
     // allocating temporary Strings for equality and sorting.
@@ -151,10 +171,12 @@ pub struct Builder<'r> {
 impl<'r> Builder<'r> {
     pub fn new(registry: &'r TermRegistry, intent: impl Into<String>) -> Self {
         Builder {
+            id: allocate_builder_id(),
             registry,
             intent: intent.into(),
             strands: Vec::new(),
             outputs: Vec::new(),
+            foreign_output: false,
             type_interner: Vec::new(),
             grants: Vec::new(),
             cost: 0,
@@ -194,7 +216,17 @@ impl<'r> Builder<'r> {
         handle: Strand,
         expected: &TypeTag,
     ) -> Result<(), BuildError> {
-        let got = &self.type_interner[handle.ty.0];
+        if handle.owner != self.id || handle.index as usize >= self.strands.len() {
+            return Err(BuildError::ForeignStrand {
+                at: "Builder::strand",
+            });
+        }
+        let got = self
+            .type_interner
+            .get(handle.ty.0)
+            .ok_or(BuildError::ForeignStrand {
+                at: "Builder::strand",
+            })?;
         if got != expected {
             Err(BuildError::TypeMismatch {
                 term: term_id.to_string(),
@@ -265,12 +297,20 @@ impl<'r> Builder<'r> {
             term: term_id.to_string(),
             inputs: inputs.iter().map(|handle| handle.index).collect(),
         });
-        Ok(Strand { index, ty })
+        Ok(Strand {
+            index,
+            owner: self.id,
+            ty,
+        })
     }
 
     /// Mark a strand as a capsule output.
     pub fn output(&mut self, strand: Strand) -> &mut Self {
-        self.outputs.push(strand.index);
+        if strand.owner != self.id || strand.index as usize >= self.strands.len() {
+            self.foreign_output = true;
+        } else {
+            self.outputs.push(strand.index);
+        }
         self
     }
 
@@ -293,6 +333,16 @@ impl<'r> Builder<'r> {
     pub fn evidence(&mut self, key: impl Into<String>) -> &mut Self {
         self.evidence.push(key.into());
         self
+    }
+
+    fn check_output_handles(&self) -> Result<(), BuildError> {
+        if self.foreign_output {
+            Err(BuildError::ForeignStrand {
+                at: "Builder::output",
+            })
+        } else {
+            Ok(())
+        }
     }
 
     fn check_has_outputs(&self) -> Result<(), BuildError> {
@@ -332,6 +382,7 @@ impl<'r> Builder<'r> {
     /// Finalize. Grants are emitted sorted+deduped (canonical order); a
     /// dangerous capsule without `HumanConfirm` is refused at author time.
     pub fn build(self) -> Result<Capsule, BuildError> {
+        self.check_output_handles()?;
         self.check_has_outputs()?;
         let budget = self.resolve_budget()?;
         let confirm = self.resolve_confirm()?;
