@@ -615,3 +615,63 @@ loud `Deferred { reason, required_by_version }` (never serialized as
 `Proven`) requires an explicit amendment to D-FLOW.6 Unknown-fails-closed;
 code MUST NOT silently reinterpret `Unknown` until the amendment lands.
 D-FLOW.6 therefore stands unchanged in this edit.
+
+### D32 — Elaboration seam — 95% deterministic, 5% semantic gate — **INTERPRETED 2026-08-26** (veto on PR review; see `docs/adr-100-braid-elaboration-seam.md`)
+
+> Director, verbatim compressed: "A DSL which operates like a borrow checker
+> on top of the borrow checker + Rust. Super declarative/functional —
+> `JSON::Find(x)::DoY`; it hates that none of that is true yet and finds the
+> laziest `x→z` in the graph. GNN as gate if determinism fails. Highly
+> semantically aware and sticky — knows the words, so `regex` vs `parse`
+> interchangeably → panic. Three axes: full Rust (hard mode) for Safety,
+> Capability-based + DiD, third axis Justification — why am I running. Make
+> it 3D. Safety^Capability^Justification and Braid is the foundation. A lot
+> less neural — 95% deterministic; GNN useful to enforce the semantic
+> contract (or a compiler-style LLM if GNN isn't there)."
+
+**Interpretation adopted (veto on PR review if wrong):**
+
+* The DSL is a *borrow checker on top of the borrow checker*. Rust owns
+  memory/ownership; Braid's 8 stages own meaning (unknown term, arity, type
+  mismatch, `grant ⊆ ambient`, effect ordering, taint fold, cost overflow);
+  the DSL's third checker — semantic stickiness — owns word meaning via
+  the closed vocabulary. A probabilistic gate never lives inside the trust
+  base: its output is reified as a concrete `Capsule`/`FlowSpec` choice
+  that re-admits deterministically.
+* Pedagogy is Meta LLM Compiler + PROGRAML: pretrain on IR, not surface;
+  learned gate as emulator with a deterministic oracle (the verifier) to
+  check against, not as the verifier. See `docs/adr-100-…` for the
+  industrial citations and the `braid-seam-conformance` harness that is
+  the training-data generator.
+* Cut is 95% deterministic elaborator; 5% learned semantic gate is a
+  **typed `Reject { stage: Semantic }` fallback**, not a scalar score
+  (D30 Goodhart fence). "95%" is a harness-measured query
+  (`no-learned-gate elaborations / total` on the conformance corpus +
+  KATs), not a vibes percentage — stated as a **falsifier** until the
+  harness exists (V3 crooked-ruler fence). PB-08: deterministic gates
+  are the instrument; no 5% reading is trusted until stages 1–8 are
+  GREEN.
+* 3D `Safety^Capability^Justification` is D26's multi-layer projection IR
+  over the shared anchor: Safety → type/bounds, Capability^DiD →
+  authority/taint, Justification → intent/architecture (D25/D28) with
+  `Deferred { reason, required_by_version }` in v0 until P0.1 flips it
+  (D-FLOW.6 unchanged; #63 governs that flip).
+* The **seam** (D21) is what this entry locks: the basement contract
+  "any surface → core IR → independent re-check" — single admission path
+  `braid_verify::verify(bytes,&TermRegistry,&[Capability])`
+  (`crates/braid-verify/src/lib.rs:511`), no second wire format, no
+  producer-side normalization, no allocation before preflight, no
+  authority pooling. The **grammar** (JSON::Find/DoY sugar) stays
+  D6-gated on §16 triggers 2/3. The v0 proof pair is JS text vs
+  JSON-of-IR — zero parser debt, does not count as a §16 second surface.
+  RON Flow (#58) is the first D6-gated surface once it exists.
+* §16 triggers at `63ee5785`: T2 ACCUMULATING (3 vocab crates, 1 wired),
+  others PENDING/HALF-FIRED/NOT FIRED — **record of observation, not a
+  lock change**; D6 stays LOCKED until a future ADR declares T2 fired.
+  Full table + falsifiers in `docs/adr-100-…`.
+
+Converts to LOCKED on Director merge of the ADR-100 PR. Awaits the
+`braid-seam-conformance` harness (`cargo test -p
+braid-seam-conformance`: two surfaces → same bytes/CID → one verdict;
+hostile bytes rejected identically; no GNN in the trust base) to close
+D-FLOW.11.
