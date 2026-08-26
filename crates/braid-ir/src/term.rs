@@ -30,6 +30,40 @@ pub enum TypeTag {
     List(Box<TypeTag>),
 }
 
+const MAX_TYPE_TAG_DEPTH: usize = 32;
+const MAX_TYPE_TAG_ARGUMENTS: usize = 128;
+const MAX_TYPE_TAG_NODES: usize = 16_384;
+const MAX_TYPE_TAG_LABEL_BYTES: usize = 128;
+
+/// A structurally unbounded type declaration is rejected before a downstream
+/// identity domain projects it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypeTagError {
+    OpaqueLabelTooLong { length: usize },
+    NestingTooDeep { depth: usize },
+    TooManyArguments { count: usize },
+    TooManyNodes { count: usize },
+}
+
+impl core::fmt::Display for TypeTagError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::OpaqueLabelTooLong { length } => {
+                write!(f, "opaque label has {length} bytes; maximum is 128")
+            }
+            Self::NestingTooDeep { depth } => write!(f, "type nesting depth {depth} exceeds 32"),
+            Self::TooManyArguments { count } => {
+                write!(f, "opaque type has {count} arguments; maximum is 128")
+            }
+            Self::TooManyNodes { count } => {
+                write!(f, "type has at least {count} nodes; maximum is 16384")
+            }
+        }
+    }
+}
+
+impl core::error::Error for TypeTagError {}
+
 /// Effect classification of a term (PRD §4.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EffectClass {
@@ -272,7 +306,60 @@ fn decode_terms_value_list(v: &Value) -> Result<&Vec<Value>, RegistryError> {
 
 // ── leaf encodings ──
 
-fn type_to_text(t: &TypeTag) -> String {
+/// Bound recursive and variable-sized type structure before canonical
+/// projection. This does not narrow legacy opaque-label semantics.
+pub fn validate_type_tag(value_type: &TypeTag) -> Result<(), TypeTagError> {
+    type_tag_node_count(value_type).map(|_| ())
+}
+
+/// Validate one type and return its structural work units. Downstream graph
+/// domains use this to enforce an aggregate budget across many valid tags.
+pub fn type_tag_node_count(value_type: &TypeTag) -> Result<usize, TypeTagError> {
+    let mut remaining_nodes = MAX_TYPE_TAG_NODES;
+    validate_type_tag_at(value_type, 1, &mut remaining_nodes)?;
+    Ok(MAX_TYPE_TAG_NODES - remaining_nodes)
+}
+
+fn validate_type_tag_at(
+    value_type: &TypeTag,
+    depth: usize,
+    remaining_nodes: &mut usize,
+) -> Result<(), TypeTagError> {
+    if depth > MAX_TYPE_TAG_DEPTH {
+        return Err(TypeTagError::NestingTooDeep { depth });
+    }
+    if *remaining_nodes == 0 {
+        return Err(TypeTagError::TooManyNodes {
+            count: MAX_TYPE_TAG_NODES + 1,
+        });
+    }
+    *remaining_nodes -= 1;
+    match value_type {
+        TypeTag::Opaque(label, arguments) => {
+            if label.len() > MAX_TYPE_TAG_LABEL_BYTES {
+                return Err(TypeTagError::OpaqueLabelTooLong {
+                    length: label.len(),
+                });
+            }
+            if arguments.len() > MAX_TYPE_TAG_ARGUMENTS {
+                return Err(TypeTagError::TooManyArguments {
+                    count: arguments.len(),
+                });
+            }
+            for argument in arguments {
+                validate_type_tag_at(argument, depth + 1, remaining_nodes)?;
+            }
+        }
+        TypeTag::List(inner) => validate_type_tag_at(inner, depth + 1, remaining_nodes)?,
+        TypeTag::Bool | TypeTag::Int | TypeTag::Bytes | TypeTag::Text | TypeTag::Cid => {}
+    }
+    Ok(())
+}
+
+/// Project a type into the one canonical textual form used inside Braid's
+/// identity-bearing values. Downstream IR crates must call this function
+/// rather than re-derive the type encoding.
+pub fn type_tag_to_text(t: &TypeTag) -> String {
     match t {
         TypeTag::Bool => "bool".into(),
         TypeTag::Int => "int".into(),
@@ -286,11 +373,14 @@ fn type_to_text(t: &TypeTag) -> String {
                 format!(
                     "{}<{}>",
                     label,
-                    args.iter().map(type_to_text).collect::<Vec<_>>().join(", ")
+                    args.iter()
+                        .map(type_tag_to_text)
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 )
             }
         }
-        TypeTag::List(inner) => format!("list<{}>", type_to_text(inner)),
+        TypeTag::List(inner) => format!("list<{}>", type_tag_to_text(inner)),
     }
 }
 
@@ -378,11 +468,11 @@ fn term_to_canon(t: &TermSpec) -> Value {
             Value::List(
                 t.inputs
                     .iter()
-                    .map(|i| Value::Text(type_to_text(i)))
+                    .map(|i| Value::Text(type_tag_to_text(i)))
                     .collect(),
             ),
         ),
-        ("output", Value::Text(type_to_text(&t.output))),
+        ("output", Value::Text(type_tag_to_text(&t.output))),
         ("effect", Value::Text(effect_to_text(t.effect).into())),
         ("exposure", Value::Int(exposure_to_int(t.source_exposure))),
         ("cost", Value::Int(t.cost as i64)),

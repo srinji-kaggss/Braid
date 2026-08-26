@@ -2,6 +2,7 @@
 members = [
     "crates/braid-capability",
     "crates/braid-ir",
+    "crates/braid-flow-ir",
     "crates/braid-vocab-cms",
     "crates/braid-vocab-js",
     "crates/braid-vocab-web",
@@ -56,6 +57,7 @@ serde_json = "1.0"
 # Intra-workspace crates.
 braid-capability = { path = "crates/braid-capability" }
 braid-ir = { path = "crates/braid-ir" }
+braid-flow-ir = { path = "crates/braid-flow-ir" }
 braid-vocab-cms = { path = "crates/braid-vocab-cms" }
 braid-vocab-js = { path = "crates/braid-vocab-js" }
 braid-verify = { path = "crates/braid-verify" }

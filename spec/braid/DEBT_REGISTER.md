@@ -35,10 +35,15 @@
 
 ## Open debts (the Java-ecosystem gap)
 
-### D-FLOW — Inter-capsule Flow is ratified but not implemented
+### D-FLOW — Inter-capsule Flow is ratified; P1 is partial
 
-P0 is complete; the implementation is intentionally empty until the following
-dependency DAG lands:
+P0 is complete. `braid-flow-ir` now has bounded construction, an
+allocation-free hostile-byte preflight, exact builder/wire depth agreement,
+canonical identity, strict semantic decoding/bijection, complete closed-variant
+fixtures, and recursive property-tested round trips. Issue #57 remains open:
+source `MapStatic` expansion, the remaining falsifiers, and ratification of the
+provisional byte/value/reference/type ceilings have not landed. The dependency
+DAG is:
 
 1. [Braid #57](https://github.com/srinji-kaggss/Braid/issues/57) — canonical
    Flow AST/IR, encoding, bounds, domains, and KATs.
@@ -62,6 +67,14 @@ demanded outputs; safe secret-version cache identity; commutativity/resource
 proofs before parallel frontier execution; a bounded patch protocol before
 runtime expansion; and fixture/host hashes before performance thresholds become
 normative. None may be guessed by an implementation phase.
+
+P2 also has a concrete substrate blocker: canonical `FlowEdge::Data` names
+typed input and output ports, but the current content-addressed `Capsule` wire
+has no named external input/output interface. It contains only an internal
+strand DAG and result indices. P2 therefore cannot resolve capsule ports from a
+capsule CID without either extending the capsule contract or ratifying a
+separately identity-bound interface registry. The verifier must fail closed at
+that boundary; it may not invent an unbound metadata authority.
 
 ### D-FLOW-REGISTRATION — ADR-099 is not yet in the constellation index
 

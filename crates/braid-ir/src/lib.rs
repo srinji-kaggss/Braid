@@ -37,5 +37,8 @@ pub use crate::braid::{Braid, Strand};
 pub use crate::canon::{CanonError, decode_strict, encode};
 pub use crate::capsule::{Capsule, ConfirmPolicy, IR_VERSION};
 pub use crate::cid::Cid;
-pub use crate::term::{EffectClass, Exposure, TermRegistry, TermSpec, TypeTag};
+pub use crate::term::{
+    EffectClass, Exposure, TermRegistry, TermSpec, TypeTag, TypeTagError, type_tag_node_count,
+    type_tag_to_text, validate_type_tag,
+};
 pub use crate::value::Value;

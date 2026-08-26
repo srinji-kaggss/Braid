@@ -6,9 +6,14 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
+TARGET_DIR="${CARGO_TARGET_DIR:-target}"
+if [[ "$TARGET_DIR" != /* ]]; then
+  TARGET_DIR="$ROOT/$TARGET_DIR"
+fi
+
 (cd "$ROOT" && cargo package --manifest-path crates/lgwks-std/Cargo.toml --allow-dirty)
 
-PKG_FILE="$(find "$ROOT/target/package" -maxdepth 1 -name 'lgwks_std-*.crate' -print | sort | tail -n 1)"
+PKG_FILE="$(find "$TARGET_DIR/package" -maxdepth 1 -name 'lgwks_std-*.crate' -print | sort | tail -n 1)"
 if [ -z "$PKG_FILE" ]; then
   echo "missing package artifact" >&2
   exit 1
