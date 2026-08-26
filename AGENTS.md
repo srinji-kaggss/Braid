@@ -62,3 +62,12 @@ template is a starting point per repo, not a shared authority).
 describes Braid only as the IR/`Cid` home — it does not yet mention this
 facet. This session has no write authority on `logic-os-kernel`; updating that
 doc is a follow-up for whoever holds it next.
+
+## Agent skill
+
+- **Skill:** `.claude/skills/braid-agent/SKILL.md` — how an AI agent uses
+  Braid's tools (capsule loop, `braid-integrate` advisor, workspace crates).
+  Invoke it when wiring a project to Braid or answering "how do I use Braid
+  from an agent". Human reference for the authoring loop is
+  `docs/authoring-cli.md`; specs are `spec/braid/PRD.md` and
+  `spec/braid/DECISIONS.md`.
