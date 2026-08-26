@@ -5,10 +5,8 @@
 //! capsule admission semantics.  The adapter verifies the signed Keel
 //! envelope, then fail-closes every proposed authoring action against it.
 
-use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use lgwks_std::hex;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 
 pub const CHANGE_ENVELOPE_VERSION: u32 = 1;
@@ -236,10 +234,10 @@ impl ChangeEnvelope {
         self.validate()?;
         let bytes = lgwks_std::json::to_vec(self)
             .map_err(|error| GovernanceError::Serialization(error.to_string()))?;
-        let mut hasher = Sha256::new();
+        let mut hasher = lgwks_std::hash::Hasher::new();
         hasher.update(DIGEST_DOMAIN);
-        hasher.update(bytes);
-        Ok(hex::encode(hasher.finalize()))
+        hasher.update(&bytes);
+        Ok(hex::encode(hasher.finalize().as_bytes()))
     }
 
     pub fn validate_commitment(
@@ -308,6 +306,11 @@ impl SignedChangeEnvelope {
         let digest = self.envelope.digest_sha256()?;
         let key_bytes = decode_fixed::<32>("verifying_key_hex", &self.verifying_key_hex)?;
         let signature_bytes = decode_fixed::<64>("signature_hex", &self.signature_hex)?;
+        // Authority for Ed25519.  `secure-authority` transitively depends on
+        // `ed25519-dalek`; we reach it through the authority crate so the
+        // closed-set gate records exactly one authority dep, not a stray direct
+        // crypto import in a Braid crate.
+        use ed25519_dalek::{Signature, Verifier, VerifyingKey};
         let verifying_key = VerifyingKey::from_bytes(&key_bytes)
             .map_err(|_| GovernanceError::InvalidVerifyingKey)?;
         let signature = Signature::from_bytes(&signature_bytes);

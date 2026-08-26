@@ -5,7 +5,7 @@ edition = "2024"
 description = "Fail-closed generation-time enforcement of Keel ChangeEnvelopes"
 
 [dependencies]
-lgwks_std = { workspace = true, features = ["json"] }
-serde = { workspace = true }
-sha2 = "0.10"
 ed25519-dalek = "2.2"
+lgwks_std = { workspace = true, features = ["json", "hash"] }
+secure-authority = { path = "../../../secure-authority/crates/secure-authority" }
+serde = { workspace = true }

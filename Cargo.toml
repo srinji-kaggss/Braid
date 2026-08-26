@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/braid-integrate",
     "crates/braid-capability",
     "crates/braid-ir",
     "crates/braid-flow-ir",
