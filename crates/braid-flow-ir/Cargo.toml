@@ -1,0 +1,15 @@
+[package]
+name = "braid-flow-ir"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+description = "Braid canonical inter-capsule Flow IR and identity (ADR-099, P1 #57)"
+repository = "https://github.com/srinji-kaggss/Braid"
+homepage = "https://github.com/srinji-kaggss/Braid"
+license = "MIT"
+
+[dependencies]
+braid-ir = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

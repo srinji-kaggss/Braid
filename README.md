@@ -22,6 +22,7 @@ reliably; the human sees a rendered manifest they can audit.
 | Path | What |
 |------|------|
 | `crates/braid-ir` | Typed term-graph IR, canonical CBOR-subset encoding, BLAKE3 CIDs, bijection guard, capsule artifacts. |
+| `crates/braid-flow-ir` | Canonical inter-capsule Flow IR, strict byte bijection, bounded identity, and justified-invocation declarations. |
 | `crates/braid-capability` | Capability token newtype — content-addressed dotted names. Vocabulary-agnostic attenuation. |
 | `crates/braid-verify` | Independent strict decoder + fail-closed admission pipeline. Registry-parametric. |
 | `crates/braid-render` | CID-bound manifest, deterministic text rendering, widening/narrowing diff, DOT export. |

@@ -114,6 +114,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "braid-flow-ir"
+version = "0.1.0"
+dependencies = [
+ "braid-ir",
+ "proptest",
+]
+
+[[package]]
 name = "braid-governance"
 version = "0.1.0"
 dependencies = [
