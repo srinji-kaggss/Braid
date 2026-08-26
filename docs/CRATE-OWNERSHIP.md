@@ -11,9 +11,10 @@ reuse does not.
 Measured at `af69f012a9298a817ee8c8863bf2d09cf1b046fe`: 17 workspace crates,
 66 Rust source files, and 17,075 lines in `crates/*/src/**/*.rs`. The original
 #28 census predated the `lgwks-*` crates, which are intentionally present as a
-separate authority surface rather than part of the Braid substrate. The D5
-process-boundary extraction adds `braid-runtime`, so the current audited count
-is 18.
+separate authority surface rather than part of the Braid substrate. Later
+additions — `braid-runtime` (D5 process boundary), `braid-flow-ir` /
+`braid-flow-verify`, `braid-governance` (Keel envelopes), and now
+`braid-integrate` (repo-graph advisor) — bring the present count to 22.
 
 ## Boundaries
 
@@ -34,7 +35,8 @@ is 18.
 | `braid-cli` | The human-reconstructable command loop across encode, decode, verify, render, diff, catalog, and store workflows. | Add commands, alter output contracts, or improve operator recovery. | **Cadence/lifecycle:** operator UX and CLI compatibility move independently from library APIs. |
 | `braid-manifest` | The repository-manifest sibling artifact: closed dimensions, required fields, validation, canonical bytes, and CID domain. | Change the inventory schema, closed enums, validation rules, or manifest CID domain. | **Authority/lifecycle:** repository metadata uses Braid's encoding discipline but is deliberately not an admitted capsule. |
 | `braid-run` | Deterministic DAG evaluation, capability-gated effect dispatch, confirmation/budget enforcement, and journal evidence. | Change execution order guarantees, host dispatch, resource accounting, evidence records, or effect handling. | **Security/failure/scaling:** execution is a distinct trust and resource-control surface from static admission and authoring. |
-| `braid-governance` | Signed Keel change envelopes, session budgets, allowed actions, commitments, expiry, and generation-time denial. | Change envelope policy/schema, governance crypto inputs, budget rules, or denial semantics. | **Authority/security/failure mode:** Keel authoring governance is explicitly outside IR admission; isolation also confines its SHA-256/Ed25519 dependency set. |
+| `braid-governance` | Signed Keel change envelopes, session budgets, allowed actions, commitments, expiry, and generation-time denial. | Change envelope policy/schema, governance crypto inputs, budget rules, or denial semantics. | **Authority/security/failure mode:** Keel authoring governance is explicitly outside IR admission; isolation also confines its hash/signature dependency set (BLAKE3 via `lgwks_std::hash`, Ed25519). |
+| `braid-integrate` | Repo-graph advisor: file inventory + import-line scan + manifest signals → `lgwks_std` / `lgwks_bot` seams (read-only unless `--apply`; never a second verifier). | Add a detector, adjust a seam heuristic, or change patch/proposal shape. | **Lifecycle/security:** advisor output is non-authoritative and reversible; isolation keeps heuristics from leaking into admission or encoding trust bases. |
 | `lgwks-std` | The estate's one approved non-`std` primitive surface, including platform, encoding, automation, and serialization primitives. | Add a primitive, revise its platform contract, or change an approved dependency-backed implementation. | **Authority/security/cadence:** this is a governed alternative to `std`, reviewed by dependency and primitive rather than through Braid IR releases. |
 | `lgwks-std-gate` | Build-time proof that `lgwks-std` dependencies match the human-approved contract. | Change the approval contract format, lockfile audit, refusal taxonomy, or gate entry point. | **Security/failure mode:** unauthorized dependency growth fails the build through a dedicated gate rather than relying on review memory. |
 
@@ -61,7 +63,8 @@ scheduler. RON/JSON/YAML parsing stays out of `braid-flow-ir`,
 
 ## Outcome
 
-All 18 boundaries satisfy all three columns. The earlier #28 behavioral slices
+All 22 boundaries satisfy all three columns. The earlier #28 behavioral slices
 removed the web-vocabulary panic surface, bounded JS elaboration input, and made
-the five-result swallow ceiling a CI gate. This slice completes issue #28's
-entrypoint consolidation without merging any existing crate.
+the five-result swallow ceiling a CI gate; later slices added
+`braid-governance` and `braid-integrate` without changing any existing crate's
+boundary.
