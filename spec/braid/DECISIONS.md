@@ -578,3 +578,40 @@ The dependency edges are Braid #57 (IR) -> Braid #60 (verification) -> Braid
 (SDK/RON/interop/render/import) and forge-harness #123 (durable runtime); both
 join at experience-as-code #66 (domain integration and performance proof).
 Each boundary lands independently with its own negative evidence.
+
+### D-FLOW.10 — P2 delivered — independent admission of `lw.braid.flow.v0` — **OBSERVED 2026-08-26**
+
+`braid-flow-verify` at `f000551e` / PR #65 (merge `f13c71cc`) closes #60 /
+`F-FLOW-01…19` admission surface. Own decoder over `Value` → `FlowSpec`
+projection (not `braid-flow-ir::decode`), preflight wire cap, `decode_strict`
++ bijectivity `encode(to_canon)==bytes` (INV-018), acyclic SCC (INV-003),
+reverse-BFS terminal co-reachability incl. `Choice` arms as edges (INV-014),
+choice totality/disjointness (INV-011), `JoinAll` cardinality (INV-013),
+terminal existence/soundness (INV-014), justification completeness per
+`InvokeCapsule` (INV-006), fail-closed `FlowVerifyError` per invariant.
+Verification lane 14/14 green at PR head `f000551` [ran]: `cargo test -p
+braid-flow-verify` KAT `flow_v0.kat` admits + `mutation_matrix`
+`every_invariant_has_a_killing_negative` kills per INV (malformed bytes,
+truncated, cycle, missing justification via raw `Value` Map, isolated node);
+`cargo clippy --workspace --all-targets -- -D warnings` clean. Local-ci
+26/26 GREEN receipt `flow-p2-verify:f000551ec61c attested 1787724669` [ran];
+PR CI run `32937074111` 14/14 success `f000551` pull_request [ran]. The
+`f13c71cc` merge is the delivery commit; seam #64 and amendment #63 remain
+open research/governance (no code lane).
+
+### D-FLOW.11 — Elaboration seam and P0.1 amendment status — **OPEN 2026-08-26**
+
+D21 seam (#64) and P0.1 Read|Write collapse (#63) are the governance
+residue of Flow P0. D21: the basement contract "any surface → core IR →
+independent re-check" (`braid-verify::verify(bytes, &TermRegistry,
+&[Capability])` sole admission, precedent `braid-elaborate-js`
+`lib.rs:893` → `braid-project lib.rs:33`) is doctrine; the conformance
+harness `braid-seam-conformance` (two surfaces → same CID → one verdict,
+`cargo test -p braid-seam-conformance`) is not yet built. §16 remains
+gated — Trigger 2 ACCUMULATING across `braid-vocab-*` but not declared,
+Triggers 1/3/4 PENDING/HALF-FIRED/NOT FIRED per #64 table at `e8fb2f4e`.
+P0.1: collapsing durable interop to `Read | Write` with `Justified` as a
+loud `Deferred { reason, required_by_version }` (never serialized as
+`Proven`) requires an explicit amendment to D-FLOW.6 Unknown-fails-closed;
+code MUST NOT silently reinterpret `Unknown` until the amendment lands.
+D-FLOW.6 therefore stands unchanged in this edit.
