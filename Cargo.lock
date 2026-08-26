@@ -122,6 +122,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "braid-flow-verify"
+version = "0.1.0"
+dependencies = [
+ "braid-flow-ir",
+ "braid-ir",
+]
+
+[[package]]
 name = "braid-governance"
 version = "0.1.0"
 dependencies = [

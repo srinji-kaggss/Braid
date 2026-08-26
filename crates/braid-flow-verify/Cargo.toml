@@ -1,0 +1,16 @@
+[package]
+name = "braid-flow-verify"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+description = "Independent Flow graph admission verifier (ADR-099 P2 #60) — own decoder + fail-closed stages"
+repository = "https://github.com/srinji-kaggss/Braid"
+homepage = "https://github.com/srinji-kaggss/Braid"
+license = "MIT"
+
+[dependencies]
+braid-ir = { workspace = true }
+braid-flow-ir = { workspace = true }
+
+[dev-dependencies]
+braid-flow-ir = { workspace = true }
