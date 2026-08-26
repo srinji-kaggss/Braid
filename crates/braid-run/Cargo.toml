@@ -7,8 +7,8 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 braid-capability = { path = "../braid-capability" }
+braid-flow-ir = { path = "../braid-flow-ir" }
+braid-flow-plan = { path = "../braid-flow-plan" }
 braid-ir = { path = "../braid-ir" }
-lgwks_std = { workspace = true }
-
-[dev-dependencies]
 braid-verify = { path = "../braid-verify" }
+lgwks_std = { workspace = true }

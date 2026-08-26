@@ -35,6 +35,35 @@ pub enum Verdict {
     Reject { stage: Stage, reason: String },
 }
 
+/// Opaque proof that independent admission accepted one exact capsule against
+/// one exact registry and ambient authority set.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdmissionProof {
+    capsule_cid: Cid,
+    registry_cid: Cid,
+    authority_cid: Cid,
+}
+
+impl AdmissionProof {
+    /// The admitted capsule identity.
+    #[must_use]
+    pub fn capsule_cid(&self) -> Cid {
+        self.capsule_cid
+    }
+
+    /// The exact registry identity used by admission.
+    #[must_use]
+    pub fn registry_cid(&self) -> Cid {
+        self.registry_cid
+    }
+
+    /// The content identity of the external ambient authority set.
+    #[must_use]
+    pub fn authority_cid(&self) -> Cid {
+        self.authority_cid
+    }
+}
+
 fn reject(stage: Stage, reason: impl Into<String>) -> Verdict {
     Verdict::Reject {
         stage,
@@ -509,8 +538,38 @@ fn run_pipeline(
 /// principal actually holds. Bytes in, verdict out — the admission decision
 /// is reproducible from the artifact alone (D9).
 pub fn verify(bytes: &[u8], registry: &TermRegistry, ambient: &[Capability]) -> Verdict {
-    match run_pipeline(bytes, registry, ambient) {
-        Ok(capsule_cid) => Verdict::Admit { capsule_cid },
+    match admit(bytes, registry, ambient) {
+        Ok(proof) => Verdict::Admit {
+            capsule_cid: proof.capsule_cid,
+        },
         Err(verdict) => verdict,
     }
+}
+
+/// Run independent admission and return an opaque authority proof on success.
+/// The proof cannot be constructed by serializing or setting a verdict value.
+pub fn admit(
+    bytes: &[u8],
+    registry: &TermRegistry,
+    ambient: &[Capability],
+) -> Result<AdmissionProof, Verdict> {
+    let capsule_cid = run_pipeline(bytes, registry, ambient)?;
+    Ok(AdmissionProof {
+        capsule_cid,
+        registry_cid: registry.cid(),
+        authority_cid: authority_cid(ambient),
+    })
+}
+
+fn authority_cid(ambient: &[Capability]) -> Cid {
+    let mut names: Vec<&str> = ambient.iter().map(Capability::as_str).collect();
+    names.sort_unstable();
+    names.dedup();
+    let encoded = braid_ir::Value::List(
+        names
+            .into_iter()
+            .map(|name| braid_ir::Value::Text(name.into()))
+            .collect(),
+    );
+    Cid::compute(b"lw.braid.authority.v0", &braid_ir::encode(&encoded))
 }
