@@ -26,3 +26,12 @@
 # braid-cli` with exit 101 and one `cargo::error` per unapproved crate. The
 # ratchet works; the register is what is not ready.
 enforce = false
+
+[[approved]]
+crate = "rusternetes"
+tier = "boundary"
+version = "0.1"
+reason = "Reimplementing the Kubernetes control plane in Rust is a multi-year project with no std or lgwks_std alternative."
+approved_by = "Director"
+approved_on = "2026-08-27"
+review = "https://github.com/calfonso/rusternetes"
