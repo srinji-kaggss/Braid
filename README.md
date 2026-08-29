@@ -4,11 +4,14 @@
 design. Programs are content-addressed graphs of typed terms drawn from a closed
 capability vocabulary. A deterministic compiler/verifier owns the correctness and
 confinement-safety floor — types, effects, capability attenuation, taint, bounds.
-Humans own the architecture and intent above that floor.
+Invocation reduces through one fail-closed root triad: **Safety × Capability ×
+Justification**. Humans own the architecture and intent above that floor.
 
 AI and humans never share a representation. They meet at a shared verified
 **anchor** through separate projections — the AI sees an IR it can produce
-reliably; the human sees a rendered manifest they can audit.
+reliably; the human sees a rendered manifest they can audit. After independent
+admission, Braid may derive a registry-CID-scoped dense token plan for the hot
+path; that plan is a cache, never a second wire or an authority credential.
 
 ## Published crates
 
@@ -21,12 +24,12 @@ reliably; the human sees a rendered manifest they can audit.
 
 | Path | What |
 |------|------|
-| `crates/braid-ir` | Typed term-graph IR, canonical CBOR-subset encoding, BLAKE3 CIDs, bijection guard, capsule artifacts. |
+| `crates/braid-ir` | Typed term-graph IR, canonical CBOR-subset encoding, BLAKE3 CIDs, one-byte admission triad, and registry-scoped compact token projection. |
 | `crates/braid-flow-ir` | Canonical inter-capsule Flow IR, strict byte bijection, bounded identity, and justified-invocation declarations. |
 | `crates/braid-flow-plan` | Snapshot-bound satiation and frontier planning — deterministic `plan()` + Plan CID (`lw.braid.flow.plan.v0` via `plan.rs:20`) and snapshot CID (`lw.braid.flow.snapshot.v0` via `snapshot.rs:45`). |
-| `crates/braid-flow-verify` | Independent strict decoder + fail-closed admission for Flow graphs. |
+| `crates/braid-flow-verify` | Independent strict decoder + compact iterative fail-closed admission for Flow graphs. |
 | `crates/braid-capability` | Capability token newtype — content-addressed dotted names. Vocabulary-agnostic attenuation. |
-| `crates/braid-verify` | Independent strict decoder + fail-closed admission pipeline. Registry-parametric. |
+| `crates/braid-verify` | Independent strict decoder + fail-closed admission pipeline; emits CID-bound `AdmissionProof` + `P × P × U` compact `AdmittedCapsule` projection. |
 | `crates/braid-render` | CID-bound manifest, deterministic text rendering, widening/narrowing diff, DOT export. |
 | `crates/braid-sdk` | Typed authoring builder over `braid-ir`. |
 | `crates/braid-cli` | The `braid` binary: encode, decode, verify, render, diff, catalog, store. |

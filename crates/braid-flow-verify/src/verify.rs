@@ -1,11 +1,16 @@
 //! Fail-closed admission stages.
+
 use crate::decode::decode_flow_verify;
 use crate::error::{FlowVerifyError, VerifyResult};
-use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::string::ToString;
+use alloc::vec;
 use alloc::vec::Vec;
-use braid_flow_ir::{FlowNodeKind, FlowSpec};
+use braid_flow_ir::{FlowEdge, FlowNodeKind, FlowSpec, ValueSource};
 
+type NodeId = u32;
+type Edge = (NodeId, NodeId);
+
+/// Independently admitted Flow plus its exact content identity.
 pub struct AdmittedFlow {
     pub flow: FlowSpec,
     pub flow_cid: braid_ir::Cid,
@@ -13,153 +18,282 @@ pub struct AdmittedFlow {
 
 pub fn verify(bytes: &[u8]) -> VerifyResult<AdmittedFlow> {
     let flow = decode_flow_verify(bytes)?;
-    check_acyclic(&flow)?;
-    check_reachability(&flow)?;
+    let graph = CompactGraph::build(&flow)?;
+    check_acyclic(&graph)?;
+    check_reachability(&flow, &graph)?;
     check_choice(&flow)?;
-    check_join(&flow)?;
+    check_join(&flow, &graph)?;
     check_terminals(&flow)?;
     check_justification(&flow)?;
     let flow_cid = braid_ir::Cid::compute(braid_flow_ir::FLOW_DOMAIN, bytes);
     Ok(AdmittedFlow { flow, flow_cid })
 }
 
-fn check_acyclic(flow: &FlowSpec) -> VerifyResult<()> {
-    let n = flow.nodes().len();
-    let idx: BTreeMap<String, usize> = flow
-        .nodes()
-        .iter()
-        .enumerate()
-        .map(|(i, nd)| (nd.key.to_string(), i))
-        .collect();
-    let mut adj: Vec<Vec<usize>> = vec![Vec::new(); n];
-    for e in flow.edges() {
-        match e {
-            braid_flow_ir::FlowEdge::After { from, to, .. } => {
-                if let (Some(&u), Some(&v)) = (idx.get(&from.to_string()), idx.get(&to.to_string()))
-                {
-                    adj[u].push(v);
-                }
-            }
-            braid_flow_ir::FlowEdge::Data { from, to, .. } => {
-                let src = match from {
-                    braid_flow_ir::ValueSource::Node(o) => o.node.to_string(),
-                    _ => continue,
-                };
-                let dst = to.node.to_string();
-                if let (Some(&u), Some(&v)) = (idx.get(&src), idx.get(&dst)) {
-                    adj[u].push(v);
-                }
-            }
-        }
+fn arithmetic_overflow(field: &'static str) -> FlowVerifyError {
+    FlowVerifyError::ArithmeticOverflow {
+        field,
+        invariant: "INV-FLOW-004",
     }
-    let mut state = vec![0u8; n];
-    fn dfs(u: usize, adj: &[Vec<usize>], state: &mut [u8]) -> bool {
-        state[u] = 1;
-        for &v in &adj[u] {
-            if state[v] == 1 {
-                return true;
-            }
-            if state[v] == 0 && dfs(v, adj, state) {
-                return true;
-            }
-        }
-        state[u] = 2;
-        false
-    }
-    for i in 0..n {
-        if state[i] == 0 && dfs(i, &adj, &mut state) {
-            return Err(FlowVerifyError::Cycle {
-                invariant: "INV-FLOW-003",
-            });
-        }
-    }
-    Ok(())
 }
-fn check_reachability(flow: &FlowSpec) -> VerifyResult<()> {
-    // Every node must be on some path from synthetic start (roots/data predecessors) to a terminal.
-    // Minimal v0: every node has at least one incoming or is referenced; and every node can reach a terminal via after/data edges.
-    let idx: BTreeMap<String, usize> = flow
+
+fn resolve_node(flow: &FlowSpec, key: &str, field: &'static str) -> VerifyResult<NodeId> {
+    let index = flow
         .nodes()
-        .iter()
-        .enumerate()
-        .map(|(i, nd)| (nd.key.to_string(), i))
-        .collect();
-    let n = flow.nodes().len();
-    let mut adj: Vec<Vec<usize>> = vec![Vec::new(); n];
-    let mut rev: Vec<Vec<usize>> = vec![Vec::new(); n];
-    for e in flow.edges() {
-        let (s, d) = match e {
-            braid_flow_ir::FlowEdge::After { from, to, .. } => (from.to_string(), to.to_string()),
-            braid_flow_ir::FlowEdge::Data { from, to, .. } => {
-                let s = match from {
-                    braid_flow_ir::ValueSource::Node(o) => o.node.to_string(),
-                    _ => continue,
-                };
-                (s, to.node.to_string())
-            }
+        .binary_search_by(|node| node.key.as_str().cmp(key))
+        .map_err(|_| FlowVerifyError::Unresolved {
+            field,
+            key: key.to_string(),
+            invariant: "INV-FLOW-002",
+        })?;
+    u32::try_from(index).map_err(|_| arithmetic_overflow("node index"))
+}
+
+fn choice_edge_count(flow: &FlowSpec) -> VerifyResult<usize> {
+    flow.nodes().iter().try_fold(0usize, |count, node| {
+        let added = match &node.kind {
+            FlowNodeKind::Choice { arms, .. } => arms
+                .len()
+                .checked_add(1)
+                .ok_or_else(|| arithmetic_overflow("choice edge count"))?,
+            _ => 0,
         };
-        if let (Some(&u), Some(&v)) = (idx.get(&s), idx.get(&d)) {
-            adj[u].push(v);
-            rev[v].push(u);
-        }
-    }
-    // Include Choice arms as edges for reachability
-    for (i, nd) in flow.nodes().iter().enumerate() {
-        if let FlowNodeKind::Choice { arms, otherwise } = &nd.kind {
-            for a in arms {
-                if let Some(&v) = idx.get(&a.then.to_string()) {
-                    adj[i].push(v);
-                    rev[v].push(i);
+        count
+            .checked_add(added)
+            .ok_or_else(|| arithmetic_overflow("choice edge count"))
+    })
+}
+
+fn collect_edges(flow: &FlowSpec) -> VerifyResult<Vec<Edge>> {
+    let capacity = flow
+        .edges()
+        .len()
+        .checked_add(choice_edge_count(flow)?)
+        .ok_or_else(|| arithmetic_overflow("graph edge capacity"))?;
+    let mut edges = Vec::with_capacity(capacity);
+
+    for edge in flow.edges() {
+        match edge {
+            FlowEdge::After { from, to, .. } => {
+                edges.push((
+                    resolve_node(flow, from.as_str(), "after.from")?,
+                    resolve_node(flow, to.as_str(), "after.to")?,
+                ));
+            }
+            FlowEdge::Data { from, to, .. } => {
+                let destination = resolve_node(flow, to.node.as_str(), "data.to")?;
+                match from {
+                    ValueSource::Node(output) => edges.push((
+                        resolve_node(flow, output.node.as_str(), "data.from")?,
+                        destination,
+                    )),
+                    ValueSource::Root(_) | ValueSource::Literal(_) => {}
                 }
             }
-            if let Some(&v) = idx.get(&otherwise.to_string()) {
-                adj[i].push(v);
-                rev[v].push(i);
+        }
+    }
+
+    for (source_index, node) in flow.nodes().iter().enumerate() {
+        let source =
+            u32::try_from(source_index).map_err(|_| arithmetic_overflow("choice source"))?;
+        if let FlowNodeKind::Choice { arms, otherwise } = &node.kind {
+            for arm in arms {
+                edges.push((
+                    source,
+                    resolve_node(flow, arm.then.as_str(), "choice.then")?,
+                ));
             }
+            edges.push((
+                source,
+                resolve_node(flow, otherwise.as_str(), "choice.otherwise")?,
+            ));
         }
     }
-    // Can-reach-terminal (reverse BFS from terminals)
-    let mut can_reach_term = vec![false; n];
-    let mut q: Vec<usize> = flow
-        .terminals()
-        .iter()
-        .filter_map(|k| idx.get(&k.to_string()).copied())
-        .collect();
-    for &t in &q {
-        can_reach_term[t] = true;
-    }
-    let mut qi = 0;
-    while qi < q.len() {
-        let u = q[qi];
-        qi += 1;
-        for &p in &rev[u] {
-            if !can_reach_term[p] {
-                can_reach_term[p] = true;
-                q.push(p);
-            }
-        }
-    }
-    for can in &can_reach_term {
-        if !*can {
-            return Err(FlowVerifyError::TerminalSoundness {
-                invariant: "INV-FLOW-014",
-            });
-        }
-    }
-    Ok(())
+
+    edges.sort_unstable();
+    edges.dedup();
+    Ok(edges)
 }
+
+/// Compressed-sparse-row adjacency using u32 node IDs and offsets.
+///
+/// Flow's hard bounds are far below u32 limits. This avoids one heap
+/// allocation per node (`Vec<Vec<usize>>`) and halves edge storage relative to
+/// host-sized `usize` pairs on 64-bit machines.
+struct Csr {
+    offsets: Vec<u32>,
+    targets: Vec<NodeId>,
+}
+
+impl Csr {
+    fn from_sorted(node_count: usize, edges: &[Edge]) -> VerifyResult<Self> {
+        let offset_count = node_count
+            .checked_add(1)
+            .ok_or_else(|| arithmetic_overflow("csr offsets"))?;
+        let mut offsets = vec![0u32; offset_count];
+
+        for &(source, _) in edges {
+            let slot = offsets
+                .get_mut(source as usize + 1)
+                .ok_or_else(|| arithmetic_overflow("csr source"))?;
+            *slot = slot
+                .checked_add(1)
+                .ok_or_else(|| arithmetic_overflow("csr degree"))?;
+        }
+
+        for index in 1..offsets.len() {
+            offsets[index] = offsets[index]
+                .checked_add(offsets[index - 1])
+                .ok_or_else(|| arithmetic_overflow("csr prefix sum"))?;
+        }
+
+        let targets = edges.iter().map(|&(_, target)| target).collect();
+        Ok(Self { offsets, targets })
+    }
+
+    fn neighbors(&self, node: NodeId) -> &[NodeId] {
+        let index = node as usize;
+        let start = self.offsets[index] as usize;
+        let end = self.offsets[index + 1] as usize;
+        &self.targets[start..end]
+    }
+}
+
+struct CompactGraph {
+    node_count: NodeId,
+    forward: Csr,
+    reverse: Csr,
+}
+
+impl CompactGraph {
+    fn build(flow: &FlowSpec) -> VerifyResult<Self> {
+        let node_count =
+            u32::try_from(flow.nodes().len()).map_err(|_| arithmetic_overflow("node count"))?;
+        let mut edges = collect_edges(flow)?;
+        let forward = Csr::from_sorted(flow.nodes().len(), &edges)?;
+
+        // Reuse the same edge arena to build the reverse CSR. This keeps peak
+        // memory to one pair arena plus the two compact target arrays.
+        for edge in &mut edges {
+            *edge = (edge.1, edge.0);
+        }
+        edges.sort_unstable();
+        edges.dedup();
+        let reverse = Csr::from_sorted(flow.nodes().len(), &edges)?;
+
+        Ok(Self {
+            node_count,
+            forward,
+            reverse,
+        })
+    }
+}
+
+fn initial_indegree(graph: &CompactGraph) -> VerifyResult<Vec<u32>> {
+    (0..graph.node_count)
+        .map(|node| {
+            u32::try_from(graph.reverse.neighbors(node).len())
+                .map_err(|_| arithmetic_overflow("node indegree"))
+        })
+        .collect()
+}
+
+fn check_acyclic(graph: &CompactGraph) -> VerifyResult<()> {
+    let mut indegree = initial_indegree(graph)?;
+    let mut queue = Vec::with_capacity(graph.node_count as usize);
+    for node in 0..graph.node_count {
+        if indegree[node as usize] == 0 {
+            queue.push(node);
+        }
+    }
+
+    let mut cursor = 0usize;
+    while cursor < queue.len() {
+        let node = queue[cursor];
+        cursor += 1;
+        for &target in graph.forward.neighbors(node) {
+            let degree = &mut indegree[target as usize];
+            *degree = degree
+                .checked_sub(1)
+                .ok_or_else(|| arithmetic_overflow("kahn indegree"))?;
+            if *degree == 0 {
+                queue.push(target);
+            }
+        }
+    }
+
+    if queue.len() == graph.node_count as usize {
+        Ok(())
+    } else {
+        Err(FlowVerifyError::Cycle {
+            invariant: "INV-FLOW-003",
+        })
+    }
+}
+
+fn mark_reachable(adjacency: &Csr, node_count: NodeId, seeds: &[NodeId]) -> Vec<bool> {
+    let mut reached = vec![false; node_count as usize];
+    let mut queue = Vec::with_capacity(node_count as usize);
+    for &seed in seeds {
+        if !reached[seed as usize] {
+            reached[seed as usize] = true;
+            queue.push(seed);
+        }
+    }
+
+    let mut cursor = 0usize;
+    while cursor < queue.len() {
+        let node = queue[cursor];
+        cursor += 1;
+        for &target in adjacency.neighbors(node) {
+            if !reached[target as usize] {
+                reached[target as usize] = true;
+                queue.push(target);
+            }
+        }
+    }
+    reached
+}
+
+fn terminal_nodes(flow: &FlowSpec) -> VerifyResult<Vec<NodeId>> {
+    flow.terminals()
+        .iter()
+        .map(|terminal| resolve_node(flow, terminal.as_str(), "terminal"))
+        .collect()
+}
+
+fn check_reachability(flow: &FlowSpec, graph: &CompactGraph) -> VerifyResult<()> {
+    // After acyclicity is proven, every node is reachable from at least one
+    // zero-indegree node; the synthetic start connects exactly those roots.
+    // The non-trivial half is proving that every node can reach a declared
+    // terminal.
+    let to_terminal = mark_reachable(&graph.reverse, graph.node_count, &terminal_nodes(flow)?);
+
+    if to_terminal.iter().all(|reached| *reached) {
+        Ok(())
+    } else {
+        Err(FlowVerifyError::TerminalSoundness {
+            invariant: "INV-FLOW-014",
+        })
+    }
+}
+
 fn check_choice(flow: &FlowSpec) -> VerifyResult<()> {
-    for nd in flow.nodes() {
-        if let FlowNodeKind::Choice { arms, otherwise: _ } = &nd.kind {
+    for node in flow.nodes() {
+        if let FlowNodeKind::Choice { arms, .. } = &node.kind {
             if arms.is_empty() {
                 return Err(FlowVerifyError::ChoiceNotTotal {
                     invariant: "INV-FLOW-011",
                 });
             }
-            // Bounded disjointness: syntactic check — distinct `then` targets.
-            let mut seen = BTreeSet::new();
-            for a in arms {
-                if !seen.insert(a.then.to_string()) {
+
+            // v0 can cheaply reject aliased targets without allocating a set.
+            // This is only a shape check; it does NOT prove predicate
+            // disjointness. That semantic proof remains a loud P2 blocker.
+            for (index, arm) in arms.iter().enumerate() {
+                if arms[..index]
+                    .iter()
+                    .any(|prior| prior.then.as_str() == arm.then.as_str())
+                {
                     return Err(FlowVerifyError::ChoiceNotDisjoint {
                         invariant: "INV-FLOW-011",
                     });
@@ -169,22 +303,12 @@ fn check_choice(flow: &FlowSpec) -> VerifyResult<()> {
     }
     Ok(())
 }
-fn check_join(flow: &FlowSpec) -> VerifyResult<()> {
-    for nd in flow.nodes() {
-        if matches!(nd.kind, FlowNodeKind::JoinAll) {
-            let preds = flow
-                .edges()
-                .iter()
-                .filter(|e| match e {
-                    braid_flow_ir::FlowEdge::After { to, .. } => {
-                        to.to_string() == nd.key.to_string()
-                    }
-                    braid_flow_ir::FlowEdge::Data { to, .. } => {
-                        to.node.to_string() == nd.key.to_string()
-                    }
-                })
-                .count();
-            if preds == 0 {
+
+fn check_join(flow: &FlowSpec, graph: &CompactGraph) -> VerifyResult<()> {
+    for (index, node) in flow.nodes().iter().enumerate() {
+        if matches!(node.kind, FlowNodeKind::JoinAll) {
+            let node_id = u32::try_from(index).map_err(|_| arithmetic_overflow("join index"))?;
+            if graph.reverse.neighbors(node_id).is_empty() {
                 return Err(FlowVerifyError::JoinCardinality {
                     invariant: "INV-FLOW-013",
                 });
@@ -193,28 +317,23 @@ fn check_join(flow: &FlowSpec) -> VerifyResult<()> {
     }
     Ok(())
 }
+
 fn check_terminals(flow: &FlowSpec) -> VerifyResult<()> {
-    let keys: BTreeSet<String> = flow.nodes().iter().map(|n| n.key.to_string()).collect();
-    for t in flow.terminals() {
-        if !keys.contains(&t.to_string()) {
-            return Err(FlowVerifyError::Unresolved {
-                field: "terminal",
-                key: t.to_string(),
-                invariant: "INV-FLOW-014",
-            });
-        }
-    }
     if flow.terminals().is_empty() {
         return Err(FlowVerifyError::EmptyCollection {
             field: "terminals",
             invariant: "INV-FLOW-014",
         });
     }
+    for terminal in flow.terminals() {
+        resolve_node(flow, terminal.as_str(), "terminal")?;
+    }
     Ok(())
 }
+
 fn check_justification(flow: &FlowSpec) -> VerifyResult<()> {
-    for nd in flow.nodes() {
-        if matches!(nd.kind, FlowNodeKind::InvokeCapsule { .. }) && nd.justification.is_none() {
+    for node in flow.nodes() {
+        if matches!(node.kind, FlowNodeKind::InvokeCapsule { .. }) && node.justification.is_none() {
             return Err(FlowVerifyError::JustificationIncomplete {
                 field: "justification",
                 invariant: "INV-FLOW-006",

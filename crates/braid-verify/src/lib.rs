@@ -1,20 +1,24 @@
 //! # braid-verify — deterministic admission (ADR-088 D3, U3–U5 #560)
 //!
 //! The fail-closed stage pipeline. Order is LOCKED (ADR-088 D3); a request
-//! that survives one gate becomes the typed input of the next (the kernel's
-//! composition idiom). Neither an AI nor a reviewer is the enforcement
-//! mechanism — this crate is.
+//! that survives one gate becomes the typed input of the next. Neither an AI
+//! nor a reviewer is the enforcement mechanism — this crate is.
 //!
-//! Verdicts are typed and machine-readable: an authoring agent repairs from
-//! `Reject { stage, reason }` without a human in the loop; a human reads the
-//! same verdict in CI.
+//! Verdicts are typed and machine-readable. [`verify_compact`] additionally
+//! projects an admitted canonical graph into the dense token form used by the
+//! future hot runtime without turning that cache into a second wire format.
+
+#![forbid(unsafe_code)]
 
 pub mod decode;
 
 use braid_capability::Capability;
 use braid_ir::braid::Strand;
 use braid_ir::term::{EffectClass, Exposure};
-use braid_ir::{Capsule, Cid, ConfirmPolicy, IR_VERSION, TermRegistry, TypeTag};
+use braid_ir::{
+    AdmissionTriad, CAPSULE_DOMAIN, Capsule, Cid, ConfirmPolicy, IR_VERSION, ProofState,
+    TermRegistry, TermTable, TokenError, TokenProgram, TypeTag,
+};
 
 /// Pipeline stages, in locked order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,10 +33,47 @@ pub enum Stage {
     Bounds,
 }
 
+/// Deterministic admission result for the canonical capsule.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Verdict {
     Admit { capsule_cid: Cid },
     Reject { stage: Stage, reason: String },
+}
+
+/// Ephemeral, non-serializable result of independent admission plus compact
+/// projection.
+///
+/// Safety and Capability are proven by this verifier invocation under the
+/// supplied registry and ambient capability set. Justification remains
+/// [`ProofState::Unknown`] until the snapshot-bound Flow planner supplies that
+/// proof. Consequently the embedded triad deterministically returns `Defer`,
+/// never `Execute`, in v0.
+///
+/// This value is not an authority credential. In particular, serializing the
+/// one-byte triad would not preserve the external authority snapshot that
+/// produced it.
+#[derive(Debug, PartialEq, Eq)]
+pub struct AdmittedCapsule {
+    program: TokenProgram,
+}
+
+impl AdmittedCapsule {
+    /// Dense, CID-bound projection of the admitted graph.
+    pub fn program(&self) -> &TokenProgram {
+        &self.program
+    }
+
+    /// Canonical capsule identity.
+    pub const fn capsule_cid(&self) -> Cid {
+        self.program.capsule_cid()
+    }
+
+    /// Consume the wrapper and return the compact projection.
+    ///
+    /// The returned projection remains data, not an authority credential.
+    pub fn into_program(self) -> TokenProgram {
+        self.program
+    }
 }
 
 /// Opaque proof that independent admission accepted one exact capsule against
@@ -228,7 +269,12 @@ fn stage_4_types(capsule: &Capsule, registry: &TermRegistry) -> Result<(), Verdi
         .braid
         .strands
         .iter()
-        .map(|s| &registry.get(&s.term).expect("checked in stage 3").output)
+        .map(|strand| {
+            &registry
+                .get(&strand.term)
+                .expect("checked in stage 3")
+                .output
+        })
         .collect();
 
     for (strand_idx, strand) in capsule.braid.strands.iter().enumerate() {
@@ -260,13 +306,15 @@ fn check_grants_ambient(grants: &[Capability], ambient: &[Capability]) -> Result
 fn ensure_capability_granted(
     strand_idx: usize,
     term: &str,
-    cap: &Capability,
+    capability: &Capability,
     grants: &[Capability],
 ) -> Result<(), Verdict> {
-    if !grants.contains(cap) {
+    // Canonical capsule decoding enforces strict grant ordering, so binary
+    // search avoids one linear string scan per effectful strand.
+    if grants.binary_search(capability).is_err() {
         Err(reject(
             Stage::Capability,
-            format!("strand {strand_idx} `{term}` requires undeclared capability `{cap}`"),
+            format!("strand {strand_idx} `{term}` requires undeclared capability `{capability}`"),
         ))
     } else {
         Ok(())
@@ -280,8 +328,8 @@ fn check_strand_capability(
     grants: &[Capability],
 ) -> Result<(), Verdict> {
     let spec = registry.get(&strand.term).expect("checked in stage 3");
-    if let Some(cap) = &spec.capability {
-        ensure_capability_granted(strand_idx, &strand.term, cap, grants)?;
+    if let Some(capability) = &spec.capability {
+        ensure_capability_granted(strand_idx, &strand.term, capability, grants)?;
     }
     Ok(())
 }
@@ -300,11 +348,17 @@ fn stage_5_capability(
 
 // ── Stage 6: Effect ────────────────────────────────────────────────────────
 
+fn is_irreversible_or_egress(effect: EffectClass) -> bool {
+    matches!(effect, EffectClass::Irreversible | EffectClass::Egress)
+}
+
 fn check_confirm_policy(capsule: &Capsule, registry: &TermRegistry) -> Result<(), Verdict> {
-    let needs_confirm = capsule.braid.strands.iter().any(|s| {
-        matches!(
-            registry.get(&s.term).expect("checked in stage 3").effect,
-            EffectClass::Irreversible | EffectClass::Egress
+    let needs_confirm = capsule.braid.strands.iter().any(|strand| {
+        is_irreversible_or_egress(
+            registry
+                .get(&strand.term)
+                .expect("checked in stage 3")
+                .effect,
         )
     });
     if needs_confirm && capsule.confirm != ConfirmPolicy::HumanConfirm {
@@ -317,78 +371,51 @@ fn check_confirm_policy(capsule: &Capsule, registry: &TermRegistry) -> Result<()
     }
 }
 
-fn explore_inputs(
-    strands: &[Strand],
-    current_idx: usize,
-    to_idx: usize,
-    seen: &mut [bool],
-    stack: &mut Vec<usize>,
-) -> bool {
-    for &target in &strands[current_idx].inputs {
-        let target_idx = target as usize;
-        if target_idx == to_idx {
-            return true;
-        }
-        if target_idx < seen.len() && !seen[target_idx] {
-            seen[target_idx] = true;
-            stack.push(target_idx);
-        }
-    }
-    false
-}
-
-fn reaches(strands: &[Strand], from_idx: usize, to_idx: usize) -> bool {
-    if from_idx == to_idx {
-        return true;
-    }
-    let mut seen = vec![false; strands.len()];
-    let mut stack = vec![from_idx];
-    while let Some(current_idx) = stack.pop() {
-        if explore_inputs(strands, current_idx, to_idx, &mut seen, &mut stack) {
-            return true;
-        }
-    }
-    false
-}
-
-fn check_effect_pair(
-    strands: &[Strand],
-    first_idx: usize,
-    second_idx: usize,
-) -> Result<(), Verdict> {
-    let upper = first_idx.max(second_idx);
-    let lower = first_idx.min(second_idx);
-    if !reaches(strands, upper, lower) {
-        Err(reject(
-            Stage::Effect,
-            format!(
-                "unordered irreversible/egress strands {first_idx} and {second_idx}: \
-                 relative order undefined — wire an explicit dependency"
-            ),
-        ))
-    } else {
-        Ok(())
-    }
-}
-
-fn check_effect_ordering(capsule: &Capsule, registry: &TermRegistry) -> Result<(), Verdict> {
-    let effectful: Vec<usize> = capsule
-        .braid
-        .strands
+fn latest_effect_from_inputs(
+    strand: &Strand,
+    latest_visible_effect: &[Option<usize>],
+) -> Option<usize> {
+    strand
+        .inputs
         .iter()
-        .enumerate()
-        .filter(|(_, s)| {
-            matches!(
-                registry.get(&s.term).expect("checked in stage 3").effect,
-                EffectClass::Irreversible | EffectClass::Egress
-            )
-        })
-        .map(|(i, _)| i)
-        .collect();
+        .filter_map(|&input| latest_visible_effect[input as usize])
+        .max()
+}
 
-    for (pos, &first_idx) in effectful.iter().enumerate() {
-        for &second_idx in &effectful[pos + 1..] {
-            check_effect_pair(&capsule.braid.strands, first_idx, second_idx)?;
+/// Prove that dangerous effects form one explicit dependency chain.
+///
+/// Because strands are topologically ordered, checking that every dangerous
+/// strand depends on the immediately previous dangerous strand is sufficient:
+/// transitivity then orders every earlier pair. This is O(V + E), replacing
+/// the former O(k² × (V + E)) pairwise graph search and its per-search
+/// allocations.
+fn check_effect_ordering(capsule: &Capsule, registry: &TermRegistry) -> Result<(), Verdict> {
+    let mut latest_visible_effect = Vec::with_capacity(capsule.braid.strands.len());
+    let mut previous_effect = None;
+
+    for (strand_index, strand) in capsule.braid.strands.iter().enumerate() {
+        let incoming_latest = latest_effect_from_inputs(strand, &latest_visible_effect);
+        let effect = registry
+            .get(&strand.term)
+            .expect("checked in stage 3")
+            .effect;
+
+        if is_irreversible_or_egress(effect) {
+            if let Some(previous_index) = previous_effect
+                && incoming_latest != Some(previous_index)
+            {
+                return Err(reject(
+                    Stage::Effect,
+                    format!(
+                        "unordered irreversible/egress strands {previous_index} and \
+                         {strand_index}: relative order undefined — wire an explicit dependency"
+                    ),
+                ));
+            }
+            previous_effect = Some(strand_index);
+            latest_visible_effect.push(Some(strand_index));
+        } else {
+            latest_visible_effect.push(incoming_latest);
         }
     }
     Ok(())
@@ -465,7 +492,7 @@ fn stage_7_taint(capsule: &Capsule, registry: &TermRegistry) -> Result<(), Verdi
 
 fn check_cost_overflow(sum: Option<u64>) -> Result<u64, Verdict> {
     match sum {
-        Some(val) => Ok(val),
+        Some(value) => Ok(value),
         None => Err(reject(Stage::Bounds, "cost overflow")),
     }
 }
@@ -477,7 +504,7 @@ fn accumulate_strand_cost(total: &mut u64, cost: u64) -> Result<(), Verdict> {
 }
 
 fn compute_total_cost(capsule: &Capsule, registry: &TermRegistry) -> Result<u64, Verdict> {
-    let mut total: u64 = 0;
+    let mut total = 0u64;
     for strand in &capsule.braid.strands {
         let spec = registry.get(&strand.term).expect("checked in stage 3");
         accumulate_strand_cost(&mut total, spec.cost)?;
@@ -502,7 +529,36 @@ fn stage_8_bounds(capsule: &Capsule, registry: &TermRegistry) -> Result<(), Verd
     Ok(())
 }
 
-// ── Pipeline Entry Point ────────────────────────────────────────────────────
+// ── Compact projection ─────────────────────────────────────────────────────
+
+fn token_error_stage(error: TokenError) -> Stage {
+    match error {
+        TokenError::RegistryTooLarge { .. } | TokenError::ProgramTooLarge { .. } => Stage::Bounds,
+        TokenError::RegistryMismatch { .. }
+        | TokenError::UnknownTerm { .. }
+        | TokenError::InvalidInput { .. }
+        | TokenError::InvalidOutput { .. } => Stage::Structure,
+    }
+}
+
+fn compile_compact_program(
+    bytes: &[u8],
+    capsule: &Capsule,
+    registry: &TermRegistry,
+) -> Result<TokenProgram, Verdict> {
+    let table = TermTable::new(registry).map_err(|error| {
+        let stage = token_error_stage(error);
+        reject(stage, error.to_string())
+    })?;
+    let capsule_cid = Cid::compute(CAPSULE_DOMAIN, bytes);
+    let triad = AdmissionTriad::new(ProofState::Proven, ProofState::Proven, ProofState::Unknown);
+    TokenProgram::derive_bound(capsule, &table, capsule_cid, triad).map_err(|error| {
+        let stage = token_error_stage(error);
+        reject(stage, error.to_string())
+    })
+}
+
+// ── Pipeline Entry Point ───────────────────────────────────────────────────
 
 fn verify_structure_and_types(capsule: &Capsule, registry: &TermRegistry) -> Result<(), Verdict> {
     stage_2_version_pin(capsule, registry)?;
@@ -523,20 +579,47 @@ fn verify_security_and_bounds(
     Ok(())
 }
 
+fn admit_capsule(
+    bytes: &[u8],
+    registry: &TermRegistry,
+    ambient: &[Capability],
+) -> Result<Capsule, Verdict> {
+    let capsule = stage_1_canonical_form(bytes)?;
+    verify_structure_and_types(&capsule, registry)?;
+    verify_security_and_bounds(&capsule, registry, ambient)?;
+    Ok(capsule)
+}
+
 fn run_pipeline(
     bytes: &[u8],
     registry: &TermRegistry,
     ambient: &[Capability],
 ) -> Result<Cid, Verdict> {
-    let capsule = stage_1_canonical_form(bytes)?;
-    verify_structure_and_types(&capsule, registry)?;
-    verify_security_and_bounds(&capsule, registry, ambient)?;
+    let capsule = admit_capsule(bytes, registry, ambient)?;
     Ok(capsule.cid())
 }
 
-/// Verify capsule BYTES against a registry and the ambient grant set the
+/// Independently verify canonical bytes and return the compact, CID-bound
+/// projection.
+///
+/// The returned triad has Safety=`Proven`, Capability=`Proven`, and
+/// Justification=`Unknown`. A runtime must therefore defer until a
+/// snapshot-bound planner supplies the third proof.
+pub fn verify_compact(
+    bytes: &[u8],
+    registry: &TermRegistry,
+    ambient: &[Capability],
+) -> Result<AdmittedCapsule, Verdict> {
+    let capsule = admit_capsule(bytes, registry, ambient)?;
+    let program = compile_compact_program(bytes, &capsule, registry)?;
+    Ok(AdmittedCapsule { program })
+}
+
+/// Verify capsule bytes against a registry and the ambient grant set the
 /// principal actually holds. Bytes in, verdict out — the admission decision
-/// is reproducible from the artifact alone (D9).
+/// is reproducible from the artifact and explicit authority input.
+///
+/// This verdict-only path does not allocate the dense execution projection.
 pub fn verify(bytes: &[u8], registry: &TermRegistry, ambient: &[Capability]) -> Verdict {
     match admit(bytes, registry, ambient) {
         Ok(proof) => Verdict::Admit {

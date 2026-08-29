@@ -154,9 +154,35 @@ fn no_outputs_refused() {
     ));
 }
 
-/// A handle from one builder cannot be used in another: the type system
-/// prevents cross-braid strand references (forward-ref/cycle unrepresentable).
-/// This is a compile-time guarantee; documented here as a usage note.
+#[test]
+fn foreign_input_handle_is_rejected_without_panicking() {
+    let reg = registry_v0();
+    let mut first = Builder::new(&reg, "first");
+    let foreign = first.strand("lit.text", &[]).unwrap();
+
+    let mut second = Builder::new(&reg, "second");
+    assert!(matches!(
+        second.strand("view.section", &[foreign]),
+        Err(BuildError::ForeignStrand { .. })
+    ));
+}
+
+#[test]
+fn foreign_output_handle_poison_is_rejected_at_build() {
+    let reg = registry_v0();
+    let mut first = Builder::new(&reg, "first");
+    let foreign = first.strand("lit.text", &[]).unwrap();
+
+    let mut second = Builder::new(&reg, "second");
+    let own = second.strand("lit.text", &[]).unwrap();
+    second.output(own);
+    second.output(foreign);
+    assert!(matches!(
+        second.build(),
+        Err(BuildError::ForeignStrand { .. })
+    ));
+}
+
 #[test]
 fn budget_tight_sizes_to_cost() {
     let reg = registry_v0();
