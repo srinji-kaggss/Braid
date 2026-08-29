@@ -61,7 +61,7 @@ jobs:
 
       - name: Compile and test the trust root
         run: |
-          cargo test --locked \
+          cargo test \
             -p braid-ir \
             -p braid-flow-verify \
             -p braid-verify \
@@ -70,7 +70,7 @@ jobs:
 
       - name: Run root documentation tests
         run: |
-          cargo test --locked \
+          cargo test \
             -p braid-ir \
             -p braid-flow-verify \
             -p braid-verify \
@@ -79,7 +79,7 @@ jobs:
 
       - name: Reject root warnings
         run: |
-          cargo clippy --locked \
+          cargo clippy \
             -p braid-ir \
             -p braid-flow-verify \
             -p braid-verify \
