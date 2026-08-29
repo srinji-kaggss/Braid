@@ -22,8 +22,15 @@ fn run(
                 at: "test::admission",
             }
         })?;
-    let invocation = RunnableInvocation::prepare(capsule.clone(), registry, admission, proof)?;
-    execute_runnable(&invocation, registry, host)
+    let invocation = RunnableInvocation::prepare(
+        capsule.clone(),
+        registry,
+        admission,
+        proof,
+        &capsule.grants,
+        &snapshot,
+    )?;
+    execute_runnable(&invocation, registry, &capsule.grants, &snapshot, host)
 }
 
 fn insert_math_specs(reg: &mut TermRegistry) {
@@ -419,10 +426,141 @@ fn runnable_invocation_rejects_registry_transplant() {
     )
     .unwrap();
     let admission = braid_verify::admit(&capsule.to_bytes(), &reg, &[]).unwrap();
-    let invocation = RunnableInvocation::prepare(capsule, &reg, admission, proof).unwrap();
+    let invocation =
+        RunnableInvocation::prepare(capsule, &reg, admission, proof, &[], &snapshot).unwrap();
     let mut host = CustomHost { writes: vec![] };
     assert!(matches!(
-        execute_runnable(&invocation, &other, &mut host),
+        execute_runnable(&invocation, &other, &[], &snapshot, &mut host),
         Err(ExecutionError::InvalidCapsuleHeader { .. })
+    ));
+}
+
+#[test]
+fn runnable_invocation_rejects_authority_transplant() {
+    let reg = setup_test_registry();
+    let capsule = Capsule {
+        ir_version: IR_VERSION,
+        vocab_version: reg.vocab_version,
+        registry_cid: reg.cid(),
+        intent: "authority binding".into(),
+        grants: vec![],
+        braid: Braid {
+            strands: vec![Strand {
+                term: "math.lit".into(),
+                inputs: vec![],
+            }],
+            outputs: vec![0],
+        },
+        budget: 10,
+        confirm: ConfirmPolicy::None,
+        evidence: vec![],
+    };
+    let snapshot = FlowSnapshot::new(BTreeMap::new());
+    let proof = JustificationProof::prove(
+        &capsule,
+        &Predicate::Const(true),
+        &snapshot,
+        &CompletionMap::new(),
+    )
+    .unwrap();
+    // Admit with ambient []
+    let admission = braid_verify::admit(&capsule.to_bytes(), &reg, &[]).unwrap();
+    // Prepare correctly with []
+    let invocation =
+        RunnableInvocation::prepare(capsule.clone(), &reg, admission, proof, &[], &snapshot)
+            .unwrap();
+    // Transplant authority at execution: ambient [fs.write] should fail
+    let mut host = CustomHost { writes: vec![] };
+    assert!(matches!(
+        execute_runnable(
+            &invocation,
+            &reg,
+            &[Capability::new("fs.write")],
+            &snapshot,
+            &mut host
+        ),
+        Err(ExecutionError::InvalidRunnableProof { .. })
+    ));
+    // Also prepare with mismatched ambient should fail
+    let snapshot2 = FlowSnapshot::new(BTreeMap::new());
+    let proof2 = JustificationProof::prove(
+        &capsule,
+        &Predicate::Const(true),
+        &snapshot2,
+        &CompletionMap::new(),
+    )
+    .unwrap();
+    let admission2 = braid_verify::admit(&capsule.to_bytes(), &reg, &[]).unwrap();
+    assert!(matches!(
+        RunnableInvocation::prepare(
+            capsule,
+            &reg,
+            admission2,
+            proof2,
+            &[Capability::new("fs.write")],
+            &snapshot2
+        ),
+        Err(ExecutionError::InvalidRunnableProof { .. })
+    ));
+}
+
+#[test]
+fn runnable_invocation_rejects_snapshot_staleness() {
+    let reg = setup_test_registry();
+    let capsule = Capsule {
+        ir_version: IR_VERSION,
+        vocab_version: reg.vocab_version,
+        registry_cid: reg.cid(),
+        intent: "snapshot binding".into(),
+        grants: vec![],
+        braid: Braid {
+            strands: vec![Strand {
+                term: "math.lit".into(),
+                inputs: vec![],
+            }],
+            outputs: vec![0],
+        },
+        budget: 10,
+        confirm: ConfirmPolicy::None,
+        evidence: vec![],
+    };
+    let snapshot_a = FlowSnapshot::new(BTreeMap::from([(
+        "a".to_string(),
+        Value::Int(1),
+    )]));
+    let snapshot_b = FlowSnapshot::new(BTreeMap::from([(
+        "a".to_string(),
+        Value::Int(2),
+    )]));
+    let proof = JustificationProof::prove(
+        &capsule,
+        &Predicate::Const(true),
+        &snapshot_a,
+        &CompletionMap::new(),
+    )
+    .unwrap();
+    let admission = braid_verify::admit(&capsule.to_bytes(), &reg, &[]).unwrap();
+    // Prepare with correct snapshot_a
+    let invocation =
+        RunnableInvocation::prepare(capsule.clone(), &reg, admission, proof, &[], &snapshot_a)
+            .unwrap();
+    // Execute with stale snapshot_b should fail
+    let mut host = CustomHost { writes: vec![] };
+    assert!(matches!(
+        execute_runnable(&invocation, &reg, &[], &snapshot_b, &mut host),
+        Err(ExecutionError::InvalidRunnableProof { .. })
+    ));
+    // Prepare with mismatched snapshot should also fail
+    let proof2 = JustificationProof::prove(
+        &capsule,
+        &Predicate::Const(true),
+        &snapshot_a,
+        &CompletionMap::new(),
+    )
+    .unwrap();
+    let admission2 = braid_verify::admit(&capsule.to_bytes(), &reg, &[]).unwrap();
+    assert!(matches!(
+        RunnableInvocation::prepare(capsule, &reg, admission2, proof2, &[], &snapshot_b),
+        Err(ExecutionError::InvalidRunnableProof { .. })
     ));
 }

@@ -535,15 +535,33 @@ pub struct RunnableInvocation {
     justification: JustificationProof,
 }
 
+fn compute_authority_cid(ambient: &[Capability]) -> Cid {
+    let mut names: Vec<&str> = ambient.iter().map(Capability::as_str).collect();
+    names.sort_unstable();
+    names.dedup();
+    let encoded = Value::List(
+        names
+            .into_iter()
+            .map(|name| Value::Text(name.into()))
+            .collect(),
+    );
+    Cid::compute(b"lw.braid.authority.v0", &encode(&encoded))
+}
+
 impl RunnableInvocation {
     /// Admit a capsule and bind it to an independently evaluated justification
     /// proof. The registry and ambient capabilities are checked again here so
     /// a proof cannot be transplanted across registries or authority scopes.
+    /// `ambient` must be the exact ambient authority set used for admission;
+    /// `snapshot` must be the exact snapshot used for justification. Mismatch
+    /// is `InvalidRunnableProof` (INV-FLOW-008/023 staleness).
     pub fn prepare(
         capsule: Capsule,
         registry: &TermRegistry,
         admission: AdmissionProof,
         justification: JustificationProof,
+        ambient: &[Capability],
+        snapshot: &FlowSnapshot,
     ) -> Result<Self, ExecutionError> {
         verify_capsule_headers(&capsule, registry)?;
         if admission.capsule_cid() != capsule.cid() || admission.registry_cid() != registry.cid() {
@@ -551,9 +569,19 @@ impl RunnableInvocation {
                 at: "RunnableInvocation::prepare::admission-binding",
             });
         }
-        if justification.capsule_cid != capsule.cid() {
+        if admission.authority_cid() != compute_authority_cid(ambient) {
+            return Err(ExecutionError::InvalidRunnableProof {
+                at: "RunnableInvocation::prepare::authority",
+            });
+        }
+        if justification.capsule_cid() != capsule.cid() {
             return Err(ExecutionError::InvalidRunnableProof {
                 at: "RunnableInvocation::prepare::capsule",
+            });
+        }
+        if justification.snapshot_cid() != snapshot.cid() {
+            return Err(ExecutionError::InvalidRunnableProof {
+                at: "RunnableInvocation::prepare::snapshot",
             });
         }
         Ok(Self {
@@ -589,16 +617,30 @@ impl RunnableInvocation {
     }
 }
 
-/// Executes a verifier-created invocation against its exact registry.
+/// Executes a verifier-created invocation against its exact registry, authority,
+/// and snapshot. Registry, authority, and snapshot must match the values bound
+/// at `prepare`; mismatch is staleness/transplant and is fail-closed.
 pub fn execute_runnable(
     invocation: &RunnableInvocation,
     registry: &TermRegistry,
+    ambient: &[Capability],
+    snapshot: &FlowSnapshot,
     host: &mut impl Host,
 ) -> Result<Journal, ExecutionError> {
     if invocation.registry_cid != registry.cid() {
         return Err(ExecutionError::InvalidCapsuleHeader {
             reason: "runnable registry_cid mismatch".into(),
             at: "execute_runnable",
+        });
+    }
+    if invocation.authority_cid() != compute_authority_cid(ambient) {
+        return Err(ExecutionError::InvalidRunnableProof {
+            at: "execute_runnable::authority",
+        });
+    }
+    if invocation.justification.snapshot_cid() != snapshot.cid() {
+        return Err(ExecutionError::InvalidRunnableProof {
+            at: "execute_runnable::snapshot",
         });
     }
     execute_capsule_inner(&invocation.capsule, registry, host)

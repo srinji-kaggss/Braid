@@ -11,7 +11,7 @@ extern crate alloc;
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::string::ToString;
 use alloc::vec::Vec;
-use braid_flow_ir::{FlowEdge, FlowNodeKind, FlowSpec};
+use braid_flow_ir::{CompletionClass, FlowEdge, FlowNodeKind, FlowSpec};
 use braid_ir::{Cid, Value, encode};
 
 use crate::eval::{CompletionKind, CompletionMap, eval_predicate};
@@ -240,11 +240,11 @@ fn evaluate_and_rank(
     // Precompute predecessor map from edges + Choice arms (so frontier
     // ordering over After/Data/Choice is identical to the verifier's
     // reachability view).
-    let mut preds: BTreeMap<String, Vec<(String, BTreeSet<String>)>> = BTreeMap::new();
+    let mut preds: BTreeMap<String, Vec<(String, BTreeSet<CompletionClass>)>> = BTreeMap::new();
     for e in flow.edges() {
         match e {
             FlowEdge::After { from, to, on } => {
-                let on_set: BTreeSet<String> = on.iter().map(|c| alloc::format!("{c:?}")).collect();
+                let on_set: BTreeSet<CompletionClass> = on.iter().copied().collect();
                 preds
                     .entry(to.to_string())
                     .or_default()
@@ -359,7 +359,7 @@ fn is_unknown(p: &ProofState) -> bool {
 
 fn preds_satisfied(
     node_key: &str,
-    preds: &BTreeMap<String, Vec<(String, BTreeSet<String>)>>,
+    preds: &BTreeMap<String, Vec<(String, BTreeSet<CompletionClass>)>>,
     completions: &CompletionMap,
 ) -> bool {
     let Some(list) = preds.get(node_key) else {
@@ -380,10 +380,7 @@ fn preds_satisfied(
                 if on_set.is_empty() {
                     return false;
                 }
-                if !on_set.contains(&alloc::format!(
-                    "{:?}",
-                    braid_flow_ir::CompletionClass::Failure
-                )) {
+                if !on_set.contains(&CompletionClass::Failure) {
                     return false;
                 }
             }
@@ -393,25 +390,88 @@ fn preds_satisfied(
     true
 }
 
+fn canonical_kind(kind: &FlowNodeKind) -> Value {
+    match kind {
+        FlowNodeKind::InvokeCapsule { capsule } => Value::Map(
+            vec![("invoke_capsule".into(), Value::Bytes(capsule.0.to_vec()))]
+                .into_iter()
+                .collect(),
+        ),
+        FlowNodeKind::Choice { arms, otherwise } => {
+            let arms_v = Value::List(
+                arms.iter()
+                    .map(|arm| {
+                        Value::Map(
+                            vec![
+                                ("then".into(), Value::Text(arm.then.to_string())),
+                                ("when".into(), arm.when.to_canon()),
+                            ]
+                            .into_iter()
+                            .collect(),
+                        )
+                    })
+                    .collect(),
+            );
+            Value::Map(
+                vec![(
+                    "choice".into(),
+                    Value::Map(
+                        vec![
+                            ("arms".into(), arms_v),
+                            ("otherwise".into(), Value::Text(otherwise.to_string())),
+                        ]
+                        .into_iter()
+                        .collect(),
+                    ),
+                )]
+                .into_iter()
+                .collect(),
+            )
+        }
+        FlowNodeKind::JoinAll => Value::Text("join_all".into()),
+        FlowNodeKind::Terminal { outcome } => Value::Map(
+            vec![(
+                "terminal".into(),
+                Value::Text(
+                    match outcome {
+                        braid_flow_ir::TerminalOutcome::Success => "success",
+                        braid_flow_ir::TerminalOutcome::Failure => "failure",
+                    }
+                    .into(),
+                ),
+            )]
+            .into_iter()
+            .collect(),
+        ),
+    }
+}
+
+fn canonical_urgency(urgency: braid_flow_ir::UrgencyClass) -> Value {
+    Value::Text(
+        match urgency {
+            braid_flow_ir::UrgencyClass::SafetyRecovery => "safety_recovery",
+            braid_flow_ir::UrgencyClass::Required => "required",
+            braid_flow_ir::UrgencyClass::Diagnostic => "diagnostic",
+            braid_flow_ir::UrgencyClass::Optimization => "optimization",
+            braid_flow_ir::UrgencyClass::Cleanup => "cleanup",
+        }
+        .into(),
+    )
+}
+
 fn ranked_choice<'a>(flow: &FlowSpec, ready: &[&'a RankedNode]) -> &'a RankedNode {
     // §10.2 deterministic ranking: urgency first, then critical-path / cost
-    // (not yet wired — fall through), then node CID descending via canonical
-    // node bytes so insertion order is irrelevant.
+    // (not yet wired — fall through), then node CID via canonical node bytes
+    // so insertion order is irrelevant (INV-011/023).
     let cid_of = |key: &str| -> Vec<u8> {
         for nd in flow.nodes() {
             if nd.key.to_string() == key {
                 let canon = Value::Map(
                     [
                         ("key".into(), Value::Text(nd.key.to_string())),
-                        ("kind".into(), Value::Text(alloc::format!("{:?}", nd.kind))),
-                        (
-                            "guard".into(),
-                            Value::Text(alloc::format!("{:?}", nd.guard)),
-                        ),
-                        (
-                            "urgency".into(),
-                            Value::Text(alloc::format!("{:?}", nd.urgency)),
-                        ),
+                        ("kind".into(), canonical_kind(&nd.kind)),
+                        ("guard".into(), nd.guard.to_canon()),
+                        ("urgency".into(), canonical_urgency(nd.urgency)),
                     ]
                     .into_iter()
                     .collect(),
