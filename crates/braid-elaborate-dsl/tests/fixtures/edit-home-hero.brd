@@ -1,0 +1,19 @@
+capsule demo::edit_home_hero version 0 {
+    intent "demo-port: edit the home hero section and render a preview — reversible, local";
+    registry cms::v1;
+    require {
+        capabilities [signal::emit];
+        effects [pure, reversible_write];
+    }
+    budget 20;
+    confirm none;
+    evidence ["fact.cid"];
+
+    step main {
+        entity = lit::entity();
+        text = lit::text();
+        edit = cms::edit_section(entity, text);
+        preview = text |> view::section();
+        output [edit, preview];
+    }
+}

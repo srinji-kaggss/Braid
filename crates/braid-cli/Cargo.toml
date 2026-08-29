@@ -26,6 +26,7 @@ braid-sdk = { path = "../braid-sdk" }
 braid-capability = { workspace = true }
 braid-vocab-cms = { workspace = true }
 braid-manifest = { workspace = true }
+braid-elaborate-dsl = { workspace = true }
 lgwks_std = { workspace = true, features = ["json"] }
 serde = { workspace = true }
 

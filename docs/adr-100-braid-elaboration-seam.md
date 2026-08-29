@@ -1,6 +1,6 @@
 # ADR-100: Braid elaboration seam — 95% deterministic, 5% semantic gate
 
-**Status:** PROPOSED — drafted from Director decisions given live
+**Status:** ACCEPTED — merged by PR #67; bounded native grammar later authorized by ADR-102/D33
 2026-08-26 session; ratifies on Director merge
 
 **Date:** 2026-08-26
@@ -13,8 +13,9 @@
 `spec/braid/units.md` debt anchors D-ELAB/D-VOCAB/D-CONSUMER/D-SEMANTICS
 already landed at U11–U14 — see that file
 
-**Supersedes:** nothing; enriches D1/D5/D6/D9/D17/D20/D21/D24/D25/D26/D30/D31
-without unlocking D6 grammar work
+**Supersedes:** nothing; enriches D1/D5/D6/D9/D17/D20/D21/D24/D25/D26/D30/D31.
+At acceptance it did not unlock D6 grammar work; ADR-102/D33 later unlocks only
+the bounded native Capsule DSL v0.
 
 **Authors:** Director Srinjon Gupta (decisions: 3D DSL, semantic stickiness,
 Safety^Capability^Justification, 95/5 split) + Claude (synthesis)
@@ -51,7 +52,8 @@ D31 made it a *global* IR (substrate `braid-ir` vs vocabulary packages
 registry-parametric `verify`). D30 split the world into
 *blocking* (binary gates) vs *advisory* (scalar scores the author never
 optimizes against) — because advisory-as-reward is guaranteed Goodhart.
-D6 still gates surface syntax on §16 triggers 2/3.
+D6 gated surface syntax at this ADR's acceptance. ADR-102/D33 later fires that
+gate for the bounded native Capsule DSL v0 only; broader grammar remains gated.
 
 Director vision for this ADR, verbatim compressed:
 

@@ -93,6 +93,10 @@ rendered manifest (audit), per Director's explicit option choice.
 "Custom lang replaces all languages currently is blue sky" (Director, task
 brief) — ratified as a non-goal for v0–v2.
 
+**2026-08-29 amendment:** D33 records the Director's explicit decision to fire
+this gate for the bounded native Capsule DSL v0 only. The general grammar,
+editor, schema/state, Flow, macro, and language-replacement work remains gated.
+
 ### D7 — Reference workflow: Day-0 CMS demo — **LOCKED**
 v0 acceptance = `blueprints/afternow-port/` CMS reference actions expressed
 as Braid capsules end-to-end. Director chose this over the research baseline's
@@ -699,3 +703,23 @@ Converts to LOCKED on Director merge of the ADR-100 PR. Awaits the
 braid-seam-conformance`: two surfaces → same bytes/CID → one verdict;
 hostile bytes rejected identically; no GNN in the trust base) to close
 D-FLOW.11.
+
+### D33 — Bounded native Braid Capsule DSL v0 — **LOCKED 2026-08-29**
+
+The Director explicitly rejected the JavaScript expression subset as the
+Braid DSL and instructed implementation against issue #77 and the repository
+specifications. ADR-102 therefore fires D6 for exactly one versioned surface:
+the bounded `cms::v1` Capsule graph grammar in
+`spec/braid/elaboration/braid-dsl-v0.md`.
+
+This surface lowers through `braid_sdk::Builder`, emits the existing canonical
+Capsule wire, checks exact declared authority/effects, and re-enters the one
+independent `braid-verify` admission path. It owns neither a wire format nor an
+admission rule. JSON-of-IR parity, pinned CIDs, typed refusals, proof-gated
+reference execution, and the complete repository gate are acceptance
+requirements.
+
+This does not unlock schemas, state/statecharts, Flow orchestration, imports,
+macros, loops, recurrence, runtime literals, embedded code, raw URL
+expressions, arbitrary registries, or replacement-language claims. Those remain
+D6-gated and require substrate support plus separate decisions.

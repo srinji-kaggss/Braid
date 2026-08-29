@@ -1,0 +1,17 @@
+capsule demo::render_work_listing version 0 {
+    intent "demo-port: read the work case-study listing — projection read, no writes";
+    registry cms::v1;
+    require {
+        capabilities [tape::read];
+        effects [pure, read];
+    }
+    budget 10;
+    confirm none;
+    evidence ["fact.cid"];
+
+    step main {
+        entity = lit::entity();
+        listing = entity |> proj::listing();
+        output [listing];
+    }
+}

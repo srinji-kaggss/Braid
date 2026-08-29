@@ -95,6 +95,7 @@ name = "braid-cli"
 version = "0.1.0"
 dependencies = [
  "braid-capability",
+ "braid-elaborate-dsl",
  "braid-ir",
  "braid-manifest",
  "braid-render",
@@ -104,6 +105,24 @@ dependencies = [
  "braid-vocab-cms",
  "lgwks_std",
  "lgwks_std_gate",
+ "serde",
+]
+
+[[package]]
+name = "braid-elaborate-dsl"
+version = "0.1.0"
+dependencies = [
+ "braid-capability",
+ "braid-flow-ir",
+ "braid-flow-plan",
+ "braid-ir",
+ "braid-render",
+ "braid-run",
+ "braid-sdk",
+ "braid-verify",
+ "braid-vocab-cms",
+ "lgwks_std",
+ "proptest",
  "serde",
 ]
 
