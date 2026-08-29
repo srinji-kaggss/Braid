@@ -265,10 +265,7 @@ impl<'r> Builder<'r> {
         {
             self.grants.push(capability.clone());
         }
-        if matches!(
-            spec.effect,
-            EffectClass::Irreversible | EffectClass::Egress
-        ) {
+        if matches!(spec.effect, EffectClass::Irreversible | EffectClass::Egress) {
             self.has_dangerous = true;
         }
         self.cost = next_cost;
@@ -286,11 +283,10 @@ impl<'r> Builder<'r> {
                 at: "Builder::strand",
             })?;
         self.validate_inputs(term_id, inputs, spec)?;
-        let index =
-            u32::try_from(self.strands.len()).map_err(|_| BuildError::TooManyStrands {
-                count: self.strands.len(),
-                at: "Builder::strand",
-            })?;
+        let index = u32::try_from(self.strands.len()).map_err(|_| BuildError::TooManyStrands {
+            count: self.strands.len(),
+            at: "Builder::strand",
+        })?;
         self.record_effects(spec)?;
         let ty = self.intern(&spec.output);
         self.strands.push(IrStrand {

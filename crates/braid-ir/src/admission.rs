@@ -282,16 +282,10 @@ mod tests {
             for &capability in &STATES {
                 for &justification in &STATES {
                     let triad = AdmissionTriad::new(safety, capability, justification);
-                    assert_eq!(
-                        AdmissionTriad::from_packed(triad.packed()).unwrap(),
-                        triad
-                    );
+                    assert_eq!(AdmissionTriad::from_packed(triad.packed()).unwrap(), triad);
                     assert_eq!(triad.state(AdmissionAxis::Safety), safety);
                     assert_eq!(triad.state(AdmissionAxis::Capability), capability);
-                    assert_eq!(
-                        triad.state(AdmissionAxis::Justification),
-                        justification
-                    );
+                    assert_eq!(triad.state(AdmissionAxis::Justification), justification);
                 }
             }
         }
@@ -331,11 +325,8 @@ mod tests {
 
     #[test]
     fn meet_is_conservative() {
-        let proven = AdmissionTriad::new(
-            ProofState::Proven,
-            ProofState::Proven,
-            ProofState::Proven,
-        );
+        let proven =
+            AdmissionTriad::new(ProofState::Proven, ProofState::Proven, ProofState::Proven);
         let partial = AdmissionTriad::new(
             ProofState::Proven,
             ProofState::Unknown,

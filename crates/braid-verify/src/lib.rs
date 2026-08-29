@@ -240,7 +240,12 @@ fn stage_4_types(capsule: &Capsule, registry: &TermRegistry) -> Result<(), Verdi
         .braid
         .strands
         .iter()
-        .map(|strand| &registry.get(&strand.term).expect("checked in stage 3").output)
+        .map(|strand| {
+            &registry
+                .get(&strand.term)
+                .expect("checked in stage 3")
+                .output
+        })
         .collect();
 
     for (strand_idx, strand) in capsule.braid.strands.iter().enumerate() {
@@ -280,9 +285,7 @@ fn ensure_capability_granted(
     if grants.binary_search(capability).is_err() {
         Err(reject(
             Stage::Capability,
-            format!(
-                "strand {strand_idx} `{term}` requires undeclared capability `{capability}`"
-            ),
+            format!("strand {strand_idx} `{term}` requires undeclared capability `{capability}`"),
         ))
     } else {
         Ok(())
@@ -519,11 +522,7 @@ fn compile_compact_program(
         reject(stage, error.to_string())
     })?;
     let capsule_cid = Cid::compute(CAPSULE_DOMAIN, bytes);
-    let triad = AdmissionTriad::new(
-        ProofState::Proven,
-        ProofState::Proven,
-        ProofState::Unknown,
-    );
+    let triad = AdmissionTriad::new(ProofState::Proven, ProofState::Proven, ProofState::Unknown);
     TokenProgram::derive_bound(capsule, &table, capsule_cid, triad).map_err(|error| {
         let stage = token_error_stage(error);
         reject(stage, error.to_string())

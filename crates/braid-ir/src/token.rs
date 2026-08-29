@@ -377,6 +377,7 @@ mod tests {
     use crate::braid::{Braid, Strand};
     use crate::capsule::{Capsule, ConfirmPolicy, IR_VERSION};
     use crate::term::{EffectClass, Exposure, TermRegistry, TermSpec, TypeTag};
+    use alloc::vec;
     use core::mem::size_of;
 
     fn fixture() -> (TermRegistry, Capsule) {
@@ -453,11 +454,8 @@ mod tests {
     #[test]
     fn graph_projects_to_fixed_ops_and_one_input_arena() {
         let (registry, capsule) = fixture();
-        let triad = AdmissionTriad::new(
-            ProofState::Proven,
-            ProofState::Proven,
-            ProofState::Unknown,
-        );
+        let triad =
+            AdmissionTriad::new(ProofState::Proven, ProofState::Proven, ProofState::Unknown);
         let program = TokenProgram::derive(&capsule, &registry, triad).unwrap();
 
         assert_eq!(program.ops().len(), 2);

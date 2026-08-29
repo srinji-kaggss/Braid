@@ -166,8 +166,8 @@ struct CompactGraph {
 
 impl CompactGraph {
     fn build(flow: &FlowSpec) -> VerifyResult<Self> {
-        let node_count = u32::try_from(flow.nodes().len())
-            .map_err(|_| arithmetic_overflow("node count"))?;
+        let node_count =
+            u32::try_from(flow.nodes().len()).map_err(|_| arithmetic_overflow("node count"))?;
         let mut edges = collect_edges(flow)?;
         let forward = Csr::from_sorted(flow.nodes().len(), &edges)?;
 
@@ -266,11 +266,7 @@ fn check_reachability(flow: &FlowSpec, graph: &CompactGraph) -> VerifyResult<()>
     // zero-indegree node; the synthetic start connects exactly those roots.
     // The non-trivial half is proving that every node can reach a declared
     // terminal.
-    let to_terminal = mark_reachable(
-        &graph.reverse,
-        graph.node_count,
-        &terminal_nodes(flow)?,
-    );
+    let to_terminal = mark_reachable(&graph.reverse, graph.node_count, &terminal_nodes(flow)?);
 
     if to_terminal.iter().all(|reached| *reached) {
         Ok(())
@@ -311,8 +307,7 @@ fn check_choice(flow: &FlowSpec) -> VerifyResult<()> {
 fn check_join(flow: &FlowSpec, graph: &CompactGraph) -> VerifyResult<()> {
     for (index, node) in flow.nodes().iter().enumerate() {
         if matches!(node.kind, FlowNodeKind::JoinAll) {
-            let node_id =
-                u32::try_from(index).map_err(|_| arithmetic_overflow("join index"))?;
+            let node_id = u32::try_from(index).map_err(|_| arithmetic_overflow("join index"))?;
             if graph.reverse.neighbors(node_id).is_empty() {
                 return Err(FlowVerifyError::JoinCardinality {
                     invariant: "INV-FLOW-013",
@@ -338,9 +333,7 @@ fn check_terminals(flow: &FlowSpec) -> VerifyResult<()> {
 
 fn check_justification(flow: &FlowSpec) -> VerifyResult<()> {
     for node in flow.nodes() {
-        if matches!(node.kind, FlowNodeKind::InvokeCapsule { .. })
-            && node.justification.is_none()
-        {
+        if matches!(node.kind, FlowNodeKind::InvokeCapsule { .. }) && node.justification.is_none() {
             return Err(FlowVerifyError::JustificationIncomplete {
                 field: "justification",
                 invariant: "INV-FLOW-006",
