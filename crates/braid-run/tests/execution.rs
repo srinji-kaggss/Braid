@@ -524,14 +524,8 @@ fn runnable_invocation_rejects_snapshot_staleness() {
         confirm: ConfirmPolicy::None,
         evidence: vec![],
     };
-    let snapshot_a = FlowSnapshot::new(BTreeMap::from([(
-        "a".to_string(),
-        Value::Int(1),
-    )]));
-    let snapshot_b = FlowSnapshot::new(BTreeMap::from([(
-        "a".to_string(),
-        Value::Int(2),
-    )]));
+    let snapshot_a = FlowSnapshot::new(BTreeMap::from([("a".to_string(), Value::Int(1))]));
+    let snapshot_b = FlowSnapshot::new(BTreeMap::from([("a".to_string(), Value::Int(2))]));
     let proof = JustificationProof::prove(
         &capsule,
         &Predicate::Const(true),
