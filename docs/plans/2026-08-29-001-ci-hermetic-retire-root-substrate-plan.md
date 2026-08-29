@@ -14,7 +14,7 @@ scope: Lightweight
 
 ## Goal Capsule
 
-**Objective:** Make `main` hermetic on a clean runner with a single honest gate. Retire the interim `Braid Root Substrate` workflow that was introduced to work around `braid-governance -> secure-authority ../../../secure-authority` (issue #73). The workaround was healed in `6ef5b3a fix: drop secure-authority host path dep from braid-governance`; `cargo metadata --locked` now passes on `main` (`EXIT:0` verified 2026-08-29). The interim gate now does an ephemeral `Cargo.toml` rewrite (`member = '    "crates/braid-governance",\n'` removal) and then runs unlocked (`cargo test` without `--locked`), which creates the lock mismatch it claims to avoid and hides future hermetic regressions.
+**Objective:** Make `main` hermetic on a clean runner with a single honest gate. Retire the interim `Braid Root Substrate` workflow that was introduced to work around `braid-governance -> secure-authority ../../../secure-authority` (issue #73). The workaround was healed in `6ef5b3a fix: drop secure-authority host path dep from braid-governance`; `cargo metadata --locked` now passes on `main` (`EXIT:0` verified 2026-08-29). The interim gate now does an ephemeral `Cargo.toml` rewrite (`member = '    "crates/braid-governance",'`) and then runs unlocked (`cargo test` without `--locked`), which creates the lock mismatch it claims to avoid and hides future hermetic regressions.
 
 **Product authority:** `AGENTS.md` Production Engineering Law (hermetic, versioned, bounded); issue #73 P0 acceptance criteria; Charter authority over `Cid`. This plan inherits the canonical triad + token substrate (`AdmissionTriad` 1-byte `Safety × Capability × Justification` fail-closed `0 == Unknown×Unknown×Unknown`, `TokenProgram` 12-byte ops) without changing it.
 
@@ -31,7 +31,7 @@ scope: Lightweight
 ### In Scope
 
 - Delete `.github/workflows/root-substrate.yml` entirely. Remove the ephemeral `Cargo.toml` edit and the unlocked `cargo test/clippy` invocations.
-- Make `Braid CI` (` .github/workflows/ci.yml`) the single full-workspace gate with hermetic enforcement:
+- Make `Braid CI` (`.github/workflows/ci.yml`) the single full-workspace gate with hermetic enforcement:
   - Build/test/clippy steps run with `--locked` (or at minimum a `cargo metadata --locked` sentinel runs before build).
   - `cargo fmt --all -- --check` already covers the whole workspace; keep it.
 - Keep a clean-checkout proof as part of CI or as a documented local check: `cargo metadata --locked` succeeds without sibling directories or self-hosted residue.
@@ -76,7 +76,7 @@ Surrounding areas not in scope remain candidates: #72 (decoder budgets), #71 (di
 
 ## Verification Plan
 
-- Read ` .github/workflows/ci.yml` and `root-substrate.yml` (done: 87 and 383 lines quoted in dossier).
+- Read `.github/workflows/ci.yml` and `root-substrate.yml` (done: 87 and 383 lines quoted in dossier).
 - Local: `cargo metadata --locked` `EXIT:0` and `cargo test --workspace --all-targets --no-run` `EXIT:0` on `main` after deleting governance sibling dir (verified).
 - CI: push deletion branch; assert `Braid CI` `Build`, `Tier 0 test`, `Tier 0 clippy`, `Format`, `Scope`, `Stack` all pass; assert `Braid Root Substrate` no longer triggers.
 

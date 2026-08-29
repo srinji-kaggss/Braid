@@ -1,7 +1,7 @@
 # Braid CI — adapted from keel's six-tier verification stack.
 #
 # Portable structure: concurrency control, stack-position gate, change-scope,
-# build-once-share, cargo test, cargo clippy -D warnings, rustfmt.
+# build-once-share, cargo test --locked, cargo clippy --locked -- -D warnings, rustfmt.
 # Keel-specific tiers (Buck2, Kani, loom, MC/DC, mutation, semantic review)
 # are not ported — Braid has no gate binary. They arrive when keel-ci-plan
 # gains a Braid target.
@@ -141,13 +141,18 @@ jobs:
           rm -rf "$CARGO_TARGET_DIR"
           mkdir -p "$CARGO_TARGET_DIR"
 
+      - name: Verify lockfile is up-to-date
+        if: needs.scope.outputs.code_changed == 'yes'
+        run: |
+          cargo metadata --locked >/dev/null || { echo 'Lockfile out of date: run cargo update --workspace and commit Cargo.lock' >&2; exit 1; }
+
       - name: Build all workspace targets
         if: needs.scope.outputs.code_changed == 'yes'
         run: cargo test --workspace --all-targets --locked --no-run
 
       - name: Build release bins (docs-only path)
         if: needs.scope.outputs.code_changed == 'no'
-        run: cargo check --workspace
+        run: cargo check --workspace --all-targets --locked
 
   # ── Format ────────────────────────────────────────────────────────────────
   fmt:
