@@ -23,6 +23,7 @@ reliably; the human sees a rendered manifest they can audit.
 |------|------|
 | `crates/braid-ir` | Typed term-graph IR, canonical CBOR-subset encoding, BLAKE3 CIDs, bijection guard, capsule artifacts. |
 | `crates/braid-flow-ir` | Canonical inter-capsule Flow IR, strict byte bijection, bounded identity, and justified-invocation declarations. |
+| `crates/braid-flow-plan` | Snapshot-bound satiation and frontier planning — deterministic `plan()` + Plan CID (`lw.braid.flow.plan.v0` via `plan.rs:20`) and snapshot CID (`lw.braid.flow.snapshot.v0` via `snapshot.rs:45`). |
 | `crates/braid-flow-verify` | Independent strict decoder + fail-closed admission for Flow graphs. |
 | `crates/braid-capability` | Capability token newtype — content-addressed dotted names. Vocabulary-agnostic attenuation. |
 | `crates/braid-verify` | Independent strict decoder + fail-closed admission pipeline. Registry-parametric. |
