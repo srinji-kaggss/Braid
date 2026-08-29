@@ -74,7 +74,7 @@ flowchart TB
     style Exec fill:#efe,stroke:#0a0
 ```
 
-¹ Flow CID domains: only `lw.braid.flow.v0` is implemented in `braid-flow-ir/src/flow.rs` (`FLOW_DOMAIN = b"lw.braid.flow.v0"`); `lw.braid.flow.plan.v0` / `snapshot` / `proof` / `patch` / `cache` / `node` domains are LOCKED in ADR-099 but not yet implemented (completes in P3/P5).
+¹ Flow CID domains: `lw.braid.flow.v0`, `lw.braid.flow.plan.v0` (`plan.rs:20`), `lw.braid.flow.snapshot.v0` (`snapshot.rs:45`) implemented; `proof`/`patch`/`cache`/`node` remain LOCKED (ADR-099) not yet implemented.
 
 **Invariants that never break:**
 - `only known-good may execute` — `Unknown` never authorizes.
@@ -383,7 +383,7 @@ Consumers path-dep `braid-ir` + `braid-vocab-cms`; browser vendored snapshot is 
 | **v0 — verified substrate (DONE)** | typed IR, verifier, render, CLI loop, budget/taint/confirm gates | 225+ tests, KATs, bijection fuzz, seeded widening red-team |
 | **v0.1 — language frontends** | `braid-elaborate-js` (expression → statement, identifiers, lexical scope), golden/refusal corpus | pinned CIDs, depth-bound refusal, mutation guards |
 | **v0.2 — project build** | `braid-project build` — elaborate + admit all caps, fail-closed, deterministic project CID | `cargo test -p braid-project` |
-| **v0.3 — frontier Flow (next — after #59/#60 merges, P3/P5)** | `braid-flow-ir` + `braid-flow-verify` + `braid-flow-plan` + `braid-run` runnable proof typestate — planned — currently on feat/braid-flow-plan #68 and issue-70 #81, not on main | 8 plan invariants, 9 runnable proofs, snapshot-bound refusal, registry transplant rejection |
+| **v0.3 — frontier Flow (SHIPPED on main via #60 #59 (PRs 68,85))** | `braid-flow-ir` + `braid-flow-verify` + `braid-flow-plan` + `braid-run` runnable proof typestate — 8 plan invariants, 11 runnable proofs (now on main) | 8 plan invariants, 11 runnable proofs, snapshot-bound refusal, registry transplant rejection |
 | **v1 — first live consumer** | kernel or browser consumes published crate, collapses parallel enum, live API is Braid | `use braid_ir::Capsule` in downstream repo, not just `Cargo.toml` |
 | **v1.1 — publish discipline** | crates publishable, semver on `Cid`/encoding breaks (G4 charter gate) | `cargo publish --dry-run` for all `braid-*` |
 | **v1.2 — vocabulary scale** | `braid-vocab-*` covers real product surface (not just expressions) | literal payloads (D8), ported vocabularies |
@@ -404,8 +404,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all -- --check
 scripts/cli-loop.sh target/debug/braid
 scripts/demo-port.sh target/debug/braid
-cargo test -p braid-flow-plan --test plan_invariants  # on feat branches (feat/braid-flow-plan #68, issue-70 #81), not on main
-cargo test -p braid-run --test execution   # RunnableInvocation proofs — on feat branches, not main
+cargo test -p braid-flow-plan --test plan_invariants  # on main since PR68
+cargo test -p braid-run --test execution   # RunnableInvocation proofs — on main since PR68
 cargo test -p braid-ir --test boundary_conformance
 ```
 
