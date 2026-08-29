@@ -50,9 +50,9 @@ flowchart TB
 
     AST -->|"normalize +<br/>deterministic encode<br/>RFC 8949 CBOR"| Bytes["Canonical bytes<br/>single wire"]
 
-    Bytes --> CID["BLAKE3 CID<br/>lw.braid.capsule.v0<br/>lw.braid.flow.v0<br/>lw.braid.flow.plan.v0"]
+    Bytes --> CID["BLAKE3 CID<br/>lw.braid.capsule.v0<br/>lw.braid.flow.v0<br/>lw.braid.flow.plan.v0 (planned)¹"]
 
-    Bytes --> Verify{"Independent verifier<br/>braid-verify / braid-flow-verify<br/>fail-closed, 6-stage pipeline"}
+    Bytes --> Verify{"Independent verifier<br/>braid-verify / braid-flow-verify<br/>fail-closed, 8-stage pipeline"}
 
     Verify -->|"ADMIT + manifest CID"| Manifest["Deterministic manifest<br/>+ DOT projection<br/>CID-bound"]
 
@@ -73,6 +73,8 @@ flowchart TB
     style Plan fill:#eef,stroke:#00a
     style Exec fill:#efe,stroke:#0a0
 ```
+
+¹ Flow CID domains: only `lw.braid.flow.v0` is implemented in `braid-flow-ir/src/flow.rs` (`FLOW_DOMAIN = b"lw.braid.flow.v0"`); `lw.braid.flow.plan.v0` / `snapshot` / `proof` / `patch` / `cache` / `node` domains are LOCKED in ADR-099 but not yet implemented (completes in P3/P5).
 
 **Invariants that never break:**
 - `only known-good may execute` — `Unknown` never authorizes.
@@ -158,7 +160,7 @@ Closed v0 kinds: `InvokeCapsule`, `Choice`, `JoinAll`, `Terminal` — no `JoinAn
 
 ---
 
-### 3.4 Verification pipeline — six fail-closed gates (the safety floor)
+### 3.4 Verification pipeline — eight fail-closed gates (the safety floor)
 
 Every byte passes through independent stages in order. Any stage may REJECT with a typed reason; forgiving at authoring, uncompromising at gate.
 
@@ -166,12 +168,14 @@ Every byte passes through independent stages in order. Any stage may REJECT with
 flowchart LR
     Bytes["Canonical bytes<br/>≤16 MiB wire<br/>≤128 MiB preflight"] --> S1
 
-    S1["Stage 1<br/>Structure<br/>CBOR bijection guard"] --> S2
-    S2["Stage 2<br/>Types<br/>closed TypeTag universe<br/>no floats"] --> S3
-    S3["Stage 3<br/>Capabilities<br/>attenuation only<br/>grant envelope check"] --> S4
-    S4["Stage 4<br/>Effects<br/>Reversible/Irreversible/Egress<br/>confirm policy required"] --> S5
-    S5["Stage 5<br/>Taint<br/>path-level fold<br/>max(parent)+producer"] --> S6
-    S6["Stage 6<br/>Bounds<br/>budget & cost<br/>checked accumulation"] --> Verdict
+    S1["Stage 1<br/>CanonicalForm<br/>CBOR bijection guard"] --> S2
+    S2["Stage 2<br/>VersionPin<br/>ir / vocab / registry"] --> S3
+    S3["Stage 3<br/>Structure<br/>DAG + arity"] --> S4
+    S4["Stage 4<br/>Types<br/>closed TypeTag universe<br/>no floats"] --> S5
+    S5["Stage 5<br/>Capabilities<br/>attenuation only<br/>grant envelope check"] --> S6
+    S6["Stage 6<br/>Effects<br/>Reversible/Irreversible/Egress<br/>confirm policy required"] --> S7
+    S7["Stage 7<br/>Taint<br/>path-level fold<br/>max(parent)+producer"] --> S8
+    S8["Stage 8<br/>Bounds<br/>budget & cost<br/>checked accumulation"] --> Verdict
 
     Verdict{{"Verdict<br/>Admit / Reject(reason)<br/>manifest CID bound"}} -->|"Admit"| Proof["AdmissionProof<br/>opaque, CID triple:<br/>capsule + registry + authority"]
     Verdict -->|"Reject"| Block["Typed refusal<br/>no fallback"]
@@ -379,7 +383,7 @@ Consumers path-dep `braid-ir` + `braid-vocab-cms`; browser vendored snapshot is 
 | **v0 — verified substrate (DONE)** | typed IR, verifier, render, CLI loop, budget/taint/confirm gates | 225+ tests, KATs, bijection fuzz, seeded widening red-team |
 | **v0.1 — language frontends** | `braid-elaborate-js` (expression → statement, identifiers, lexical scope), golden/refusal corpus | pinned CIDs, depth-bound refusal, mutation guards |
 | **v0.2 — project build** | `braid-project build` — elaborate + admit all caps, fail-closed, deterministic project CID | `cargo test -p braid-project` |
-| **v0.3 — frontier Flow (NOW)** | `braid-flow-ir` + `braid-flow-verify` + `braid-flow-plan` + `braid-run` runnable proof typestate | 8 plan invariants, 9 runnable proofs, snapshot-bound refusal, registry transplant rejection |
+| **v0.3 — frontier Flow (next — after #59/#60 merges, P3/P5)** | `braid-flow-ir` + `braid-flow-verify` + `braid-flow-plan` + `braid-run` runnable proof typestate — planned — currently on feat/braid-flow-plan #68 and issue-70 #81, not on main | 8 plan invariants, 9 runnable proofs, snapshot-bound refusal, registry transplant rejection |
 | **v1 — first live consumer** | kernel or browser consumes published crate, collapses parallel enum, live API is Braid | `use braid_ir::Capsule` in downstream repo, not just `Cargo.toml` |
 | **v1.1 — publish discipline** | crates publishable, semver on `Cid`/encoding breaks (G4 charter gate) | `cargo publish --dry-run` for all `braid-*` |
 | **v1.2 — vocabulary scale** | `braid-vocab-*` covers real product surface (not just expressions) | literal payloads (D8), ported vocabularies |
@@ -400,8 +404,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all -- --check
 scripts/cli-loop.sh target/debug/braid
 scripts/demo-port.sh target/debug/braid
-cargo test -p braid-flow-plan --test plan_invariants
-cargo test -p braid-run --test execution   # RunnableInvocation proofs
+cargo test -p braid-flow-plan --test plan_invariants  # on feat branches (feat/braid-flow-plan #68, issue-70 #81), not on main
+cargo test -p braid-run --test execution   # RunnableInvocation proofs — on feat branches, not main
 cargo test -p braid-ir --test boundary_conformance
 ```
 
