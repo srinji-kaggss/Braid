@@ -35,6 +35,11 @@ pub enum Predicate {
 }
 
 impl Predicate {
+    /// Canonical semantic representation used for content identity.
+    pub fn to_canon(&self) -> Value {
+        crate::encode::predicate_to_canon(self)
+    }
+
     pub(crate) fn validate(
         &mut self,
         bounds: &FlowBounds,

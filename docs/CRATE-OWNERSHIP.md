@@ -13,8 +13,8 @@ Measured at `af69f012a9298a817ee8c8863bf2d09cf1b046fe`: 17 workspace crates,
 #28 census predated the `lgwks-*` crates, which are intentionally present as a
 separate authority surface rather than part of the Braid substrate. Later
 additions — `braid-runtime` (D5 process boundary), `braid-flow-ir` /
-`braid-flow-verify`, `braid-governance` (Keel envelopes), and now
-`braid-integrate` (repo-graph advisor) — bring the present count to 22.
+`braid-flow-verify` (P2), `braid-flow-plan` (P3), `braid-governance` (Keel envelopes), and now
+`braid-integrate` (repo-graph advisor) — bring the present count to 23.
 
 ## Boundaries
 
@@ -42,17 +42,16 @@ additions — `braid-runtime` (D5 process boundary), `braid-flow-ir` /
 
 ## Ratified Frontier Flow boundaries
 
-ADR-099 ratifies four implementation crates. `braid-flow-ir` now exists as an
-incomplete P1 foundation; the verifier, planner, and SDK remain planned. They
+ADR-099 ratifies four implementation crates. `braid-flow-ir` (P1), `braid-flow-verify` (P2), and `braid-flow-plan` (P3) are delivered present on main (PRs 68,85); `braid-flow-sdk` (P4) remains planned. They
 land through Braid #57, #60, #59, and #58; after #59, the SDK work in #58 may
 proceed in parallel with the separately owned Forge runtime adapter.
 
 | Planned crate | Invariant owned | Legitimate reason to change | Split justification |
 | --- | --- | --- | --- |
 | `braid-flow-ir` *(P1 foundation present)* | The closed outer graph shape, deterministic encoding, domain-separated semantic Flow identity, bounded source normalization, and predicate AST. | Change identity-bearing Flow semantics, encoding, bounds, or the closed v0 graph vocabulary. | **Authority/security:** semantic bytes and CID remain a small `no_std + alloc` trust base independent of source parsers and runtimes. |
-| `braid-flow-verify` | Independent canonical decoding and fail-closed static admission of Flow structure, types, reachability, joins, choices, terminals, justification, and authority non-aggregation. | Add or tighten a Flow admission obligation or typed refusal. | **Authority/failure mode:** a builder or importer cannot make its own graph admissible. |
-| `braid-flow-plan` | Deterministic, immutable-snapshot-bound satiation and next-frontier derivation plus Plan identity. | Change trusted readiness, satiation, invalidation, selection, or planning-context semantics. | **Failure mode/cadence:** trusted planning is distinct from graph admission and from Forge's durable scheduling lifecycle. |
-| `braid-flow-sdk` | Rust builder state, first-class RON authoring, normalized JSON interoperability, source diagnostics, and lowering to the one Flow AST. | Improve authoring ergonomics, source schema versions, diagnostics, or importer-facing conversion. | **Lifecycle/security:** textual parsing and friendly recovery evolve without entering canonical IR or verifier trust bases. |
+| `braid-flow-verify` *(P2 delivered — present on main since PR 68)* | Independent canonical decoding and fail-closed static admission of Flow structure, types, reachability, joins, choices, terminals, justification, and authority non-aggregation. | Add or tighten a Flow admission obligation or typed refusal. | **Authority/failure mode:** a builder or importer cannot make its own graph admissible. |
+| `braid-flow-plan` *(P3 delivered — present on main since PR 85)* | Deterministic, immutable-snapshot-bound satiation and next-frontier derivation plus Plan identity. | Change trusted readiness, satiation, invalidation, selection, or planning-context semantics. | **Failure mode/cadence:** trusted planning is distinct from graph admission and from Forge's durable scheduling lifecycle. |
+| `braid-flow-sdk` *(P4 planned)* | Rust builder state, first-class RON authoring, normalized JSON interoperability, source diagnostics, and lowering to the one Flow AST. | Improve authoring ergonomics, source schema versions, diagnostics, or importer-facing conversion. | **Lifecycle/security:** textual parsing and friendly recovery evolve without entering canonical IR or verifier trust bases. |
 
 Existing integration ownership is also frozen: `braid-render` owns deterministic
 Flow manifest and full DOT projection; `braid-project` may consume admitted
@@ -63,7 +62,7 @@ scheduler. RON/JSON/YAML parsing stays out of `braid-flow-ir`,
 
 ## Outcome
 
-All 22 boundaries satisfy all three columns. The earlier #28 behavioral slices
+All 23 boundaries satisfy all three columns. The earlier #28 behavioral slices
 removed the web-vocabulary panic surface, bounded JS elaboration input, and made
 the five-result swallow ceiling a CI gate; later slices added
 `braid-governance` and `braid-integrate` without changing any existing crate's

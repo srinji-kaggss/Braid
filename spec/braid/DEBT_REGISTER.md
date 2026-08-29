@@ -35,22 +35,30 @@
 
 ## Open debts (the Java-ecosystem gap)
 
-### D-FLOW — Inter-capsule Flow is ratified; P1 is partial
+### D-FLOW — Inter-capsule Flow is ratified; P1 partial, P2/P3 shipped
 
 P0 is complete. `braid-flow-ir` now has bounded construction, an
 allocation-free hostile-byte preflight, exact builder/wire depth agreement,
 canonical identity, strict semantic decoding/bijection, complete closed-variant
 fixtures, and recursive property-tested round trips. Issue #57 remains open:
 source `MapStatic` expansion, the remaining falsifiers, and ratification of the
-provisional byte/value/reference/type ceilings have not landed. The dependency
-DAG is:
+provisional byte/value/reference/type ceilings have not landed.
+
+P2 shipped in PR #65 (`braid-flow-verify` independent admission, `Fixures` for
+`FlowVerifyError`, mutation matrix) — [Braid #60](https://github.com/srinji-kaggss/Braid/issues/60) closed.
+P3 shipped in PRs #68/#85 (`braid-flow-plan` satiation-first §9.2, ready
+antichain §10, stable urgency→CID ranking, Plan CID `lw.braid.flow.plan.v0`
+and Snapshot CID `lw.braid.flow.snapshot.v0`, 8 invariants, 11 runnable proofs
+with authority/snapshot staleness fail-closed) — [Braid #59](https://github.com/srinji-kaggss/Braid/issues/59) closed.
+
+The dependency DAG is:
 
 1. [Braid #57](https://github.com/srinji-kaggss/Braid/issues/57) — canonical
-   Flow AST/IR, encoding, bounds, domains, and KATs.
+   Flow AST/IR, encoding, bounds, domains, and KATs. (partial, remaining ceilings)
 2. [Braid #60](https://github.com/srinji-kaggss/Braid/issues/60) — independent
-   admission and the invariant/falsification matrix.
+   admission and the invariant/falsification matrix. ✅ SHIPPED PR #65
 3. [Braid #59](https://github.com/srinji-kaggss/Braid/issues/59) — deterministic
-   snapshot-bound satiation and frontier planning.
+   snapshot-bound satiation and frontier planning. ✅ SHIPPED PRs #68/#85
 4. [Braid #58](https://github.com/srinji-kaggss/Braid/issues/58) — Rust/RON SDK,
    normalized JSON interoperability, full graph rendering, and CI import.
 5. [forge-harness #123](https://github.com/srinji-kaggss/forge-harness/issues/123)

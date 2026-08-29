@@ -306,10 +306,10 @@ impl SignedChangeEnvelope {
         let digest = self.envelope.digest_sha256()?;
         let key_bytes = decode_fixed::<32>("verifying_key_hex", &self.verifying_key_hex)?;
         let signature_bytes = decode_fixed::<64>("signature_hex", &self.signature_hex)?;
-        // Authority for Ed25519.  `secure-authority` transitively depends on
-        // `ed25519-dalek`; we reach it through the authority crate so the
-        // closed-set gate records exactly one authority dep, not a stray direct
-        // crypto import in a Braid crate.
+        // Authority for Ed25519 is `ed25519-dalek` directly.  The former
+        // `secure-authority` path dep pointed outside this repo and broke
+        // every runner that lacked the host sibling checkout; the crate was
+        // never imported, so the dep was removed rather than vendored.
         use ed25519_dalek::{Signature, Verifier, VerifyingKey};
         let verifying_key = VerifyingKey::from_bytes(&key_bytes)
             .map_err(|_| GovernanceError::InvalidVerifyingKey)?;

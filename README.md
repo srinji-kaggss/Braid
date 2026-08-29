@@ -24,11 +24,12 @@ path; that plan is a cache, never a second wire or an authority credential.
 
 | Path | What |
 |------|------|
-| `crates/braid-ir` | Typed term-graph IR, canonical encoding, BLAKE3 CIDs, one-byte admission triad, and registry-scoped compact token projection. |
+| `crates/braid-ir` | Typed term-graph IR, canonical CBOR-subset encoding, BLAKE3 CIDs, one-byte admission triad, and registry-scoped compact token projection. |
 | `crates/braid-flow-ir` | Canonical inter-capsule Flow IR, strict byte bijection, bounded identity, and justified-invocation declarations. |
+| `crates/braid-flow-plan` | Snapshot-bound satiation and frontier planning — deterministic `plan()` + Plan CID (`lw.braid.flow.plan.v0` via `plan.rs:20`) and snapshot CID (`lw.braid.flow.snapshot.v0` via `snapshot.rs:45`). |
 | `crates/braid-flow-verify` | Independent strict decoder + compact iterative fail-closed admission for Flow graphs. |
 | `crates/braid-capability` | Capability token newtype — content-addressed dotted names. Vocabulary-agnostic attenuation. |
-| `crates/braid-verify` | Independent strict decoder + fail-closed admission pipeline; emits a CID-bound `P × P × U` compact projection. |
+| `crates/braid-verify` | Independent strict decoder + fail-closed admission pipeline; emits CID-bound `AdmissionProof` + `P × P × U` compact `AdmittedCapsule` projection. |
 | `crates/braid-render` | CID-bound manifest, deterministic text rendering, widening/narrowing diff, DOT export. |
 | `crates/braid-sdk` | Typed authoring builder over `braid-ir`. |
 | `crates/braid-cli` | The `braid` binary: encode, decode, verify, render, diff, catalog, store. |
