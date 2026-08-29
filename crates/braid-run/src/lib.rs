@@ -20,9 +20,14 @@ use core::fmt;
 extern crate alloc;
 
 use braid_capability::Capability;
+use braid_flow_ir::Predicate;
+use braid_flow_plan::{CompletionMap, FlowSnapshot, ProofState, eval_predicate};
 use braid_ir::braid::Strand;
 use braid_ir::term::EffectClass;
-use braid_ir::{Capsule, Cid, ConfirmPolicy, IR_VERSION, TermRegistry, TermSpec, TypeTag, Value};
+use braid_ir::{
+    Capsule, Cid, ConfirmPolicy, IR_VERSION, TermRegistry, TermSpec, TypeTag, Value, encode,
+};
+use braid_verify::AdmissionProof;
 
 /// Why a capsule execution failed.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -108,6 +113,16 @@ pub enum ExecutionError {
         reason: String,
         /// Source location of the error.
         at: &'static str,
+    },
+    /// The caller supplied a proof for a different capsule or registry.
+    InvalidRunnableProof {
+        /// Source location of the failed binding check.
+        at: &'static str,
+    },
+    /// The justification predicate was not proven by the supplied snapshot.
+    UnjustifiedInvocation {
+        /// Why the predicate could not authorize execution.
+        reason: String,
     },
 }
 
@@ -202,6 +217,10 @@ impl fmt::Display for ExecutionError {
             }
             Self::InvalidCapsuleHeader { reason, at } => {
                 write!(f, "invalid capsule header at {at}: {reason}")
+            }
+            Self::InvalidRunnableProof { at } => write!(f, "invalid runnable proof at {at}"),
+            Self::UnjustifiedInvocation { reason } => {
+                write!(f, "unjustified invocation: {reason}")
             }
         }
     }
@@ -447,8 +466,187 @@ fn gather_capsule_outputs(
     Ok(outputs)
 }
 
-/// Executes an admitted Braid capsule against a registry and host dispatcher.
-pub fn execute_capsule(
+/// A proof that a justification predicate was evaluated as `Proven` against a
+/// particular immutable snapshot for one capsule.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JustificationProof {
+    capsule_cid: Cid,
+    snapshot_cid: Cid,
+    predicate_cid: Cid,
+}
+
+impl JustificationProof {
+    /// Evaluate and bind a justification predicate. `Unknown` and
+    /// `Disproven` never produce a proof.
+    pub fn prove(
+        capsule: &Capsule,
+        predicate: &Predicate,
+        snapshot: &FlowSnapshot,
+        completions: &CompletionMap,
+    ) -> Result<Self, ExecutionError> {
+        match eval_predicate(predicate, snapshot, completions) {
+            ProofState::Proven => Ok(Self {
+                capsule_cid: capsule.cid(),
+                snapshot_cid: snapshot.cid(),
+                predicate_cid: predicate_cid(predicate),
+            }),
+            ProofState::Disproven => Err(ExecutionError::UnjustifiedInvocation {
+                reason: "predicate is disproven".into(),
+            }),
+            ProofState::Unknown(reason) => Err(ExecutionError::UnjustifiedInvocation {
+                reason: reason.to_string(),
+            }),
+        }
+    }
+
+    /// The capsule this proof authorizes.
+    #[must_use]
+    pub fn capsule_cid(&self) -> Cid {
+        self.capsule_cid
+    }
+
+    /// The immutable snapshot used by the proof.
+    #[must_use]
+    pub fn snapshot_cid(&self) -> Cid {
+        self.snapshot_cid
+    }
+
+    /// The content identity of the evaluated predicate.
+    #[must_use]
+    pub fn predicate_cid(&self) -> Cid {
+        self.predicate_cid
+    }
+}
+
+fn predicate_cid(predicate: &Predicate) -> Cid {
+    Cid::compute(
+        b"lw.braid.justification.predicate.v0",
+        &encode(&predicate.to_canon()),
+    )
+}
+
+/// A verifier/planner-owned invocation. Its private capsule prevents callers
+/// from manufacturing an executable value by setting three boolean fields.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunnableInvocation {
+    capsule: Capsule,
+    admission: AdmissionProof,
+    registry_cid: Cid,
+    justification: JustificationProof,
+}
+
+fn compute_authority_cid(ambient: &[Capability]) -> Cid {
+    let mut names: Vec<&str> = ambient.iter().map(Capability::as_str).collect();
+    names.sort_unstable();
+    names.dedup();
+    let encoded = Value::List(
+        names
+            .into_iter()
+            .map(|name| Value::Text(name.into()))
+            .collect(),
+    );
+    Cid::compute(b"lw.braid.authority.v0", &encode(&encoded))
+}
+
+impl RunnableInvocation {
+    /// Admit a capsule and bind it to an independently evaluated justification
+    /// proof. The registry and ambient capabilities are checked again here so
+    /// a proof cannot be transplanted across registries or authority scopes.
+    /// `ambient` must be the exact ambient authority set used for admission;
+    /// `snapshot` must be the exact snapshot used for justification. Mismatch
+    /// is `InvalidRunnableProof` (INV-FLOW-008/023 staleness).
+    pub fn prepare(
+        capsule: Capsule,
+        registry: &TermRegistry,
+        admission: AdmissionProof,
+        justification: JustificationProof,
+        ambient: &[Capability],
+        snapshot: &FlowSnapshot,
+    ) -> Result<Self, ExecutionError> {
+        verify_capsule_headers(&capsule, registry)?;
+        if admission.capsule_cid() != capsule.cid() || admission.registry_cid() != registry.cid() {
+            return Err(ExecutionError::InvalidRunnableProof {
+                at: "RunnableInvocation::prepare::admission-binding",
+            });
+        }
+        if admission.authority_cid() != compute_authority_cid(ambient) {
+            return Err(ExecutionError::InvalidRunnableProof {
+                at: "RunnableInvocation::prepare::authority",
+            });
+        }
+        if justification.capsule_cid() != capsule.cid() {
+            return Err(ExecutionError::InvalidRunnableProof {
+                at: "RunnableInvocation::prepare::capsule",
+            });
+        }
+        if justification.snapshot_cid() != snapshot.cid() {
+            return Err(ExecutionError::InvalidRunnableProof {
+                at: "RunnableInvocation::prepare::snapshot",
+            });
+        }
+        Ok(Self {
+            capsule,
+            admission,
+            registry_cid: registry.cid(),
+            justification,
+        })
+    }
+
+    /// The immutable capsule identity bound into this invocation.
+    #[must_use]
+    pub fn capsule_cid(&self) -> Cid {
+        self.capsule.cid()
+    }
+
+    /// The registry identity required at execution time.
+    #[must_use]
+    pub fn registry_cid(&self) -> Cid {
+        self.registry_cid
+    }
+
+    /// The externally supplied authority proof identity.
+    #[must_use]
+    pub fn authority_cid(&self) -> Cid {
+        self.admission.authority_cid()
+    }
+
+    /// The bound justification proof identity.
+    #[must_use]
+    pub fn justification(&self) -> &JustificationProof {
+        &self.justification
+    }
+}
+
+/// Executes a verifier-created invocation against its exact registry, authority,
+/// and snapshot. Registry, authority, and snapshot must match the values bound
+/// at `prepare`; mismatch is staleness/transplant and is fail-closed.
+pub fn execute_runnable(
+    invocation: &RunnableInvocation,
+    registry: &TermRegistry,
+    ambient: &[Capability],
+    snapshot: &FlowSnapshot,
+    host: &mut impl Host,
+) -> Result<Journal, ExecutionError> {
+    if invocation.registry_cid != registry.cid() {
+        return Err(ExecutionError::InvalidCapsuleHeader {
+            reason: "runnable registry_cid mismatch".into(),
+            at: "execute_runnable",
+        });
+    }
+    if invocation.authority_cid() != compute_authority_cid(ambient) {
+        return Err(ExecutionError::InvalidRunnableProof {
+            at: "execute_runnable::authority",
+        });
+    }
+    if invocation.justification.snapshot_cid() != snapshot.cid() {
+        return Err(ExecutionError::InvalidRunnableProof {
+            at: "execute_runnable::snapshot",
+        });
+    }
+    execute_capsule_inner(&invocation.capsule, registry, host)
+}
+
+fn execute_capsule_inner(
     capsule: &Capsule,
     registry: &TermRegistry,
     host: &mut impl Host,

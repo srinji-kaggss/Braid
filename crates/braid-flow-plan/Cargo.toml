@@ -1,0 +1,17 @@
+[package]
+name = "braid-flow-plan"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+description = "Deterministic snapshot-bound frontier planner (ADR-099, P3 #59) — satiation-first, ready antichain, stable sequential selection"
+repository = "https://github.com/srinji-kaggss/Braid"
+homepage = "https://github.com/srinji-kaggss/Braid"
+license = "MIT"
+
+[dependencies]
+braid-ir = { workspace = true }
+braid-flow-ir = { workspace = true }
+braid-flow-verify = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

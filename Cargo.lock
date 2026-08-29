@@ -129,6 +129,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "braid-flow-plan"
+version = "0.1.0"
+dependencies = [
+ "braid-flow-ir",
+ "braid-flow-verify",
+ "braid-ir",
+ "proptest",
+]
+
+[[package]]
 name = "braid-flow-verify"
 version = "0.1.0"
 dependencies = [
@@ -207,6 +217,8 @@ name = "braid-run"
 version = "0.1.0"
 dependencies = [
  "braid-capability",
+ "braid-flow-ir",
+ "braid-flow-plan",
  "braid-ir",
  "braid-verify",
  "lgwks_std",
