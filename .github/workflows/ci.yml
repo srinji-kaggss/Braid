@@ -143,7 +143,7 @@ jobs:
 
       - name: Build all workspace targets
         if: needs.scope.outputs.code_changed == 'yes'
-        run: cargo test --workspace --all-targets --no-run
+        run: cargo test --workspace --all-targets --locked --no-run
 
       - name: Build release bins (docs-only path)
         if: needs.scope.outputs.code_changed == 'no'
@@ -173,11 +173,11 @@ jobs:
 
       - name: Run all workspace tests
         if: needs.scope.outputs.code_changed == 'yes'
-        run: cargo test --workspace --all-targets
+        run: cargo test --workspace --all-targets --locked
 
       - name: Doc tests
         if: needs.scope.outputs.code_changed == 'yes'
-        run: cargo test --workspace --doc
+        run: cargo test --workspace --doc --locked
 
       - name: Record docs-only N/A
         if: needs.scope.outputs.code_changed != 'yes'
@@ -196,7 +196,7 @@ jobs:
 
       - name: Clippy all workspace targets
         if: needs.scope.outputs.code_changed == 'yes'
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
       - name: Record docs-only N/A
         if: needs.scope.outputs.code_changed != 'yes'
