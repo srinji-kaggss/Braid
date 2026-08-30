@@ -1,26 +1,23 @@
 # PB-01 — Finish the safety-assurance floor (U-SA closure + Lean conformance)
 
-**Objective**: take the already-wired Keel Tier-2 floor from "runs in CI" to "qualified
-and falsifiable" — every `braid-verify` stage mutation-proven, the seeded-slop red-team
-passing, and the Rust↔Lean semantic conformance check (D-SA5) built.
+**Objective**: restore the current native Keel Tier-2 floor as a hermetic,
+qualified, falsifiable release gate while preserving the existing verifier
+mutation and Rust↔Lean structural conformance evidence.
 
 **Why this is first**: everything else in the production arc (elaborator, runtime,
 deploy platform) is code an LLM will author. The floor is what makes that work
 trustworthy (T2/T11: the verifier is itself an attack surface authored by an LLM —
 qualify it, don't trust it). Debt register priority #1 concurs.
 
-## Current state (verified 2026-07-02 — correct the stale docs first)
+## Current state (corrected 2026-08-30)
 
-- `tier2-semantic` CI job EXISTS (`.github/workflows/ci.yml`), runs
-  `scripts/keel-floor.sh` → Keel `NotSlop` verdict via `braid.profile.json`;
-  Keel is vendored at `keel/`; evidence DAG lands in `.keel/`.
-- `spec/braid/DEBT_REGISTER.md` §D-SA still says "specified but not built" — **stale;
-  fix in this playbook's first PR**.
-- Risk imported from outside: the standalone `~/keel` repo's CI has been RED
-  (deterministic-floor issue, claimed by opus in coord since 2026-06-27). Braid
-  vendors its own copy, so Braid CI is insulated — but the vendored copy and `~/keel`
-  can drift. Establish which is authoritative before touching either (memory:
-  Keel+Braid are permanently co-owned; do not fork-fix silently — Prime Directive 3).
+- No `tier2-semantic` job exists in the current workflow. `keel/` is absent and
+  the retired Node adapter cannot run.
+- `scripts/keel-floor.sh` now calls only an explicitly installed native Keel
+  binary. It is diagnostic until #78 supplies a pinned clean distribution and
+  the blocking findings are remediated.
+- `scripts/ci-policy-check.sh` independently prevents known orchestration
+  false-greens; it is not a second semantic verdict engine.
 
 ## Deep-learning corpus (read → probe)
 
@@ -47,9 +44,9 @@ seed a failing test) and confirm exit ≠ 0 with the failed atom named.
 
 ## Execution steps
 
-1. **Truth-sync the docs** (small PR): update `DEBT_REGISTER.md` D-SA to "wired;
-   qualification residue open"; record vendored-keel provenance (which `~/keel`
-   commit) in `keel/README.md` so drift is detectable.
+1. **Truth-sync the docs**: keep D-SA open until a pinned native Keel artifact,
+   clean-run evidence bundle, and finding baseline are reproducible without a
+   sibling checkout. Never recreate the removed vendored copy.
 2. **U-SA AC-2, the red-team**: build 3 seeded-slop fixtures mirroring keel's
    `fixtures/known-bad/` discipline — (a) a re-derived primitive (copy `canon.rs`
    encode logic into a second crate), (b) an ungrounded claim (doc asserts a bound no

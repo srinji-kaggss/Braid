@@ -1,13 +1,11 @@
 # Keel ↔ Braid Reconciliation
 
-> **Provenance**: Braid's safety-assurance CI layer (U-SA, D32) is Keel, bound
-> via `braid.profile.json`. Keel itself is **not** checked into this repo —
-> see `chore: reference keel via pinned git-clone-at-CI-time, not a checked-in
-> copy (#20)`: a vendored `keel/` copy had drifted from its source twice, so
-> CI now clones Keel at a pinned branch instead of trusting a local copy. This
-> note documents the reconciliation *about* Keel; it deliberately does not
-> live under a `keel/` path in this repo, to avoid recreating the drift #20
-> removed.
+> **Current provenance (2026-08-30)**: `braid.profile.json` records the
+> historical U-SA/D32 mapping, but the old Node profile adapter is not an active
+> CI lane. Keel is **not** checked into this repo, current CI does not clone it,
+> and `scripts/keel-floor.sh` now refuses unless a native `keel` binary is
+> explicitly installed. Issue #78 owns the hermetic distribution and evidence
+> migration. This note deliberately does not recreate a drifting `keel/` copy.
 
 ## Purpose
 
