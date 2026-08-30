@@ -1,8 +1,21 @@
 //! Typed admission refusals — one invariant per variant.
 
+use alloc::boxed::Box;
 use alloc::string::String;
 
+use crate::disjoint::{DisjointnessUnknown, PredicateCounterexample};
+
 pub type VerifyResult<T> = Result<T, FlowVerifyError>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChoiceOverlap {
+    pub choice: String,
+    pub left_arm: usize,
+    pub right_arm: usize,
+    pub left_target: String,
+    pub right_target: String,
+    pub counterexample: PredicateCounterexample,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LimitKind {
@@ -82,7 +95,22 @@ pub enum FlowVerifyError {
     ChoiceNotTotal {
         invariant: &'static str,
     },
+    DuplicateChoiceTarget {
+        choice: String,
+        left_arm: usize,
+        right_arm: usize,
+        target: String,
+        invariant: &'static str,
+    },
     ChoiceNotDisjoint {
+        overlap: Box<ChoiceOverlap>,
+        invariant: &'static str,
+    },
+    ChoiceDisjointnessUnknown {
+        choice: String,
+        left_arm: usize,
+        right_arm: usize,
+        reason: DisjointnessUnknown,
         invariant: &'static str,
     },
     JoinCardinality {
@@ -164,7 +192,37 @@ impl core::fmt::Display for FlowVerifyError {
             } => write!(f, "{invariant}: unresolved {field} `{key}`"),
             Self::Cycle { invariant } => write!(f, "{invariant}: cycle"),
             Self::ChoiceNotTotal { invariant } => write!(f, "{invariant}: choice not total"),
-            Self::ChoiceNotDisjoint { invariant } => write!(f, "{invariant}: choice not disjoint"),
+            Self::DuplicateChoiceTarget {
+                choice,
+                left_arm,
+                right_arm,
+                target,
+                invariant,
+            } => write!(
+                f,
+                "{invariant}: choice `{choice}` arms {left_arm} and {right_arm} duplicate target `{target}`"
+            ),
+            Self::ChoiceNotDisjoint { overlap, invariant } => write!(
+                f,
+                "{invariant}: choice `{choice}` arms {left_arm} (`{left_target}`) and {right_arm} (`{right_target}`) overlap ({} value bindings, {} completion bindings)",
+                overlap.counterexample.values.len(),
+                overlap.counterexample.completions.len(),
+                choice = overlap.choice,
+                left_arm = overlap.left_arm,
+                right_arm = overlap.right_arm,
+                left_target = overlap.left_target,
+                right_target = overlap.right_target,
+            ),
+            Self::ChoiceDisjointnessUnknown {
+                choice,
+                left_arm,
+                right_arm,
+                reason,
+                invariant,
+            } => write!(
+                f,
+                "{invariant}: choice `{choice}` arms {left_arm} and {right_arm} disjointness unknown: {reason:?}"
+            ),
             Self::JoinCardinality { invariant } => {
                 write!(f, "{invariant}: join cardinality not explicit")
             }

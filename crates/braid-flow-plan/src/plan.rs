@@ -18,7 +18,7 @@ use crate::eval::{CompletionKind, CompletionMap, eval_predicate};
 use crate::snapshot::{FlowSnapshot, ProofState};
 
 const PLAN_DOMAIN: &[u8] = b"lw.braid.flow.plan.v0";
-const PLANNER_VERSION: u16 = 0;
+pub const PLANNER_VERSION: u16 = 1;
 
 /// Which inputs the planner consumed. The Plan CID covers all of them so a
 /// plan cannot be reused under a different snapshot (INV-FLOW-008/023).
@@ -47,6 +47,10 @@ impl Default for PlanningContext {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlanError {
+    UnsupportedPlannerVersion {
+        found: u16,
+        expected: u16,
+    },
     UnknownProof {
         reason: String,
         invariant: &'static str,
@@ -63,6 +67,12 @@ pub enum PlanError {
 impl core::fmt::Display for PlanError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
+            Self::UnsupportedPlannerVersion { found, expected } => {
+                write!(
+                    f,
+                    "unsupported planner version {found}; expected {expected}"
+                )
+            }
             Self::UnknownProof { reason, invariant } => {
                 write!(f, "{invariant}: unknown — {reason}")
             }
@@ -85,6 +95,8 @@ pub struct SatiatedTransition {
 pub struct PlanStep {
     pub node: String,
     pub capsule: Option<Cid>,
+    /// Snapshot-evaluated target for a `Choice`; absent for every other kind.
+    pub choice_target: Option<String>,
     pub kind: PlanStepKind,
 }
 
@@ -122,6 +134,12 @@ pub fn plan(
     completions: &CompletionMap,
     context: &PlanningContext,
 ) -> Result<FlowPlan, PlanError> {
+    if context.planner_version != PLANNER_VERSION {
+        return Err(PlanError::UnsupportedPlannerVersion {
+            found: context.planner_version,
+            expected: PLANNER_VERSION,
+        });
+    }
     let flow_cid = flow.cid().get();
     let ranked = evaluate_and_rank(flow, snapshot, completions)?;
     let mut trace: Vec<String> = Vec::new();
@@ -180,10 +198,12 @@ pub fn plan(
         // critical-path / cost, then node CID tie-break. Insertion / map
         // iteration order must never affect selection (INV-011/023).
         let chosen = ranked_choice(flow, &ready);
-        let (kind, capsule) = step_kind_and_capsule(flow, &chosen.key);
+        let (kind, capsule, choice_target) =
+            step_details(flow, &chosen.key, snapshot, completions)?;
         Some(PlanStep {
             node: chosen.key.clone(),
             capsule,
+            choice_target,
             kind,
         })
     };
@@ -500,20 +520,59 @@ fn ranked_choice<'a>(flow: &FlowSpec, ready: &[&'a RankedNode]) -> &'a RankedNod
     best
 }
 
-fn step_kind_and_capsule(flow: &FlowSpec, key: &str) -> (PlanStepKind, Option<Cid>) {
+fn step_details(
+    flow: &FlowSpec,
+    key: &str,
+    snapshot: &FlowSnapshot,
+    completions: &CompletionMap,
+) -> Result<(PlanStepKind, Option<Cid>, Option<String>), PlanError> {
     for nd in flow.nodes() {
         if nd.key.to_string() == key {
             return match &nd.kind {
                 FlowNodeKind::InvokeCapsule { capsule } => {
-                    (PlanStepKind::InvokeCapsule, Some(*capsule))
+                    Ok((PlanStepKind::InvokeCapsule, Some(*capsule), None))
                 }
-                FlowNodeKind::Choice { .. } => (PlanStepKind::Choice, None),
-                FlowNodeKind::JoinAll => (PlanStepKind::JoinAll, None),
-                FlowNodeKind::Terminal { .. } => (PlanStepKind::Terminal, None),
+                FlowNodeKind::Choice { arms, otherwise } => {
+                    let mut selected = None;
+                    for (index, arm) in arms.iter().enumerate() {
+                        match eval_predicate(&arm.when, snapshot, completions) {
+                            ProofState::Proven => {
+                                if selected.is_some() {
+                                    return Err(PlanError::InconsistentGraph {
+                                        reason: alloc::format!(
+                                            "multiple Choice arms Proven for {key}"
+                                        ),
+                                        invariant: "INV-FLOW-011",
+                                    });
+                                }
+                                selected = Some(arm.then.to_string());
+                            }
+                            ProofState::Disproven => {}
+                            ProofState::Unknown(reason) => {
+                                return Err(PlanError::UnknownProof {
+                                    reason: alloc::format!(
+                                        "Choice arm {index} Unknown for {key}: {reason}"
+                                    ),
+                                    invariant: "INV-FLOW-007",
+                                });
+                            }
+                        }
+                    }
+                    Ok((
+                        PlanStepKind::Choice,
+                        None,
+                        Some(selected.unwrap_or_else(|| otherwise.to_string())),
+                    ))
+                }
+                FlowNodeKind::JoinAll => Ok((PlanStepKind::JoinAll, None, None)),
+                FlowNodeKind::Terminal { .. } => Ok((PlanStepKind::Terminal, None, None)),
             };
         }
     }
-    (PlanStepKind::Terminal, None)
+    Err(PlanError::InconsistentGraph {
+        reason: alloc::format!("selected node {key} is absent"),
+        invariant: "INV-FLOW-002",
+    })
 }
 
 fn compute_plan_cid(
@@ -526,7 +585,40 @@ fn compute_plan_cid(
 ) -> Cid {
     // INV-020 / INV-023: Plan CID is sensitive to every planning input.
     let next_v = match next_step {
-        Some(s) => Value::Text(s.node.clone()),
+        Some(step) => Value::Map(
+            [
+                ("node".into(), Value::Text(step.node.clone())),
+                (
+                    "kind".into(),
+                    Value::Text(
+                        match step.kind {
+                            PlanStepKind::InvokeCapsule => "invoke_capsule",
+                            PlanStepKind::Choice => "choice",
+                            PlanStepKind::JoinAll => "join_all",
+                            PlanStepKind::Terminal => "terminal",
+                        }
+                        .into(),
+                    ),
+                ),
+                (
+                    "capsule".into(),
+                    step.capsule.map_or_else(
+                        || Value::Bytes(Vec::new()),
+                        |cid| Value::Bytes(cid.0.to_vec()),
+                    ),
+                ),
+                (
+                    "choice_target".into(),
+                    Value::Text(
+                        step.choice_target
+                            .clone()
+                            .unwrap_or_else(|| "__none__".into()),
+                    ),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        ),
         None => Value::Text("__none__".into()),
     };
     let satiated_v = Value::List(
