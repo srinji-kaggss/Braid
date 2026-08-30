@@ -59,19 +59,25 @@ serde = { version = "1.0.228", default-features = false, features = ["derive", "
 proptest = "1.6.0"
 
 # Intra-workspace crates.
-braid-capability = { path = "crates/braid-capability" }
-braid-ir = { path = "crates/braid-ir" }
-braid-flow-ir = { path = "crates/braid-flow-ir" }
-braid-flow-verify = { path = "crates/braid-flow-verify" }
-braid-vocab-cms = { path = "crates/braid-vocab-cms" }
-braid-vocab-js = { path = "crates/braid-vocab-js" }
-braid-verify = { path = "crates/braid-verify" }
-braid-render = { path = "crates/braid-render" }
-braid-sdk = { path = "crates/braid-sdk" }
-braid-manifest = { path = "crates/braid-manifest" }
-braid-runtime = { path = "crates/braid-runtime" }
-braid-elaborate-dsl = { path = "crates/braid-elaborate-dsl" }
-braid-test-support = { path = "crates/braid-test-support" }
+braid-capability = { version = "0.1.0", path = "crates/braid-capability" }
+braid-ir = { version = "0.1.0", path = "crates/braid-ir" }
+braid-flow-ir = { version = "0.1.0", path = "crates/braid-flow-ir" }
+braid-flow-verify = { version = "0.1.0", path = "crates/braid-flow-verify" }
+braid-flow-plan = { version = "0.1.0", path = "crates/braid-flow-plan" }
+braid-vocab-cms = { version = "0.1.0", path = "crates/braid-vocab-cms" }
+braid-vocab-js = { version = "0.1.0", path = "crates/braid-vocab-js" }
+braid-vocab-rust = { version = "0.1.0", path = "crates/braid-vocab-rust" }
+braid-verify = { version = "0.1.0", path = "crates/braid-verify" }
+braid-render = { version = "0.1.0", path = "crates/braid-render" }
+braid-sdk = { version = "0.1.0", path = "crates/braid-sdk" }
+braid-manifest = { version = "0.1.0", path = "crates/braid-manifest" }
+braid-runtime = { version = "0.1.0", path = "crates/braid-runtime" }
+braid-elaborate-dsl = { version = "0.1.0", path = "crates/braid-elaborate-dsl" }
+braid-elaborate-js = { version = "0.1.0", path = "crates/braid-elaborate-js" }
+braid-run = { version = "0.1.0", path = "crates/braid-run" }
+braid-test-support = { version = "0.1.0", path = "crates/braid-test-support" }
+lgwks_bot = { version = "0.1.1", path = "crates/lgwks-bot" }
+lgwks_std_gate = { version = "0.1.0", path = "crates/lgwks-std-gate" }
 
 [patch.crates-io]
 # While developing against the in-repo implementation, keep the public contract

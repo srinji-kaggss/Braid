@@ -22,7 +22,7 @@ path = "src/main.rs"
 braid-runtime = { workspace = true }
 braid-ir = { workspace = true }
 braid-verify = { workspace = true }
-braid-elaborate-js = { path = "../braid-elaborate-js" }
+braid-elaborate-js = { workspace = true }
 braid-vocab-js = { workspace = true }
-braid-vocab-rust = { path = "../braid-vocab-rust" }
+braid-vocab-rust = { workspace = true }
 lgwks_std = { workspace = true, features = ["json"] }

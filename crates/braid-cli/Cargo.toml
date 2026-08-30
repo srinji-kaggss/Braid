@@ -22,7 +22,7 @@ braid-runtime = { workspace = true }
 braid-ir = { workspace = true }
 braid-verify = { workspace = true }
 braid-render = { workspace = true }
-braid-sdk = { path = "../braid-sdk" }
+braid-sdk = { workspace = true }
 braid-capability = { workspace = true }
 braid-vocab-cms = { workspace = true }
 braid-manifest = { workspace = true }

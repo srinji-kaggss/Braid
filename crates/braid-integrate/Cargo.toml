@@ -15,5 +15,5 @@ path = "src/main.rs"
 [dependencies]
 braid-runtime = { workspace = true }
 lgwks_std = { workspace = true, features = ["json"] }
-lgwks_std_gate = { path = "../lgwks-std-gate" }
-lgwks_bot = { path = "../lgwks-bot" }
+lgwks_std_gate = { workspace = true }
+lgwks_bot = { workspace = true }

@@ -4,7 +4,8 @@
 #
 # Mirrors every code-changed lane of the GitHub workflow step for step:
 # swallow budget, fmt, build, tests, doc tests, clippy, lgwks-std feature
-# matrix, MSRV checks, contract-drift, package smoke, consumption contract.
+# matrix, MSRV checks, contract drift, package smoke, consumption contract,
+# deterministic registry export, and the locked tagged-Git consumer probe.
 # Stack-position and Scope are pull-request-runner concerns and are skipped;
 # a local receipt run is always full-scope.
 #
@@ -154,6 +155,19 @@ run "version pin present" rg -q \
   '^lgwks_std\s*=\s*\{\s*version\s*=\s*"0\.5\.1"\s*\}' -g '*.toml' Cargo.toml crates
 run "local patch present" rg -q \
   '^lgwks_std\s*=\s*\{\s*path\s*=\s*"crates/lgwks-std"\s*\}' -g '*.toml' Cargo.toml
+
+# ── Lane 12: Braid contract release boundary ────────────────────────────────
+
+release_probe_rejects_bad_revision() {
+  if ./scripts/braid-release-probe.sh "file://$REPO_ROOT" not-a-commit; then
+    echo "release probe accepted a malformed revision" >&2
+    return 1
+  fi
+}
+run "registry export is deterministic" ./scripts/braid-registry-export-check.sh
+run "release probe rejects bad revision" release_probe_rejects_bad_revision
+run "locked tagged-Git consumer" \
+  ./scripts/braid-release-probe.sh "file://$REPO_ROOT" "$SUBJECT_SHA"
 
 # ── Receipt ──────────────────────────────────────────────────────────────────
 

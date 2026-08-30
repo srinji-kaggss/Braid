@@ -357,6 +357,31 @@ jobs:
             exit 1
           fi
 
+  braid-contract-release:
+    name: Braid contract release probe
+    needs: [scope, stack-position]
+    runs-on: self-hosted
+    if: needs.scope.outputs.code_changed == 'yes'
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Regenerate the CMS registry deterministically
+        run: ./scripts/braid-registry-export-check.sh
+
+      - name: Prove malformed release revisions fail closed
+        run: |
+          set -eu
+          if ./scripts/braid-release-probe.sh "file://${GITHUB_WORKSPACE}" not-a-commit; then
+            echo "release probe accepted a malformed revision" >&2
+            exit 1
+          fi
+
+      - name: Build a locked consumer from this exact Git commit
+        run: ./scripts/braid-release-probe.sh "file://${GITHUB_WORKSPACE}" "$GITHUB_SHA"
+
   # ── std+ feature matrix ────────────────────────────────────────────────
   lgwks-std-feature-matrix:
     name: lgwks-std feature matrix
