@@ -121,8 +121,19 @@ These are not papered over by this ADR:
 2. **Runtime allocation amplification:** execution still performs string dispatch and clones every input/output/journal value. It has not yet migrated to `TokenProgram` plus a bounded value arena.
 3. **Justification proof:** the Flow planner must evaluate `needed_when` and `satisfied_when` against a CID-bound snapshot and return the third proof.
 4. **Choice disjointness:** v0 checks choice shape and duplicate targets; it does not prove predicate disjointness. The verifier must not describe that as solved.
-5. **Decoder preflight:** the capsule independent decoder still needs explicit wire-byte and total-value ceilings before allocating the complete canonical value tree.
-6. **Cross-process proof transport:** a future runnable artifact needs identity-bound evidence/receipt references; the one-byte triad is insufficient.
+5. **Cross-process proof transport:** a future runnable artifact needs identity-bound evidence/receipt references; the one-byte triad is insufficient.
+
+## Subsequent resolution
+
+- **Decoder preflight (#72, 2026-08-29):** the independent capsule decoder now
+  performs an allocation-free, iterative canonical byte scan before owned
+  projection. The default envelope is 16 MiB wire bytes, 262,144 value nodes,
+  262,144 aggregate list items, 262,144 aggregate map entries, 16 MiB each of
+  text, byte-string, and key payload, and depth 64. Canonical integer widths,
+  checked offsets, borrowed key order, UTF-8, and complete input consumption
+  are established before allocation. `cargo bench -p braid-verify --bench
+  preflight_alloc --locked` reports allocation counts and peak live bytes for
+  accepted and hostile-rejected boundaries.
 
 ## Consequences
 

@@ -13,11 +13,10 @@
 # written ONLY after every step exits 0. There is no --skip, no || true,
 # and no set +e: a gate that can be talked out of a failure is not a gate.
 #
-# Subject resolution (lessons L202/L206): the receipt certifies the tree
-# `git push` will publish, so the subject is git HEAD — in a colocated repo
-# that is @- (the bookmarked parent), never the possibly-empty working-copy
-# commit. An unreachable subject is refused instead of dying later inside a
-# clone with `fatal: unable to read tree`.
+# Subject resolution (lessons L202/L206): the receipt certifies the exact
+# Jujutsu working-copy commit that the feature bookmark will publish. A working
+# copy without a local bookmark is refused; certifying colocated Git HEAD would
+# attest @- while omitting the feature bytes in @.
 #
 # Usage:  bash .wwfd/local-ci.sh
 #
@@ -26,7 +25,7 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(git rev-parse --show-toplevel)"
+REPO_ROOT="$(jj root)"
 RECEIPT="/Users/srinji/wwfd/state/local-ci-receipt.json"
 cd "$REPO_ROOT"
 
@@ -38,17 +37,21 @@ run() {
   "$@"
 }
 
+locked_metadata() {
+  cargo metadata --locked --no-deps --format-version 1 >/dev/null
+}
+
 # ── Subject reachability ──────────────────────────────────────────────────────
 
-SUBJECT_SHA="$(git rev-parse HEAD)"
-if ! git for-each-ref --contains "$SUBJECT_SHA" --count=1 refs/heads refs/tags |
-     grep -q .; then
-  echo "local-ci: subject $SUBJECT_SHA is not reachable from any ref." >&2
+SUBJECT_SHA="$(jj --no-pager log --no-graph -r @ -T 'commit_id')"
+BOOKMARKS="$(jj --no-pager log --no-graph -r @ -T 'bookmarks')"
+if [[ -z "$BOOKMARKS" ]]; then
+  echo "local-ci: subject $SUBJECT_SHA has no local bookmark." >&2
   echo "  Put a bookmark on it first:" >&2
   echo "    jj bookmark create local-ci-subject -r @" >&2
   exit 128
 fi
-echo "subject: $SUBJECT_SHA (ref-reachable)"
+echo "subject: $SUBJECT_SHA (bookmarks: $BOOKMARKS)"
 
 # ── Lane 1: swallow budget (ci.yml · swallow-budget) ─────────────────────────
 
@@ -62,13 +65,14 @@ run "cargo fmt --check" cargo fmt --all -- --check
 
 # ── Lane 3–5: build, tests, doc tests (ci.yml · build/tests) ─────────────────
 
-run "build all targets"      cargo test --workspace --all-targets --no-run
-run "workspace tests"        cargo test --workspace --all-targets
-run "doc tests"              cargo test --workspace --doc
+run "locked metadata"        locked_metadata
+run "build all targets"      cargo test --workspace --all-targets --locked --no-run
+run "workspace tests"        cargo test --workspace --all-targets --locked
+run "doc tests"              cargo test --workspace --doc --locked
 
 # ── Lane 6: clippy (ci.yml · clippy) ─────────────────────────────────────────
 
-run "clippy -D warnings" cargo clippy --workspace --all-targets -- -D warnings
+run "clippy -D warnings" cargo clippy --workspace --all-targets --locked -- -D warnings
 
 # ── Lane 7: lgwks-std feature matrix (ci.yml · lgwks-std-feature-matrix) ─────
 
@@ -152,8 +156,8 @@ run "local patch present" rg -q \
 
 # ── Receipt ──────────────────────────────────────────────────────────────────
 
-BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-HEAD_SHA="$(git rev-parse HEAD | cut -c1-12)"
+BRANCH="$BOOKMARKS"
+HEAD_SHA="${SUBJECT_SHA:0:12}"
 printf '{"repo_root":"%s","branch":"%s","head_sha":"%s","attested_at":%s,"ci_script":"bash .wwfd/local-ci.sh"}\n' \
   "$REPO_ROOT" "$BRANCH" "$HEAD_SHA" "$(date +%s)" > "$RECEIPT"
 echo
