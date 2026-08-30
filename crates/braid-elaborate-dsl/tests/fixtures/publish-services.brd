@@ -1,0 +1,19 @@
+capsule demo::publish_services version 0 {
+    intent "demo-port: edit the services page then publish it — irreversible, human-confirmed";
+    registry cms::v1;
+    require {
+        capabilities [intent::emit, signal::emit];
+        effects [pure, reversible_write, irreversible];
+    }
+    budget 30;
+    confirm human;
+    evidence ["fact.cid", "confirmation.token"];
+
+    step main {
+        entity = lit::entity();
+        text = lit::text();
+        edit = cms::edit_section(entity, text);
+        published = cms::publish(edit);
+        output [published];
+    }
+}

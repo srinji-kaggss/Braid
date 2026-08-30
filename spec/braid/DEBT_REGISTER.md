@@ -19,7 +19,8 @@
   crates.io-ready; the rest `cargo add --git`.
 - ✅ **Tier-2 safety-assurance CI** (U-SA, D32) — `braid.profile.json` binds
   Keel's 20 atoms (gate `NotSlop`); `keel/` vendored; the gate runs in CI.
-- ✅ **First real language frontend** (U11, D31) — `braid-elaborate-js`
+- ✅ **Real language frontends** (U11, D31, D33) — the JS expression proof and
+  bounded native `braid-elaborate-dsl` Capsule authoring surface
   compiles a JS expression subset (literals + `+`) into admitted capsules via
   the one verifier; "renders JS useless" is operational for that subset.
 - ✅ **JS expression language + vocab v2** (U12, D-VOCAB.1) — operator-
@@ -100,18 +101,24 @@ with no V. A Java-ecosystem substrate without execution is a spec, not a
 product.
 **Closes**: U7 (blocked); PRD §1 "self-sufficient runtime ecosystem."
 
-### D-ELAB — No real language frontend / elaborator *(first slice LANDED — U11)*
-🟡 **Partially closed.** `braid-elaborate-js` (U11) is the first real frontend:
-it lexes/parses a JS *expression* subset (string/number literals + `+`,
-parenthesizable) and **compiles JS text into an admitted capsule** via the one
-`braid-verify` — the "renders JS useless" claim (D31) is now *operational* for
-that subset, not just architectural. Remaining gap: it is an *expression* slice
-(no identifiers/statements/calls; valueless `js.lit.*`), there is no Java→Braid,
-and no D6-gated surface syntax for the human authoring direction. A Java
-ecosystem still needs a full `javac`-class frontend.
-**Closes**: U11 (the expression slice — done); U12 (JS at scale + literal
-payloads); D6-gated surface syntax (later); eventually a real multi-language
-frontend.
+### D-ELAB — Native language frontend / elaborator *(bounded v0 LANDED — D33)*
+🟡 **Partially closed.** `braid-elaborate-dsl` implements the versioned native
+Capsule DSL authorized by ADR-102/D33: bounded parsing, namespaced calls and
+pipelines, explicit authority/effect assertions, lowering through
+`braid_sdk::Builder`, existing-wire emission, and independent admission. The
+three CMS demo sources have JSON-of-IR byte parity, pinned CIDs, typed refusal
+coverage, and proof-gated reference-interpreter tests. `braid dsl check` and
+`braid dsl compile` expose the journey without Rust, JSON, or JavaScript.
+
+Remaining: Capsule v0 has no runtime literal payload contract; schema/state and
+Flow/RON authoring remain separately gated; #72 still owns hostile canonical
+Capsule decoder preflight; and `braid-run` remains a reference interpreter, not
+a production runtime. The JS expression frontend remains a useful independent
+elaboration-seam proof, not the native DSL.
+
+**Closes when:** issue #77's complete acceptance contract and repository gate
+are green and the issue is independently confirmed closed. Broader
+multi-language and production-runtime work remains separate debt.
 
 ### D-CONSUMER — Zero real consumers
 The browser engine has a parallel `BraidTerm` enum (steer note delivered at

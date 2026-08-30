@@ -36,6 +36,7 @@
 
 use std::process::ExitCode;
 
+use braid_elaborate_dsl::{ErrorCode as DslErrorCode, MAX_SOURCE_BYTES, elaborate};
 use braid_ir::{Capsule, ConfirmPolicy};
 use braid_render::{DeltaKind, has_widening, manifest, manifest_diff, render_text};
 use braid_sdk::Builder;
@@ -99,6 +100,7 @@ pub fn run(args: &[String]) -> ExitCode {
         "verify" => cmd_verify(rest),
         "render" => cmd_render(rest),
         "diff" => cmd_diff(rest),
+        "dsl" => cmd_dsl(rest),
         "store" => crate::store::cmd_store(rest),
         "catalog" => crate::store::cmd_catalog(rest),
         "summary" => crate::store::cmd_summary(rest),
@@ -139,6 +141,9 @@ USAGE:
     braid verify <capsule.braid> [--grant <cap>] run the admission pipeline (exit 1 on Reject)
     braid render <capsule.braid>                 the human-review manifest
     braid diff <old.braid> <new.braid>           manifest delta (exit 1 on any Widening)
+    braid dsl check <source.brd>                  parse + lower + independently admit, write nothing
+    braid dsl compile <source.brd> -o <out.braid> [--emit-json <out.json>]
+                                                  admitted Braid DSL -> canonical bytes
     braid store put <repo-manifest.json> [--store <dir>] [--replace]
                                                   validate + install one repo manifest
     braid catalog [--store <dir>]                 the org map (declared inventory == store)
@@ -148,6 +153,97 @@ EXIT CODES: 0 ok · 1 policy-negative / fail-closed denial · 2 operator error
 
 `verify --grant` may repeat; it sets the ambient authority the principal holds.
 Default ambient = the capsule's own declared grants (the happy-path check).";
+
+// ───────────────────────────────── DSL ────────────────────────────────────
+
+fn read_dsl_source(path: &str) -> Result<String, String> {
+    let metadata = std::fs::metadata(path).map_err(|error| format!("read {path}: {error}"))?;
+    let length = usize::try_from(metadata.len())
+        .map_err(|_| format!("{path}: source length does not fit this platform"))?;
+    if length > MAX_SOURCE_BYTES {
+        return Err(format!(
+            "{path}: {} at byte 0: source is {length} bytes; maximum is {MAX_SOURCE_BYTES}",
+            DslErrorCode::SourceTooLarge.as_str()
+        ));
+    }
+    let bytes = std::fs::read(path).map_err(|error| format!("read {path}: {error}"))?;
+    String::from_utf8(bytes).map_err(|error| {
+        format!(
+            "{path}: BRD003_INVALID_TOKEN at byte {}: source is not UTF-8",
+            error.utf8_error().valid_up_to()
+        )
+    })
+}
+
+fn cmd_dsl(args: &[String]) -> CliResult {
+    let Some(action) = args.first() else {
+        return Err("dsl needs `check` or `compile`".into());
+    };
+    let mut source_path = None;
+    let mut output_path = None;
+    let mut json_path = None;
+    let mut cursor = 1;
+    while cursor < args.len() {
+        match args[cursor].as_str() {
+            "-o" | "--out" => {
+                output_path = Some(args.get(cursor + 1).ok_or("`--out` needs a path")?.as_str());
+                cursor += 2;
+            }
+            "--emit-json" => {
+                json_path = Some(
+                    args.get(cursor + 1)
+                        .ok_or("`--emit-json` needs a path")?
+                        .as_str(),
+                );
+                cursor += 2;
+            }
+            value if !value.starts_with('-') && source_path.is_none() => {
+                source_path = Some(value);
+                cursor += 1;
+            }
+            other => return Err(format!("unexpected arg `{other}` (dsl {action})")),
+        }
+    }
+    let source_path = source_path.ok_or_else(|| format!("dsl {action} needs <source.brd>"))?;
+    match action.as_str() {
+        "check" if output_path.is_some() || json_path.is_some() => {
+            return Err("dsl check does not accept output paths; use `dsl compile`".into());
+        }
+        "check" => {}
+        "compile" if output_path.is_none() => {
+            return Err("dsl compile needs `-o <out.braid>`".into());
+        }
+        "compile" => {}
+        other => {
+            return Err(format!(
+                "unknown dsl action `{other}`; use `check` or `compile`"
+            ));
+        }
+    }
+
+    let source = read_dsl_source(source_path)?;
+    let result = match elaborate(&source) {
+        Ok(value) => value,
+        Err(error) if error.code == DslErrorCode::VerificationRejected => {
+            println!("REJECT {}", error);
+            return Err(POLICY_NEGATIVE.into());
+        }
+        Err(error) => return Err(format!("{source_path}: {error}")),
+    };
+
+    if let Some(path) = output_path {
+        std::fs::write(path, &result.bytes).map_err(|error| format!("write {path}: {error}"))?;
+        eprintln!("wrote {path} ({} bytes)", result.bytes.len());
+    }
+    if let Some(path) = json_path {
+        std::fs::write(path, result.json_ir.as_bytes())
+            .map_err(|error| format!("write {path}: {error}"))?;
+        eprintln!("wrote {path} (JSON-of-IR parity transport)");
+    }
+    eprintln!("cid {}", result.capsule.cid().to_hex());
+    println!("{}", result.manifest_text);
+    Ok(())
+}
 
 // ───────────────────────────────── encode ─────────────────────────────────
 

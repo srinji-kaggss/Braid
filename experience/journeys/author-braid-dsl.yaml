@@ -1,0 +1,52 @@
+id: author-braid-dsl
+actor: human-or-agent-author
+job: Author a bounded Braid capsule in Braid syntax and receive canonical bytes that the independent verifier admits.
+prior_knowledge:
+  - Knows the public `braid dsl` help text and the vocabulary term catalog.
+  - Does not know the Rust SDK, canonical wire encoding, or verifier internals.
+start:
+  installation: clean Braid checkout or installed Braid CLI
+  state: a UTF-8 `.brd` source file
+success:
+  visible_outcome: Canonical capsule bytes, CID, manifest, and optional JSON-of-IR are emitted only after independent admission.
+states:
+  - name: source-read
+    expectation: Oversized or non-UTF-8 input is refused before parsing.
+  - name: parsed
+    expectation: Only the versioned closed grammar is accepted; unsupported constructs receive a stable typed diagnostic.
+  - name: lowered
+    expectation: Every term resolves through the selected registry and declared authority exactly matches derived authority.
+  - name: admitted
+    expectation: The independent verifier, not the parser or SDK, decides whether bytes are admissible.
+  - name: emitted
+    expectation: The byte artifact, CID, manifest, and JSON transport describe the same capsule.
+invariants:
+  - The DSL never creates a second wire format or verifier.
+  - Unknown syntax, terms, capabilities, effects, and fields fail closed.
+  - Declared capabilities and effects must equal the derived sets; authority cannot be widened or hidden.
+  - Same source and registry pin produce identical canonical bytes and CID.
+  - DSL and JSON-of-IR paths produce byte-identical capsules.
+  - No output file is written when parsing, lowering, or admission fails.
+trust_boundaries:
+  - The elaborator is outside the trusted core and every result is independently verified.
+  - Irreversible or egress terms require an explicit human-confirm policy.
+  - Runtime values, durable state, recurrence, and free-form code are not fabricated when the IR cannot represent them.
+recovery_contracts:
+  - Diagnostics include a stable code, byte offset, failed construct, and corrective action.
+  - Re-running an unchanged valid source overwrites only the explicitly selected output and reproduces its bytes.
+  - Invalid source preserves all existing artifacts.
+agent_contracts:
+  - Exit 0 means admitted artifact emitted; exit 1 means policy rejection; exit 2 means source, usage, or IO error.
+  - Standard output is reserved for artifact or structured data; diagnostics and CID receipts use standard error.
+  - Source bytes are bounded before token or AST allocation.
+probes:
+  - id: demo-edit-parity
+    action: Compile the edit-home-hero DSL fixture and prove byte equality with the existing JSON-of-IR fixture.
+  - id: demo-publish-confirm
+    action: Compile confirmed publish and refuse the same source when confirmation is removed.
+  - id: unknown-term
+    action: Compile a source containing an unregistered namespaced term and require a typed refusal.
+  - id: authority-mismatch
+    action: Add an unused capability or omit a derived effect and require a typed refusal.
+  - id: hostile-source
+    action: Exercise byte, token, nesting, identifier, and statement ceilings without panic or partial output.

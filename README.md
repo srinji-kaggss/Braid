@@ -32,12 +32,13 @@ path; that plan is a cache, never a second wire or an authority credential.
 | `crates/braid-verify` | Independent strict decoder + fail-closed admission pipeline; emits CID-bound `AdmissionProof` + `P × P × U` compact `AdmittedCapsule` projection. |
 | `crates/braid-render` | CID-bound manifest, deterministic text rendering, widening/narrowing diff, DOT export. |
 | `crates/braid-sdk` | Typed authoring builder over `braid-ir`. |
-| `crates/braid-cli` | The `braid` binary: encode, decode, verify, render, diff, catalog, store. |
+| `crates/braid-cli` | The `braid` binary: DSL check/compile, encode, decode, verify, render, diff, catalog, store. |
 | `crates/braid-manifest` | Repository-manifest sibling artifact (closed dimensions, canonical bytes, CID). |
 | `crates/braid-run` | Deterministic DAG evaluation + capability-gated effect dispatch. |
 | `crates/braid-governance` | Signed Keel change envelopes, budgets, allowlists, commitments, expiry. |
 | `crates/braid-runtime` | Executable startup contract (validated args + one startup-failure path). |
 | `crates/braid-elaborate-js` | Operator-precedence JS expression frontend that elaborates text into admitted capsules. |
+| `crates/braid-elaborate-dsl` | Bounded native Braid DSL frontend for namespaced capsule graphs; lowers to the existing wire and independent verifier. |
 | `crates/braid-project` | Multi-capsule project manifest and deterministic `braid-project build`. |
 | `crates/braid-integrate` | Repo-graph advisor — proposes `lgwks_std` / `lgwks_bot` seams (`braid-integrate --json`). |
 | `crates/braid-vocab-cms` | CMS vocabulary — the kernel term registry and capability verbs. |
@@ -51,6 +52,14 @@ path; that plan is a cache, never a second wire or an authority credential.
 | `spec/braid/` | PRD, decision register, threat model, KAT vectors. |
 
 ## Build & test
+
+Check or compile a native Braid DSL source without introducing another wire or
+verifier:
+
+```bash
+cargo run -p braid-cli -- dsl check crates/braid-elaborate-dsl/tests/fixtures/edit-home-hero.brd
+cargo run -p braid-cli -- dsl compile crates/braid-elaborate-dsl/tests/fixtures/edit-home-hero.brd -o /tmp/edit-home-hero.braid
+```
 
 ```bash
 cargo check --workspace
