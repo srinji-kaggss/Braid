@@ -166,7 +166,7 @@ Every byte passes through independent stages in order. Any stage may REJECT with
 
 ```mermaid
 flowchart LR
-    Bytes["Canonical bytes<br/>≤16 MiB wire<br/>≤128 MiB preflight"] --> S1
+    Bytes["Canonical capsule bytes<br/>≤16 MiB wire<br/>≤262k values"] --> S1
 
     S1["Stage 1<br/>CanonicalForm<br/>CBOR bijection guard"] --> S2
     S2["Stage 2<br/>VersionPin<br/>ir / vocab / registry"] --> S3
@@ -303,7 +303,8 @@ Every hostile input is a typed rejection, not a panic, not a silent fallback:
 - Unknown capability → `MissingCapability` / `UnregisteredCrate` (boundary gate)
 - Float smuggled → `Rejected at canonical-form`
 - `let _ =` / `.ok()` swallowed → `swallow-budget ≤5` CI gate
-- Massive wire → 16 MiB / 128 MiB preflight, 262k Value node ceiling
+- Massive capsule wire → 16 MiB wire and 262k Value-node preflight;
+  Frontier Flow separately retains its 128 MiB wire envelope
 - Unknown justification → `UnknownProof` fail-closed; registry transplant → `InvalidRunnableProof`
 
 Evidence: `cargo test --workspace --all-targets` (225+ suites today), `cargo clippy -- -D warnings`, `cargo fmt --check`, `lgwks_std_gate`, plus KAT vectors and mutation-ledger prover for anti-dredging.

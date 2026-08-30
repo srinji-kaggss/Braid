@@ -15,3 +15,8 @@ braid-capability = { workspace = true }
 [dev-dependencies]
 lgwks_std = { workspace = true }
 braid-vocab-cms = { workspace = true }
+proptest = { workspace = true }
+
+[[bench]]
+name = "preflight_alloc"
+harness = false
