@@ -38,7 +38,8 @@ if grep -Rq '__BRAID_' "$PROBE_DIR"; then
   exit 1
 fi
 
-CARGO_TARGET_DIR="$PROBE_DIR/target" \
+CARGO_NET_GIT_FETCH_WITH_CLI="${CARGO_NET_GIT_FETCH_WITH_CLI:-true}" \
+  CARGO_TARGET_DIR="$PROBE_DIR/target" \
   cargo run --locked --manifest-path "$PROBE_DIR/Cargo.toml"
 
 if command -v sha256sum >/dev/null 2>&1; then

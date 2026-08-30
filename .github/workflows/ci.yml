@@ -93,7 +93,9 @@ jobs:
         run: |
           set -eu
           base="${{ steps.base.outputs.ref }}"
-          changed="$(git diff --name-only "$base" -- '*.rs' '*.toml' '*.lock' | head -1)"
+          changed="$(git diff --name-only "$base" -- \
+            '*.rs' '*.toml' '*.lock' '*.sh' \
+            '.github/workflows/*.yml' '.github/workflows/*.yaml' | head -1)"
           if [ -n "$changed" ]; then
             echo "code_changed=yes" >> "$GITHUB_OUTPUT"
             echo "scope: code changed"
