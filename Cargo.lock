@@ -104,8 +104,6 @@ dependencies = [
  "braid-verify",
  "braid-vocab-cms",
  "lgwks_std",
- "lgwks_std_gate",
- "serde",
 ]
 
 [[package]]
@@ -119,11 +117,10 @@ dependencies = [
  "braid-render",
  "braid-run",
  "braid-sdk",
+ "braid-test-support",
  "braid-verify",
  "braid-vocab-cms",
  "lgwks_std",
- "proptest",
- "serde",
 ]
 
 [[package]]
@@ -144,7 +141,7 @@ name = "braid-flow-ir"
 version = "0.1.0"
 dependencies = [
  "braid-ir",
- "proptest",
+ "braid-test-support",
 ]
 
 [[package]]
@@ -154,7 +151,7 @@ dependencies = [
  "braid-flow-ir",
  "braid-flow-verify",
  "braid-ir",
- "proptest",
+ "braid-test-support",
 ]
 
 [[package]]
@@ -163,7 +160,7 @@ version = "0.1.0"
 dependencies = [
  "braid-flow-ir",
  "braid-ir",
- "proptest",
+ "braid-test-support",
 ]
 
 [[package]]
@@ -172,7 +169,6 @@ version = "0.1.0"
 dependencies = [
  "ed25519-dalek",
  "lgwks_std",
- "serde",
 ]
 
 [[package]]
@@ -183,9 +179,6 @@ dependencies = [
  "lgwks_bot",
  "lgwks_std",
  "lgwks_std_gate",
- "serde",
- "serde_json",
- "tempfile",
 ]
 
 [[package]]
@@ -194,10 +187,9 @@ version = "0.1.0"
 dependencies = [
  "blake3",
  "braid-capability",
+ "braid-test-support",
  "braid-vocab-cms",
  "lgwks_std",
- "proptest",
- "serde_json",
 ]
 
 [[package]]
@@ -206,7 +198,6 @@ version = "0.1.0"
 dependencies = [
  "braid-ir",
  "lgwks_std",
- "serde",
 ]
 
 [[package]]
@@ -220,7 +211,6 @@ dependencies = [
  "braid-vocab-js",
  "braid-vocab-rust",
  "lgwks_std",
- "serde",
 ]
 
 [[package]]
@@ -260,15 +250,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "braid-test-support"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+]
+
+[[package]]
 name = "braid-verify"
 version = "0.1.0"
 dependencies = [
  "blake3",
  "braid-capability",
  "braid-ir",
+ "braid-test-support",
  "braid-vocab-cms",
  "lgwks_std",
- "proptest",
 ]
 
 [[package]]
@@ -551,7 +548,6 @@ name = "lgwks_bot"
 version = "0.1.1"
 dependencies = [
  "lgwks_std",
- "serde",
 ]
 
 [[package]]
@@ -571,6 +567,9 @@ dependencies = [
 [[package]]
 name = "lgwks_std_gate"
 version = "0.1.0"
+dependencies = [
+ "lgwks_std",
+]
 
 [[package]]
 name = "libc"

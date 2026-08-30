@@ -1,4 +1,4 @@
-# Braid's approved dependencies — the semantic contract for INV-DEP-REGISTERED.
+# Braid's approved dependency edges — the contract for INV-DEP-EDGE-OWNED.
 #
 # Read by `lgwks_std_gate`. A crate reaches this file only after the ladder in
 # `lgwks-gate tiers` has been climbed and every rung above a dependency was
@@ -10,28 +10,173 @@
 # `vendor`.
 
 [policy]
-# Adoption, not enforcement — yet. Measured 2026-08-19: 119 resolved crates,
-# 105 of them unapproved. Approving 105 entries today would fill this file with
-# blocks nobody would defend in a diff, which is a whitelist wearing a
-# contract's clothes.
-#
-# The order is deliberate and is recorded in `docs/LGWKS-STD-MIGRATION.md`:
-# land the ELIMINATE-tier swaps first so the number falls without anyone
-# approving anything, approve what genuinely remains rung by rung, and only
-# then flip this to `true`. From that point the gate is a ratchet.
-#
-# While this is false, refusals report as `cargo::warning` and the build passes.
-#
-# Verified 2026-08-19 by flipping it: `enforce = true` fails `cargo build -p
-# braid-cli` with exit 101 and one `cargo::error` per unapproved crate. The
-# ratchet works; the register is what is not ready.
-enforce = false
+enforce = true
+repository = "https://github.com/srinji-kaggss/Braid"
 
 [[approved]]
-crate = "rusternetes"
+crate = "serde"
 tier = "boundary"
-version = "0.1"
-reason = "Reimplementing the Kubernetes control plane in Rust is a multi-year project with no std or lgwks_std alternative."
+version = "^1.0.228"
+owner = "braid-capability"
+capability = "wire.capability-token.no-std"
+source = "registry"
+allowed_consumers = "braid-capability"
+allowed_kinds = "normal"
+reason = "No-std derive support preserves the protocol token without importing the std-plus facade."
 approved_by = "Director"
-approved_on = "2026-08-27"
-review = "https://github.com/calfonso/rusternetes"
+approved_on = "2026-08-30"
+review = "https://github.com/srinji-kaggss/Braid/issues/91"
+
+[[approved]]
+crate = "serde"
+tier = "boundary"
+version = "^1"
+owner = "lgwks_std"
+capability = "encoding.serde"
+source = "registry"
+allowed_consumers = "lgwks_std"
+allowed_kinds = "normal"
+reason = "Derive-based serialization needs compiler introspection the standard library does not expose."
+approved_by = "Director"
+approved_on = "2026-08-30"
+review = "https://github.com/srinji-kaggss/Braid/issues/91"
+
+[[approved]]
+crate = "serde_json"
+tier = "boundary"
+version = "^1"
+owner = "lgwks_std"
+capability = "encoding.json"
+source = "registry"
+allowed_consumers = "lgwks_std"
+allowed_kinds = "normal"
+reason = "Interoperable JSON parsing requires a standards-complete parser beyond the standard library."
+approved_by = "Director"
+approved_on = "2026-08-30"
+review = "https://github.com/srinji-kaggss/Braid/issues/91"
+
+[[approved]]
+crate = "blake3"
+tier = "boundary"
+version = "^1.8"
+owner = "lgwks_std"
+capability = "hash.blake3"
+source = "registry"
+allowed_consumers = "lgwks_std"
+allowed_kinds = "normal"
+reason = "BLAKE3 compatibility requires the audited algorithm implementation absent from the standard library."
+approved_by = "Director"
+approved_on = "2026-08-30"
+review = "https://github.com/srinji-kaggss/Braid/issues/91"
+
+[[approved]]
+crate = "blake3"
+tier = "boundary"
+version = "^1.8.5"
+owner = "braid-ir"
+capability = "protocol.canonical-cid"
+source = "registry"
+allowed_consumers = "braid-ir, braid-verify"
+allowed_kinds = "normal"
+reason = "Independent canonical CID production and verification require identical BLAKE3 protocol bytes."
+approved_by = "Director"
+approved_on = "2026-08-30"
+review = "https://github.com/srinji-kaggss/Braid/issues/91"
+
+[[approved]]
+crate = "ed25519-dalek"
+tier = "boundary"
+version = "^2.2"
+owner = "braid-governance"
+capability = "governance.signature.ed25519"
+source = "registry"
+allowed_consumers = "braid-governance"
+allowed_kinds = "normal"
+reason = "Ed25519 signature verification requires audited curve arithmetic absent from the standard library."
+approved_by = "Director"
+approved_on = "2026-08-30"
+review = "https://github.com/srinji-kaggss/Braid/issues/91"
+
+[[approved]]
+crate = "proptest"
+tier = "boundary"
+version = "^1.6.0"
+owner = "braid-test-support"
+capability = "test.property-generation"
+source = "registry"
+allowed_consumers = "braid-test-support"
+allowed_kinds = "normal"
+reason = "Shrinking property generators provide falsification coverage unavailable in the standard test harness."
+approved_by = "Director"
+approved_on = "2026-08-30"
+review = "https://github.com/srinji-kaggss/Braid/issues/91"
+
+[[approved]]
+crate = "regex"
+tier = "boundary"
+version = "^1.13"
+owner = "lgwks_std"
+capability = "pattern.regex"
+source = "registry"
+allowed_consumers = "lgwks_std"
+allowed_kinds = "normal"
+reason = "Linear-time regular expression matching is not provided by the standard library."
+approved_by = "Director"
+approved_on = "2026-08-30"
+review = "https://github.com/srinji-kaggss/Braid/issues/91"
+
+[[approved]]
+crate = "rkyv"
+tier = "boundary"
+version = "^0.8"
+owner = "lgwks_std"
+capability = "encoding.archive"
+source = "registry"
+allowed_consumers = "lgwks_std"
+allowed_kinds = "normal"
+reason = "Validated zero-copy archived values require a wire implementation beyond standard library primitives."
+approved_by = "Director"
+approved_on = "2026-08-30"
+review = "https://github.com/srinji-kaggss/Braid/issues/91"
+
+[[approved]]
+crate = "ron"
+tier = "boundary"
+version = "^0.12"
+owner = "lgwks_std"
+capability = "encoding.ron"
+source = "registry"
+allowed_consumers = "lgwks_std"
+allowed_kinds = "normal"
+reason = "Rust-native human-readable data interchange requires a parser absent from the standard library."
+approved_by = "Director"
+approved_on = "2026-08-30"
+review = "https://github.com/srinji-kaggss/Braid/issues/91"
+
+[[approved]]
+crate = "getrandom"
+tier = "boundary"
+version = "^0.4"
+owner = "lgwks_std"
+capability = "random.os-entropy"
+source = "registry"
+allowed_consumers = "lgwks_std"
+allowed_kinds = "normal"
+reason = "Portable operating-system entropy access is not exposed uniformly by the standard library."
+approved_by = "Director"
+approved_on = "2026-08-30"
+review = "https://github.com/srinji-kaggss/Braid/issues/91"
+
+[[approved]]
+crate = "tempfile"
+tier = "boundary"
+version = "^3.20"
+owner = "lgwks_std"
+capability = "test.atomic-tempdir"
+source = "registry"
+allowed_consumers = "lgwks_std"
+allowed_kinds = "dev"
+reason = "Race-safe temporary directory lifecycle handling exceeds standard library test primitives."
+approved_by = "Director"
+approved_on = "2026-08-30"
+review = "https://github.com/srinji-kaggss/Braid/issues/91"

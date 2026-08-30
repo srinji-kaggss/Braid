@@ -17,4 +17,3 @@ path = "src/lib.rs"
 [dependencies]
 braid-ir = { workspace = true }
 lgwks_std = { workspace = true, features = ["json"] }
-serde = { workspace = true }

@@ -41,13 +41,14 @@ path; that plan is a cache, never a second wire or an authority credential.
 | `crates/braid-elaborate-dsl` | Bounded native Braid DSL frontend for namespaced capsule graphs; lowers to the existing wire and independent verifier. |
 | `crates/braid-project` | Multi-capsule project manifest and deterministic `braid-project build`. |
 | `crates/braid-integrate` | Repo-graph advisor — proposes `lgwks_std` / `lgwks_bot` seams (`braid-integrate --json`). |
+| `crates/braid-test-support` | Test-only owner for the workspace property-testing engine. |
 | `crates/braid-vocab-cms` | CMS vocabulary — the kernel term registry and capability verbs. |
 | `crates/braid-vocab-js` | JavaScript vocabulary — JS capsules admitted via `braid-verify` with `js.*` capabilities. |
 | `crates/braid-vocab-rust` | Rust vocabulary. |
 | `crates/braid-vocab-web` | Web vocabulary. |
 | `crates/lgwks-std` | Published: `lgwks_std` on crates.io. |
 | `crates/lgwks-bot` | Published: `lgwks_bot` on crates.io. |
-| `crates/lgwks-std-gate` | Build-time proof that dependencies match the human-approved contract. |
+| `crates/lgwks-std-gate` | Cargo-metadata proof that every direct external edge has one semantic owner and admitted consumers. |
 | `.claude/skills/braid-agent` | AI-agent skill — how an agent uses Braid's tools (see `docs/agent-guide.md`). |
 | `spec/braid/` | PRD, decision register, threat model, KAT vectors. |
 

@@ -1,6 +1,7 @@
-//! `lgwks_std_gate` owns dependency admission and enforces INV-DEP-REGISTERED:
-//! a resolved crate that is neither written by the estate, nor `lgwks_std`
-//! itself, nor an entry in the human-approved register fails the build.
+//! `lgwks_std_gate` owns dependency admission and enforces
+//! INV-DEP-EDGE-OWNED: every external dependency authored by a workspace
+//! package names its semantic owner, capability, source, requirement, allowed
+//! consumers, and allowed dependency kinds.
 //!
 //! The Director's rule in one line: *if a library is not in `std` or `std+`,
 //! it is not an approved dependency, and the code does not compile until a
@@ -8,28 +9,16 @@
 //! make the second half of that sentence mechanically true rather than a
 //! convention people remember.
 //!
-//! ## Where the refusal happens
+//! ## Enforcement boundary
 //!
-//! A CI check is advisory — it runs after the code is written and it can be
-//! skipped. To make an unapproved dependency a *compile* error, the consumer
-//! takes this crate as a build-dependency and calls [`enforce`] from its
-//! `build.rs`:
-//!
-//! ```ignore
-//! // build.rs — INV-DEP-REGISTERED
-//! fn main() {
-//!     lgwks_std_gate::enforce();
-//! }
-//! ```
-//!
-//! Cargo runs `build.rs` before compiling the crate, with the *consumer's*
-//! `CARGO_MANIFEST_DIR`, so the gate reads the consumer's own `Cargo.lock` and
-//! `contract/APPROVED.toml` and fails the build with `cargo::error` before a
-//! single line of the crate is type-checked.
+//! The same `lgwks-gate check` command is an explicit first lane in local and
+//! remote CI. It reads `cargo metadata --no-deps`, not the transitive lockfile
+//! closure, because only metadata preserves the package that authored an edge.
+//! Embedders call [`check_dependencies`] for the identical verdict.
 //!
 //! ## Fail-closed
 //!
-//! A missing register, an unparseable register, and an unreadable lock file are
+//! A missing register, unparseable metadata, an unparseable register, and an unreadable lock file are
 //! all refusals. A gate that passes when it cannot find its own contract is a
 //! gate that reports success for the one condition it exists to catch. The only
 //! way to stand enforcement down is `enforce = false` under `[policy]` in the
@@ -41,13 +30,14 @@
 
 pub mod contract;
 pub mod lock;
+pub mod metadata;
 
 use std::error::Error;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
 use contract::Contract;
-use lock::Resolved;
+use metadata::DirectEdge;
 
 /// Register location relative to the repository root.
 pub const CONTRACT_PATH: &str = "contract/APPROVED.toml";
@@ -60,40 +50,138 @@ const SELF_EXEMPT: [&str; 2] = ["lgwks_std", "lgwks_std_gate"];
 /// One dependency the register does not admit.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Refusal {
-    /// The crate appears in the resolved graph with no approval at all.
-    Unregistered {
-        /// Package name as `Cargo.lock` spells it.
+    /// A path target claims a repository outside this workspace authority.
+    ForeignWorkspaceMember {
+        /// Workspace package declaring the path edge.
+        consumer: String,
+        /// Copied or embedded package name.
         krate: String,
-        /// Version Cargo resolved.
-        version: String,
+        /// Repository declared by the target package.
+        declared_repository: String,
+        /// Repository admitted by this contract.
+        expected_repository: String,
     },
-    /// The crate is approved, but not at the version that resolved. An approval
-    /// is for a specific set of bytes; a drifted version is a new approval, not
-    /// an automatic one.
-    VersionDrift {
-        /// Package name.
+    /// A workspace package authored an external edge with no semantic owner.
+    UnregisteredEdge {
+        /// Package declaring the edge.
+        consumer: String,
+        /// External package name.
         krate: String,
-        /// Version the register approves.
+        /// Cargo manifest requirement.
+        requirement: String,
+        /// Registry, Git, path, or other.
+        source: String,
+        /// Normal, build, or dev.
+        kind: String,
+    },
+    /// The package is registered, but not for this workspace consumer.
+    ConsumerNotAllowed {
+        /// Package declaring the edge.
+        consumer: String,
+        /// External package name.
+        krate: String,
+    },
+    /// The package is registered, but not at this manifest requirement.
+    RequirementDrift {
+        /// Package declaring the edge.
+        consumer: String,
+        /// External package name.
+        krate: String,
+        /// Approved manifest requirement.
         approved: String,
-        /// Version Cargo resolved.
-        resolved: String,
+        /// Authored manifest requirement.
+        declared: String,
+    },
+    /// The package is registered, but the edge changed origin class.
+    SourceDrift {
+        /// Package declaring the edge.
+        consumer: String,
+        /// External package name.
+        krate: String,
+        /// Approved source class.
+        approved: String,
+        /// Authored source class.
+        declared: String,
+    },
+    /// The package is registered, but not for this dependency kind.
+    KindNotAllowed {
+        /// Package declaring the edge.
+        consumer: String,
+        /// External package name.
+        krate: String,
+        /// Authored dependency kind.
+        kind: String,
+    },
+    /// A semantic approval has no authored edge and is stale authority.
+    UnusedApproval {
+        /// Approved external package.
+        krate: String,
+        /// Crate responsible for the capability.
+        owner: String,
+        /// Capability the approval claims to supply.
+        capability: String,
     },
 }
 
 impl fmt::Display for Refusal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Unregistered { krate, version } => write!(
-                f,
-                "{krate} {version} is not in std, not in lgwks_std, and not approved in {CONTRACT_PATH}"
-            ),
-            Self::VersionDrift {
+            Self::ForeignWorkspaceMember {
+                consumer,
                 krate,
-                approved,
-                resolved,
+                declared_repository,
+                expected_repository,
             } => write!(
                 f,
-                "{krate} resolved to {resolved} but {CONTRACT_PATH} approves {approved}"
+                "{consumer} embeds workspace package {krate} from {declared_repository}; consume its published crate instead (workspace authority is {expected_repository})"
+            ),
+            Self::UnregisteredEdge {
+                consumer,
+                krate,
+                requirement,
+                source,
+                kind,
+            } => write!(
+                f,
+                "{consumer} declares unowned {kind} edge {krate} {requirement} from {source}"
+            ),
+            Self::ConsumerNotAllowed { consumer, krate } => write!(
+                f,
+                "{consumer} declares {krate}, but no approval allows that consumer"
+            ),
+            Self::RequirementDrift {
+                consumer,
+                krate,
+                approved,
+                declared,
+            } => write!(
+                f,
+                "{consumer} declares {krate} requirement {declared}, contract approves {approved}"
+            ),
+            Self::SourceDrift {
+                consumer,
+                krate,
+                approved,
+                declared,
+            } => write!(
+                f,
+                "{consumer} declares {krate} from {declared}, contract approves {approved}"
+            ),
+            Self::KindNotAllowed {
+                consumer,
+                krate,
+                kind,
+            } => write!(
+                f,
+                "{consumer} declares {krate} as {kind}, but that edge kind is not approved"
+            ),
+            Self::UnusedApproval {
+                krate,
+                owner,
+                capability,
+            } => write!(
+                f,
+                "unused approval for {krate} capability {capability} owned by {owner}"
             ),
         }
     }
@@ -103,7 +191,13 @@ impl Refusal {
     /// The crate this refusal is about.
     pub fn krate(&self) -> &str {
         match self {
-            Self::Unregistered { krate, .. } | Self::VersionDrift { krate, .. } => krate,
+            Self::ForeignWorkspaceMember { krate, .. }
+            | Self::UnregisteredEdge { krate, .. }
+            | Self::ConsumerNotAllowed { krate, .. }
+            | Self::RequirementDrift { krate, .. }
+            | Self::SourceDrift { krate, .. }
+            | Self::KindNotAllowed { krate, .. }
+            | Self::UnusedApproval { krate, .. } => krate,
         }
     }
 }
@@ -133,6 +227,8 @@ pub enum GateError {
     Contract(contract::ContractError),
     /// The lock file could not be read.
     Lock(lock::LockError),
+    /// Cargo's authored direct dependency graph could not be obtained.
+    Metadata(metadata::MetadataError),
 }
 
 impl fmt::Display for GateError {
@@ -152,6 +248,7 @@ impl fmt::Display for GateError {
             }
             Self::Contract(e) => write!(f, "{CONTRACT_PATH}: {e}"),
             Self::Lock(e) => write!(f, "Cargo.lock: {e}"),
+            Self::Metadata(e) => write!(f, "Cargo metadata: {e}"),
         }
     }
 }
@@ -162,6 +259,7 @@ impl Error for GateError {
             Self::Unreadable { cause, .. } => Some(cause),
             Self::Contract(e) => Some(e),
             Self::Lock(e) => Some(e),
+            Self::Metadata(e) => Some(e),
             _ => None,
         }
     }
@@ -169,50 +267,121 @@ impl Error for GateError {
 
 // ── The audit ───────────────────────────────────────────────────────────────
 
-/// Audits a resolved graph against a register. Pure: no filesystem, no
-/// environment, so the whole decision is testable from two strings.
-pub fn audit(resolved: &[Resolved], register: &Contract) -> Vec<Refusal> {
+fn normalise(name: &str) -> String {
+    name.to_ascii_lowercase().replace('-', "_")
+}
+
+fn allows_consumer(entry: &contract::Entry, consumer: &str) -> bool {
+    entry
+        .allowed_consumers
+        .iter()
+        .any(|allowed| normalise(allowed) == normalise(consumer))
+}
+
+fn edge_matches(entry: &contract::Entry, edge: &DirectEdge) -> bool {
+    allows_consumer(entry, &edge.consumer)
+        && entry.version == edge.requirement
+        && entry.source == edge.source.class()
+        && entry
+            .allowed_kinds
+            .iter()
+            .any(|kind| kind == edge.kind.as_str())
+}
+
+/// Audits authored direct dependency edges against semantic ownership.
+pub fn audit_direct(edges: &[DirectEdge], register: &Contract) -> Vec<Refusal> {
     let mut refusals = Vec::new();
-    for package in resolved {
-        if package.local || is_self_exempt(&package.name) {
-            continue;
-        }
-        match register.approval_for(&package.name) {
-            None => refusals.push(Refusal::Unregistered {
-                krate: package.name.clone(),
-                version: package.version.clone(),
-            }),
-            Some(entry) if !version_admits(&entry.version, &package.version) => {
-                refusals.push(Refusal::VersionDrift {
-                    krate: package.name.clone(),
-                    approved: entry.version.clone(),
-                    resolved: package.version.clone(),
-                })
+    if let Some(expected) = &register.repository {
+        for edge in edges.iter().filter(|edge| edge.workspace) {
+            if let Some(declared) = &edge.target_repository
+                && declared != expected
+            {
+                refusals.push(Refusal::ForeignWorkspaceMember {
+                    consumer: edge.consumer.clone(),
+                    krate: edge.package.clone(),
+                    declared_repository: declared.clone(),
+                    expected_repository: expected.clone(),
+                });
             }
-            Some(_) => {}
         }
     }
-    refusals.sort_by(|a, b| a.krate().cmp(b.krate()));
+    let external: Vec<&DirectEdge> = edges
+        .iter()
+        .filter(|edge| !edge.workspace && !is_self_exempt(&edge.package))
+        .collect();
+    for edge in &external {
+        let approvals: Vec<&contract::Entry> = register.approvals_for(&edge.package).collect();
+        if approvals.is_empty() {
+            refusals.push(Refusal::UnregisteredEdge {
+                consumer: edge.consumer.clone(),
+                krate: edge.package.clone(),
+                requirement: edge.requirement.clone(),
+                source: format!("{}:{}", edge.source.class(), edge.source.detail()),
+                kind: edge.kind.to_string(),
+            });
+            continue;
+        }
+        if approvals.iter().any(|entry| edge_matches(entry, edge)) {
+            continue;
+        }
+        let consumer_approvals: Vec<&&contract::Entry> = approvals
+            .iter()
+            .filter(|entry| allows_consumer(entry, &edge.consumer))
+            .collect();
+        if consumer_approvals.is_empty() {
+            refusals.push(Refusal::ConsumerNotAllowed {
+                consumer: edge.consumer.clone(),
+                krate: edge.package.clone(),
+            });
+        } else if let Some(entry) = consumer_approvals
+            .iter()
+            .find(|entry| entry.source != edge.source.class())
+        {
+            refusals.push(Refusal::SourceDrift {
+                consumer: edge.consumer.clone(),
+                krate: edge.package.clone(),
+                approved: entry.source.clone(),
+                declared: edge.source.class().to_string(),
+            });
+        } else if let Some(entry) = consumer_approvals
+            .iter()
+            .find(|entry| entry.version != edge.requirement)
+        {
+            refusals.push(Refusal::RequirementDrift {
+                consumer: edge.consumer.clone(),
+                krate: edge.package.clone(),
+                approved: entry.version.clone(),
+                declared: edge.requirement.clone(),
+            });
+        } else {
+            refusals.push(Refusal::KindNotAllowed {
+                consumer: edge.consumer.clone(),
+                krate: edge.package.clone(),
+                kind: edge.kind.to_string(),
+            });
+        }
+    }
+    for entry in &register.entries {
+        let used = external.iter().any(|edge| {
+            normalise(&edge.package) == normalise(&entry.krate)
+                && normalise(&edge.consumer) == normalise(&entry.owner)
+                && edge_matches(entry, edge)
+        });
+        if !used {
+            refusals.push(Refusal::UnusedApproval {
+                krate: entry.krate.clone(),
+                owner: entry.owner.clone(),
+                capability: entry.capability.clone(),
+            });
+        }
+    }
+    refusals.sort_by_key(ToString::to_string);
     refusals
 }
 
 fn is_self_exempt(name: &str) -> bool {
     let normalised = name.to_ascii_lowercase().replace('-', "_");
     SELF_EXEMPT.contains(&normalised.as_str())
-}
-
-/// An approved version admits a resolved one when it is equal or a prefix on a
-/// dot boundary, so `1.0` admits `1.0.219` and `1.0.219` admits only itself.
-/// The literal `*` admits any version and is the visible way for a human to say
-/// "deliberately unpinned".
-fn version_admits(approved: &str, resolved: &str) -> bool {
-    if approved == "*" {
-        return true;
-    }
-    resolved == approved
-        || resolved
-            .strip_prefix(approved)
-            .is_some_and(|rest| rest.starts_with('.'))
 }
 
 // ── Filesystem entry points ─────────────────────────────────────────────────
@@ -259,8 +428,9 @@ pub fn check_dependencies_against(
     let contract_path = contract_path.to_path_buf();
     ensure_contract_file(&contract_path)?;
     let register = Contract::parse(&read(&contract_path)?).map_err(GateError::Contract)?;
-    let resolved = lock::parse(&read(&lock_path)?).map_err(GateError::Lock)?;
-    let refusals = audit(&resolved, &register);
+    read(&lock_path)?;
+    let edges = metadata::read(root).map_err(GateError::Metadata)?;
+    let refusals = audit_direct(&edges, &register);
     Ok((register, refusals))
 }
 
@@ -269,75 +439,6 @@ fn read(path: &Path) -> Result<String, GateError> {
         path: path.to_path_buf(),
         cause,
     })
-}
-
-// ── build.rs entry point ────────────────────────────────────────────────────
-
-fn resolve_enforce_root() -> PathBuf {
-    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
-        .expect("CARGO_MANIFEST_DIR is set by cargo for every build script");
-    match repository_root(Path::new(&manifest_dir)) {
-        Ok(root) => root,
-        Err(e) => fail(&[e.to_string()]),
-    }
-}
-
-fn emit_cargo_rerun(root: &Path) {
-    println!(
-        "cargo::rerun-if-changed={}",
-        root.join("Cargo.lock").display()
-    );
-    println!(
-        "cargo::rerun-if-changed={}",
-        root.join(CONTRACT_PATH).display()
-    );
-}
-
-fn handle_enforce_refusals(register: &Contract, refusals: &[Refusal]) {
-    if refusals.is_empty() {
-        return;
-    }
-    let lines: Vec<String> = refusals.iter().map(|r| r.to_string()).collect();
-    if register.enforce {
-        fail(&lines);
-    }
-    for line in &lines {
-        println!("cargo::warning=INV-DEP-REGISTERED (enforcement stood down): {line}");
-    }
-}
-
-/// Fails the consumer's build when its resolved graph carries a dependency the
-/// human-approved register does not admit. Call from `build.rs`; see the module
-/// header for the three-line wiring.
-///
-/// # Panics
-///
-/// Panics when the audit refuses, when the register is missing or unparseable,
-/// or when the lock file cannot be read. That panic is the mechanism: it is how
-/// a build script turns INV-DEP-REGISTERED into a compile error.
-pub fn enforce() {
-    let root = resolve_enforce_root();
-    emit_cargo_rerun(&root);
-
-    let (register, refusals) = match check_dependencies(&root) {
-        Ok(outcome) => outcome,
-        Err(e) => fail(&[e.to_string()]),
-    };
-    handle_enforce_refusals(&register, &refusals);
-}
-
-fn fail(lines: &[String]) -> ! {
-    for line in lines {
-        println!("cargo::error=INV-DEP-REGISTERED: {line}");
-    }
-    println!(
-        "cargo::error=add an approval to {CONTRACT_PATH}, or reach for a lower rung — \
-         `lgwks-gate request <crate> <version>` prints the block to fill in"
-    );
-    panic!(
-        "INV-DEP-REGISTERED: {} unapproved dependencies",
-        lines.len()
-    );
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -352,83 +453,104 @@ mod tests {
         "crate = \"serde\"\n",
         "tier = \"boundary\"\n",
         "version = \"1.0\"\n",
+        "owner = \"lgwks_std\"\n",
+        "capability = \"json.serialization\"\n",
+        "source = \"registry\"\n",
+        "allowed_consumers = \"lgwks_std\"\n",
+        "allowed_kinds = \"normal\"\n",
         "reason = \"Derive-based serialization needs compiler introspection std lacks.\"\n",
         "approved_by = \"Director\"\n",
         "approved_on = \"2026-08-19\"\n",
         "review = \"docs/ADMISSION.md\"\n",
     );
 
-    fn resolved(name: &str, version: &str, local: bool) -> Resolved {
-        Resolved {
-            name: name.into(),
-            version: version.into(),
-            local,
+    fn edge(consumer: &str, package: &str, requirement: &str) -> DirectEdge {
+        DirectEdge {
+            consumer: consumer.into(),
+            package: package.into(),
+            requirement: requirement.into(),
+            kind: metadata::DependencyKind::Normal,
+            source: metadata::DependencySource::Registry(
+                "registry+https://github.com/rust-lang/crates.io-index".into(),
+            ),
+            optional: false,
+            workspace: false,
+            target_repository: None,
         }
     }
 
     #[test]
-    fn an_approved_crate_at_an_approved_version_passes() {
-        let register = Contract::parse(REGISTER).unwrap();
-        assert!(audit(&[resolved("serde", "1.0.219", false)], &register).is_empty());
-    }
-
-    #[test]
-    fn an_unregistered_crate_is_refused() {
+    fn direct_edge_requires_an_allowed_consumer() {
         let register = Contract::parse(REGISTER).unwrap();
         assert_eq!(
-            audit(&[resolved("tokio", "1.40.0", false)], &register),
-            vec![Refusal::Unregistered {
-                krate: "tokio".into(),
-                version: "1.40.0".into()
-            }]
+            audit_direct(&[edge("braid-cli", "serde", "1.0")], &register),
+            vec![
+                Refusal::ConsumerNotAllowed {
+                    consumer: "braid-cli".into(),
+                    krate: "serde".into(),
+                },
+                Refusal::UnusedApproval {
+                    krate: "serde".into(),
+                    owner: "lgwks_std".into(),
+                    capability: "json.serialization".into(),
+                },
+            ]
         );
     }
 
     #[test]
-    fn a_workspace_crate_is_never_audited() {
+    fn exact_owned_direct_edge_passes() {
         let register = Contract::parse(REGISTER).unwrap();
-        assert!(audit(&[resolved("braid-ir", "0.1.0", true)], &register).is_empty());
+        assert!(audit_direct(&[edge("lgwks_std", "serde", "1.0")], &register).is_empty());
     }
 
     #[test]
-    fn the_plus_library_itself_needs_no_approval() {
+    fn unregistered_path_copy_is_refused() {
         let register = Contract::parse(REGISTER).unwrap();
-        assert!(audit(&[resolved("lgwks_std", "0.1.0", false)], &register).is_empty());
+        let mut copied = edge("app", "braid-ir", "*");
+        copied.source = metadata::DependencySource::Path("../copied-braid-ir".into());
+        assert!(matches!(
+            audit_direct(&[copied], &register).first(),
+            Some(Refusal::UnregisteredEdge { source, .. }) if source.starts_with("path:")
+        ));
     }
 
     #[test]
-    fn a_drifted_version_is_refused_even_though_the_crate_is_approved() {
+    fn copied_foreign_workspace_member_is_refused() {
+        let register = Contract::parse(&format!(
+            "[policy]\nrepository = \"https://example.invalid/consumer\"\n{REGISTER}"
+        ))
+        .unwrap();
+        let mut copied = edge("app", "braid-ir", "*");
+        copied.source = metadata::DependencySource::Path("vendor/braid-ir".into());
+        copied.workspace = true;
+        copied.target_repository = Some("https://github.com/srinji-kaggss/Braid".into());
+        assert!(matches!(
+            audit_direct(&[copied], &register).first(),
+            Some(Refusal::ForeignWorkspaceMember { .. })
+        ));
+    }
+
+    #[test]
+    fn registry_to_git_source_drift_is_refused() {
         let register = Contract::parse(REGISTER).unwrap();
-        assert_eq!(
-            audit(&[resolved("serde", "2.0.0", false)], &register),
-            vec![Refusal::VersionDrift {
-                krate: "serde".into(),
-                approved: "1.0".into(),
-                resolved: "2.0.0".into(),
-            }]
+        let mut git = edge("lgwks_std", "serde", "1.0");
+        git.source =
+            metadata::DependencySource::Git("git+https://example.invalid/serde?rev=abc#abc".into());
+        assert!(
+            audit_direct(&[git], &register)
+                .iter()
+                .any(|refusal| matches!(refusal, Refusal::SourceDrift { .. }))
         );
     }
 
     #[test]
-    fn a_prefix_pin_only_matches_on_a_dot_boundary() {
-        assert!(version_admits("1.0", "1.0.219"));
-        assert!(version_admits("1.0.219", "1.0.219"));
-        assert!(!version_admits("1.0", "1.02"));
-        assert!(!version_admits("1.0", "1.0219"));
-        assert!(version_admits("*", "99.1.2"));
-    }
-
-    #[test]
-    fn refusals_are_reported_in_a_stable_order() {
+    fn unused_approval_is_refused() {
         let register = Contract::parse(REGISTER).unwrap();
-        let graph = [
-            resolved("zeroize", "1.8.1", false),
-            resolved("anyhow", "1.0.90", false),
-            resolved("tokio", "1.40.0", false),
-        ];
-        let refusals = audit(&graph, &register);
-        let names: Vec<&str> = refusals.iter().map(|r| r.krate()).collect();
-        assert_eq!(names, vec!["anyhow", "tokio", "zeroize"]);
+        assert!(matches!(
+            audit_direct(&[], &register).as_slice(),
+            [Refusal::UnusedApproval { .. }]
+        ));
     }
 
     /// INV-STDPLUS-APPROVED-ONLY: lgwks-std may depend on vetted leaf crates
@@ -442,7 +564,7 @@ mod tests {
             .parent()
             .unwrap();
 
-        // The gate itself must remain zero-dep.
+        // The gate itself may depend only on the estate facade it enforces.
         {
             let manifest =
                 std::fs::read_to_string(workspace.join("crates/lgwks-std-gate/Cargo.toml"))
@@ -457,10 +579,12 @@ mod tests {
                 .take_while(|l| !l.starts_with('['))
                 .filter(|l| !l.is_empty() && !l.starts_with('#'))
                 .collect();
-            assert!(
-                declared.is_empty(),
-                "lgwks-std-gate declares dependencies: {declared:?}"
+            assert_eq!(
+                declared.len(),
+                1,
+                "unexpected gate dependencies: {declared:?}"
             );
+            assert!(declared[0].starts_with("lgwks_std ="));
         }
 
         // lgwks-std may only declare deps on this approved list.

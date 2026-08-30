@@ -2,7 +2,7 @@
 //! INV-BOT-CAP-DOTTED: capabilities are dotted string names drawn from the
 //! bot vocabulary, consistent with the global IR's `Capability` model.
 
-use serde::{Deserialize, Serialize};
+use lgwks_std::json::{Deserialize, Serialize};
 use std::fmt;
 
 /// A capability permission required by a bot domain.
@@ -10,6 +10,7 @@ use std::fmt;
 /// Dotted string name — `bot.net`, `bot.fs`, `bot.sys`, `bot.notify`. Compared
 /// by name equality. The gate checks `required ⊆ granted` before a bot builds.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(crate = "lgwks_std::json::serde")]
 pub struct Cap(String);
 
 impl Cap {

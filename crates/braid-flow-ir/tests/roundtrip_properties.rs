@@ -5,7 +5,7 @@ use braid_flow_ir::{
     InputPort, PortKey, Predicate, UrgencyClass, ValueExpr, ValueSource,
 };
 use braid_ir::{TypeTag, Value};
-use proptest::prelude::*;
+use braid_test_support::proptest::{self, prelude::*};
 use std::collections::BTreeMap;
 
 fn rank(seed: u64, label: &str) -> u64 {

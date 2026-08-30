@@ -14,7 +14,6 @@ blake3 = { workspace = true }
 braid-capability = { workspace = true }
 
 [dev-dependencies]
-lgwks_std = { workspace = true }
-proptest = { workspace = true }
-serde_json = { workspace = true }
+braid-test-support = { workspace = true }
+lgwks_std = { workspace = true, features = ["json"] }
 braid-vocab-cms = { workspace = true }

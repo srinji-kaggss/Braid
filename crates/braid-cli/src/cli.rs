@@ -42,13 +42,14 @@ use braid_render::{DeltaKind, has_widening, manifest, manifest_diff, render_text
 use braid_sdk::Builder;
 use braid_verify::{Verdict, verify};
 use braid_vocab_cms::registry_v0;
-use serde::{Deserialize, Serialize};
+use lgwks_std::json::{Deserialize, Serialize};
 
 // ── JSON-of-IR author form (D19). `deny_unknown_fields` mirrors the IR's
 //    require_only_keys anti-smuggling discipline: an unrecognized key is a
 //    rejected author input, never silently dropped. ──
 
 #[derive(Deserialize)]
+#[serde(crate = "lgwks_std::json::serde")]
 #[serde(deny_unknown_fields)]
 struct JsonCapsule {
     intent: String,
@@ -63,6 +64,7 @@ struct JsonCapsule {
 }
 
 #[derive(Deserialize, Serialize)]
+#[serde(crate = "lgwks_std::json::serde")]
 #[serde(deny_unknown_fields)]
 struct JsonStrand {
     term: String,
@@ -70,6 +72,7 @@ struct JsonStrand {
 }
 
 #[derive(Serialize)]
+#[serde(crate = "lgwks_std::json::serde")]
 struct JsonCapsuleOut {
     intent: String,
     budget: u64,

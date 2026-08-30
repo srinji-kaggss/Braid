@@ -2,7 +2,7 @@
 //! INV-BOT-SPEC-SERIALIZABLE: every `BotSpec` round-trips through JSON and
 //! INV-BOT-TUPLE-WIRE: causal chains are `(condition, action)` tuples.
 
-use serde::{Deserialize, Serialize};
+use lgwks_std::json::{Deserialize, Serialize};
 
 use super::cap::Cap;
 use super::error::BotError;
@@ -13,6 +13,7 @@ use super::gate::GrantSet;
 /// The serializable bot contract — what an AI emits, what a manifest contains,
 /// what `Bot::build()` validates.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(crate = "lgwks_std::json::serde")]
 pub struct BotSpec {
     /// The bot's unique name.
     pub name: String,
@@ -22,6 +23,7 @@ pub struct BotSpec {
 
 /// One observation binding in a serializable spec.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(crate = "lgwks_std::json::serde")]
 pub struct ChainSpec {
     /// The domain identifier of the observed source (e.g. `"gh::pr_status"`).
     pub source: String,
@@ -33,6 +35,7 @@ pub struct ChainSpec {
 
 /// A serializable action reference.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(crate = "lgwks_std::json::serde")]
 pub struct ActionSpec {
     /// The domain identifier (e.g. `"notify::slack"`).
     pub domain: String,

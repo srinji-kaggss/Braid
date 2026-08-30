@@ -146,6 +146,10 @@ jobs:
         run: |
           cargo metadata --locked >/dev/null || { echo 'Lockfile out of date: run cargo update --workspace and commit Cargo.lock' >&2; exit 1; }
 
+      - name: Enforce dependency edge ownership
+        if: needs.scope.outputs.code_changed == 'yes'
+        run: cargo run --locked -p lgwks_std_gate --bin lgwks-gate -- check .
+
       - name: Build all workspace targets
         if: needs.scope.outputs.code_changed == 'yes'
         run: cargo test --workspace --all-targets --locked --no-run

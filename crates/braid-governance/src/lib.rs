@@ -6,13 +6,14 @@
 //! envelope, then fail-closes every proposed authoring action against it.
 
 use lgwks_std::hex;
-use serde::{Deserialize, Serialize};
+use lgwks_std::json::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
 pub const CHANGE_ENVELOPE_VERSION: u32 = 1;
 const DIGEST_DOMAIN: &[u8] = b"keel.change-envelope.v1\0";
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(crate = "lgwks_std::json::serde")]
 #[serde(rename_all = "kebab-case")]
 pub enum FoundationTier {
     T0Cosmetic,
@@ -23,6 +24,7 @@ pub enum FoundationTier {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(crate = "lgwks_std::json::serde")]
 pub struct ResourceBudget {
     pub max_files_changed: u32,
     pub max_new_dependencies: u32,
@@ -31,6 +33,7 @@ pub struct ResourceBudget {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(crate = "lgwks_std::json::serde")]
 pub struct ChangeEnvelope {
     pub version: u32,
     pub change_id: String,
@@ -55,6 +58,7 @@ pub struct ChangeEnvelope {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(crate = "lgwks_std::json::serde")]
 pub struct SignedChangeEnvelope {
     pub envelope: ChangeEnvelope,
     pub signer_key_id: String,
@@ -64,6 +68,7 @@ pub struct SignedChangeEnvelope {
 
 /// Structured explain-before-author commitment for high-risk work.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(crate = "lgwks_std::json::serde")]
 pub struct DesignCommitment {
     pub change_id: String,
     pub requirement_refs: BTreeSet<String>,

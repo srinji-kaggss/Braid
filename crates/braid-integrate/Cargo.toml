@@ -17,11 +17,3 @@ braid-runtime = { workspace = true }
 lgwks_std = { workspace = true, features = ["json"] }
 lgwks_std_gate = { path = "../lgwks-std-gate" }
 lgwks_bot = { path = "../lgwks-bot" }
-serde = { workspace = true }
-serde_json = "1.0"
-
-[build-dependencies]
-lgwks_std_gate = { path = "../lgwks-std-gate" }
-
-[dev-dependencies]
-tempfile = "3.20"

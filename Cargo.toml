@@ -21,6 +21,7 @@ members = [
     "crates/braid-vocab-rust",
     "crates/braid-manifest",
     "crates/braid-run",
+    "crates/braid-test-support",
     # std+ and its gate. Not `braid-*`: these carry a different authority from
     # the IR and the verifier — `lgwks_std` is the estate's one approved
     # non-`std` surface, and `lgwks_std_gate` enforces INV-DEP-REGISTERED, that
@@ -56,7 +57,6 @@ serde = { version = "1.0.228", default-features = false, features = ["derive", "
 
 # Test-only.
 proptest = "1.6.0"
-serde_json = "1.0"
 
 # Intra-workspace crates.
 braid-capability = { path = "crates/braid-capability" }
@@ -71,6 +71,7 @@ braid-sdk = { path = "crates/braid-sdk" }
 braid-manifest = { path = "crates/braid-manifest" }
 braid-runtime = { path = "crates/braid-runtime" }
 braid-elaborate-dsl = { path = "crates/braid-elaborate-dsl" }
+braid-test-support = { path = "crates/braid-test-support" }
 
 [patch.crates-io]
 # While developing against the in-repo implementation, keep the public contract

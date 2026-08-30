@@ -12,4 +12,4 @@ license = "MIT"
 braid-ir = { workspace = true }
 
 [dev-dependencies]
-proptest = { workspace = true }
+braid-test-support = { workspace = true }

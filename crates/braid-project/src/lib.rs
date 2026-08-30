@@ -33,7 +33,7 @@ use std::collections::BTreeSet;
 use braid_elaborate_js::{ElabError, elaborate_and_admit};
 use braid_ir::{Capsule, Cid};
 use braid_verify::Verdict;
-use serde::Deserialize;
+use lgwks_std::json::Deserialize;
 
 pub mod cli;
 
@@ -49,6 +49,7 @@ const PROJECT_DOMAIN: &[u8] = b"lw.braid.project.v1";
 
 /// A project manifest.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(crate = "lgwks_std::json::serde")]
 pub struct Project {
     pub name: String,
     pub capsules: Vec<CapsuleSource>,
@@ -56,6 +57,7 @@ pub struct Project {
 
 /// One named capsule's source.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(crate = "lgwks_std::json::serde")]
 pub struct CapsuleSource {
     pub name: String,
     pub source: String,

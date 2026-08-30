@@ -14,4 +14,4 @@ braid-flow-ir = { workspace = true }
 
 [dev-dependencies]
 braid-flow-ir = { workspace = true }
-proptest = { workspace = true }
+braid-test-support = { workspace = true }

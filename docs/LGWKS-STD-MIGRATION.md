@@ -108,7 +108,7 @@ Per repo, in this order — see `docs/ADMISSION.md` for the reasoning:
 ```
 lgwks-gate init .                      # fail-closed starting register
 # set [policy] enforce = false          # adoption only, in a signed diff
-# add build.rs + [build-dependencies]
+# add `lgwks-gate check .` as the first local and remote CI build lane
 lgwks-gate check .                     # the work-list
 # land the ELIMINATE swaps above
 # approve what genuinely remains, rung by rung

@@ -1,4 +1,4 @@
-//! `lgwks-gate` is the human-facing half of INV-DEP-REGISTERED: the same audit
+//! `lgwks-gate` is the human-facing half of INV-DEP-EDGE-OWNED: the same audit
 //! the build script runs, runnable by hand, plus the two commands that make the
 //! admission process a path rather than a folk practice.
 //!
@@ -31,7 +31,7 @@ USAGE
              [--json]                  output as JSON instead of a table
 
 EXIT
-  0  every resolved dependency is std, lgwks_std, local, or approved
+  0  every authored external edge has an admitted semantic owner
   2  a refusal, a missing register, or an unparseable one
 ";
 
@@ -100,7 +100,7 @@ fn audit_root(
 
 fn report_refusals(root: &Path, register: &Contract, refusals: &[Refusal]) -> ExitCode {
     eprintln!(
-        "REFUSED  {} — {} unapproved dependencies\n",
+        "REFUSED  {} — {} dependency-edge violations\n",
         root.display(),
         refusals.len()
     );
@@ -122,7 +122,7 @@ fn report_refusals(root: &Path, register: &Contract, refusals: &[Refusal]) -> Ex
 
 fn report_ok(root: &Path, count: usize) -> ExitCode {
     println!(
-        "OK  {} — {} approved, every other resolved crate is local or lgwks_std",
+        "OK  {} — {} semantic approvals, every authored external edge is owned",
         root.display(),
         count
     );
@@ -159,11 +159,16 @@ fn print_request_template(krate: &str, version: &str) {
     println!(
         "\n\
          If every rung above still leaves a dependency, append this to {CONTRACT_PATH},\n\
-         fill in the four blanks, and commit it. The commit is the approval.\n\n\
+         fill in the blanks, and commit it. The commit is the approval.\n\n\
          [[approved]]\n\
          crate = \"{krate}\"\n\
          tier = \"boundary\"          # boundary | vendor — see the ladder above\n\
          version = \"{version}\"\n\
+         owner = \"\"                 # workspace crate responsible for the capability\n\
+         capability = \"\"            # stable semantic capability name\n\
+         source = \"registry\"        # registry | git | path\n\
+         allowed_consumers = \"\"     # comma-separated workspace crate names\n\
+         allowed_kinds = \"normal\"   # normal, build, and/or dev\n\
          reason = \"\"                # one sentence naming what std cannot do\n\
          approved_by = \"\"           # the human who decided\n\
          approved_on = \"\"           # YYYY-MM-DD\n\
@@ -183,7 +188,7 @@ fn run_request(krate: Option<&String>, version: Option<&String>) -> ExitCode {
 // ── init ────────────────────────────────────────────────────────────────────
 
 const STARTER: &str = "\
-# Approved dependencies — the semantic contract for INV-DEP-REGISTERED.
+# Approved dependency edges — the semantic contract for INV-DEP-EDGE-OWNED.
 #
 # A crate reaches this file only after the ladder in `lgwks-gate tiers` has been
 # climbed and every rung above a dependency was rejected for a stated reason.
@@ -196,6 +201,9 @@ const STARTER: &str = "\
 # Fail-closed. Set to false only while a repo is being brought onto the gate,
 # and only in a diff a human signed off — refusals then report as warnings.
 enforce = true
+# Canonical repository URL. A workspace member declaring a different repository
+# is a copied foreign crate and must be consumed as a released dependency.
+repository = \"\"
 ";
 
 fn check_target_exists(target: &Path) -> Result<(), String> {
@@ -431,9 +439,10 @@ fn print_freshness_json(results: &[FreshnessResult]) {
 // ── Ladder text ─────────────────────────────────────────────────────────────
 
 const LADDER: &str = "\
-The std+ admission ladder (INV-DEP-REGISTERED)
+The std+ admission ladder (INV-DEP-EDGE-OWNED)
 
-Every dependency in Cargo.lock must be accounted for at one of these rungs.
+Every direct dependency authored in a workspace manifest must be accounted for.
+Transitive closure remains lockfile provenance, not package-level authority.
 Lower rungs are preferred; each step up is an escalation that requires a reason.
 
   1. Rust standard library (std / core / alloc)
@@ -441,7 +450,7 @@ Lower rungs are preferred; each step up is an escalation that requires a reason.
 
   2. Workspace stdlib+ (`lgwks_std`)
      The common substrate: id (uuid v4), hex, time (RFC 3339), glob, fs, leb128, task.
-     Zero external dependencies of its own; uses standard library only.
+     The estate facade owns its audited external implementations behind one API.
 
   3. ELIMINATE
      Crates whose functionality belongs in `lgwks_std` or std.

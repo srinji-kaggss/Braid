@@ -75,9 +75,9 @@ lgwks_std = { version = "0.5", features = ["full"] }           # everything
 
 ## Dependency philosophy
 
-Every dependency is a vetted leaf or single-purpose stack with zero further
-external deps. The full transitive tree is audited and mechanically enforced —
-an unapproved dependency fails the build.
+Every direct dependency is a vetted leaf or single-purpose stack registered by
+semantic capability and owner. `lgwks-gate check` audits authored edges from
+Cargo metadata; Cargo.lock preserves the exact transitive provenance.
 
 - **blake3** — 3 zero-dep leaves (arrayvec, cfg-if, constant_time_eq)
 - **regex** — 4 BurntSushi-internal crates, zero external deps

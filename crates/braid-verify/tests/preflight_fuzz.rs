@@ -1,8 +1,8 @@
+use braid_test_support::proptest::{self, prelude::*};
 use braid_verify::decode::{
     DecodeError, LimitKind, MAX_VALUE_NODES, MAX_WIRE_BYTES, decode_canonical, preflight_canonical,
     reencode,
 };
-use proptest::prelude::*;
 use std::collections::BTreeMap;
 
 fn canonical_value() -> impl Strategy<Value = braid_ir::Value> {

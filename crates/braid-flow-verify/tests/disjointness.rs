@@ -7,7 +7,7 @@ use braid_flow_verify::{
     analyze_disjointness, verify,
 };
 use braid_ir::Value;
-use proptest::prelude::*;
+use braid_test_support::proptest::prelude::*;
 
 fn fact(name: &str) -> ValueExpr {
     ValueExpr::SnapshotFact(FactRef::new(name).unwrap())
