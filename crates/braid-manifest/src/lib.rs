@@ -24,7 +24,7 @@
 use braid_ir::Value;
 use braid_ir::canon::{CanonError, decode_strict, encode};
 use braid_ir::cid::Cid;
-use serde::Deserialize;
+use lgwks_std::json::Deserialize;
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -329,6 +329,7 @@ fn enforce_contracts(manifest: &RepoManifest) -> Result<(), ManifestError> {
 /// anti-smuggling discipline: an unrecognized key is a rejected author input,
 /// never silently dropped (T3).
 #[derive(Deserialize)]
+#[serde(crate = "lgwks_std::json::serde")]
 #[serde(deny_unknown_fields)]
 struct JsonManifest {
     name: String,

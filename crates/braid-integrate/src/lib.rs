@@ -266,6 +266,36 @@ mod tests {
     use super::*;
     use std::path::Path;
 
+    struct TestDir(std::path::PathBuf);
+
+    fn remove_test_dir(path: &Path) {
+        match std::fs::remove_dir_all(path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => panic!("remove test directory {}: {error}", path.display()),
+        }
+    }
+
+    impl TestDir {
+        fn new(name: &str) -> Self {
+            let path =
+                std::env::temp_dir().join(format!("braid-integrate-{name}-{}", std::process::id()));
+            remove_test_dir(&path);
+            std::fs::create_dir_all(&path).expect("create isolated test directory");
+            Self(path)
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TestDir {
+        fn drop(&mut self) {
+            remove_test_dir(&self.0);
+        }
+    }
+
     #[test]
     fn help_exits_zero() {
         assert_eq!(run(&["--help".to_string()]), ExitCode::SUCCESS);
@@ -291,7 +321,7 @@ mod tests {
 
     #[test]
     fn read_only_by_default_leaves_repo_untouched() {
-        let tmp = tempfile::tempdir().expect("tempdir");
+        let tmp = TestDir::new("read-only");
         let root = tmp.path();
         std::fs::write(
             root.join("package.json"),

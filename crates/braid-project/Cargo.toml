@@ -26,4 +26,3 @@ braid-elaborate-js = { path = "../braid-elaborate-js" }
 braid-vocab-js = { workspace = true }
 braid-vocab-rust = { path = "../braid-vocab-rust" }
 lgwks_std = { workspace = true, features = ["json"] }
-serde = { workspace = true }

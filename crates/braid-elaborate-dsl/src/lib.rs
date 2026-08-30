@@ -16,7 +16,7 @@ use braid_render::{manifest, render_text};
 use braid_sdk::{Builder, Strand};
 use braid_verify::{Verdict, verify};
 use braid_vocab_cms::registry_v0;
-use serde::Serialize;
+use lgwks_std::json::Serialize;
 
 /// Source-language version accepted by this implementation.
 pub const DSL_VERSION: u64 = 0;
@@ -1062,12 +1062,14 @@ fn lower_document(document: &Document) -> Result<Capsule, DslError> {
 }
 
 #[derive(Serialize)]
+#[serde(crate = "lgwks_std::json::serde")]
 struct JsonStrand<'a> {
     term: &'a str,
     inputs: &'a [u32],
 }
 
 #[derive(Serialize)]
+#[serde(crate = "lgwks_std::json::serde")]
 struct JsonCapsule<'a> {
     intent: &'a str,
     budget: u64,

@@ -10,7 +10,7 @@ use crate::scan::Mode;
 
 /// Serialize the report to the machine contract JSON.
 pub fn to_json(report: &Report) -> Result<String, String> {
-    let v = serde_json::json!({
+    let v = lgwks_std::json::json!({
         "repo": report.repo,
         "mode": match report.mode { Mode::Rust => "rust", Mode::Polyglot => "polyglot" },
         "languages": report.languages,
@@ -18,7 +18,7 @@ pub fn to_json(report: &Report) -> Result<String, String> {
             "files": report.scan.files.len(),
             "by_ext": report.scan.by_ext,
             "manifests": report.scan.manifests,
-            "imports": report.scan.files.iter().map(|f| serde_json::json!({
+            "imports": report.scan.files.iter().map(|f| lgwks_std::json::json!({
                 "file": f.rel,
                 "imports": f.imports,
                 "sched_hit": f.sched_hit,
@@ -29,7 +29,7 @@ pub fn to_json(report: &Report) -> Result<String, String> {
             "py_deps": report.scan.py_deps,
             "go_deps": report.scan.go_deps,
         },
-        "findings": report.findings.iter().map(|f| serde_json::json!({
+        "findings": report.findings.iter().map(|f| lgwks_std::json::json!({
             "id": f.id,
             "title": f.title,
             "rationale": f.rationale,
@@ -37,7 +37,7 @@ pub fn to_json(report: &Report) -> Result<String, String> {
             "maps_to": f.maps_to,
             "severity": match f.severity { crate::Severity::Info => "info", crate::Severity::Warn => "warn" },
         })).collect::<Vec<_>>(),
-        "proposals": report.proposals.iter().map(|p| serde_json::json!({
+        "proposals": report.proposals.iter().map(|p| lgwks_std::json::json!({
             "id": p.id,
             "title": p.title,
             "targets": p.targets,
@@ -48,7 +48,7 @@ pub fn to_json(report: &Report) -> Result<String, String> {
         })).collect::<Vec<_>>(),
         "next_steps": report.next_steps,
     });
-    serde_json::to_string_pretty(&v).map_err(|e| e.to_string())
+    lgwks_std::json::to_string_pretty(&v).map_err(|e| e.to_string())
 }
 
 // ── Human text ───────────────────────────────────────────────────────────

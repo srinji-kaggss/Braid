@@ -1,8 +1,10 @@
 # Admission — the process for adding something new
 
-INV-DEP-REGISTERED says a resolved crate that is not `std`, not `lgwks_std`, not
-written by the estate, and not in the register fails the build. This file is how
-something legitimately gets in.
+INV-DEP-EDGE-OWNED says every external edge authored in a workspace manifest
+must name its semantic owner, capability, source, requirement, allowed
+consumers, and dependency kinds. Transitive packages remain lockfile provenance;
+they are not 100 accidental authorities. This file is how an edge legitimately
+gets in.
 
 The short version: **most of this process ends before a dependency exists.**
 Rungs 0 through 4 produce no register entry at all, and they are where the
@@ -73,6 +75,11 @@ lgwks-gate request tokio 1.40
 crate = "tokio"
 tier = "boundary"
 version = "1.40"
+owner = "lgwks_std"
+capability = "task.async-runtime"
+source = "registry"
+allowed_consumers = "lgwks_std"
+allowed_kinds = "normal"
 reason = "An async runtime is not in std and reimplementing one is a multi-year project."
 approved_by = "Director"
 approved_on = "2026-08-19"
@@ -83,9 +90,14 @@ Every field is required and every field is checked:
 
 | field | rule |
 |---|---|
-| `crate` | as `Cargo.lock` spells it; `-`/`_` drift is tolerated |
+| `crate` | upstream Cargo package name; `-`/`_` drift is tolerated |
 | `tier` | `boundary` or `vendor` only |
-| `version` | prefix-on-a-dot-boundary; `1.0` admits `1.0.219`, `*` admits all |
+| `version` | Cargo manifest requirement exactly as metadata reports it |
+| `owner` | workspace crate responsible for the semantic capability |
+| `capability` | stable semantic name for what the package supplies |
+| `source` | admitted origin class: `registry`, `git`, or `path` |
+| `allowed_consumers` | comma-separated workspace crates permitted to declare the edge |
+| `allowed_kinds` | comma-separated `normal`, `build`, and/or `dev` |
 | `reason` | a sentence — 4+ words, 24+ characters, ends in a full stop, and not a restatement of the crate name |
 | `approved_by` | the human who decided |
 | `approved_on` | `YYYY-MM-DD` |
@@ -96,22 +108,18 @@ name with a reason, a pin, an approver, a date, and a link to the evidence is a
 contract. `reason = "needed"` fails the build with the same force as no entry at
 all — verified, and it is the point of the exercise.
 
-## ── Updating an approved version ────────────────────────────────────
+## ── Updating an approved requirement ────────────────────────────────
 
-A drifted version is refused even though the crate is approved. That is
-deliberate:
+A changed Cargo manifest requirement is refused even though the crate is
+approved. That is deliberate:
 
 > "Show me the commit we need. Don't update for the sake of it."
 > — Mitchell Hashimoto
 
-To take a bump, read the diff between the approved version and the new one, then
-edit `version` and `approved_on` in the same commit that raises the pin. If you
-cannot name the commit you need, do not raise the pin.
-
-Pin as tightly as the risk deserves. `version = "1.0"` accepts the patch stream
-without review; `version = "1.0.219"` accepts nothing without review. The author
-picks the strictness by how much of the version they write down, and the choice
-is visible in the diff.
+To change a requirement, read the upstream diff, then edit `version` and
+`approved_on` in the same commit that changes Cargo.toml. The contract spelling
+must match Cargo metadata exactly (`^1.0`, `=1.0.219`, and `~1.0` are distinct
+policies). Cargo.lock remains the exact resolved-byte provenance.
 
 ## ── Bringing a repo onto the gate ───────────────────────────────────
 
@@ -121,7 +129,7 @@ Adoption is not "approve a thousand crates."
 2. Set `[policy] enforce = false`. Refusals now report as warnings. This is the
    only sanctioned use of that flag, it belongs in a diff a human signed, and it
    carries an expiry the repo's own issue tracker owns.
-3. Wire `build.rs` and the build-dependency.
+3. Wire `lgwks-gate check` as the first local and remote CI build lane.
 4. Land the ELIMINATE-tier swaps. The count falls without anyone approving
    anything — that is the whole design.
 5. Approve what genuinely remains, rung by rung.
@@ -133,6 +141,6 @@ full of unexamined approvals is a whitelist again.
 
 ## ── Removing an approval ────────────────────────────────────────────
 
-Delete the block. If the crate is still resolved, the next build fails and names
-it — which is the correct outcome, because a dependency nobody will defend in a
-diff is a dependency the estate should not carry.
+Delete the block. If the direct edge still exists, the next gate run fails and
+names its consumer. If the edge no longer exists, leaving the block also fails
+as stale authority; approvals cannot outlive the code that justified them.

@@ -28,9 +28,3 @@ braid-vocab-cms = { workspace = true }
 braid-manifest = { workspace = true }
 braid-elaborate-dsl = { workspace = true }
 lgwks_std = { workspace = true, features = ["json"] }
-serde = { workspace = true }
-
-# INV-DEP-REGISTERED. A build-dependency, so it never ships in the binary and
-# never enters the runtime graph. See build.rs and ../lgwks-std/README.md.
-[build-dependencies]
-lgwks_std_gate = { path = "../lgwks-std-gate" }

@@ -66,6 +66,7 @@ run "cargo fmt --check" cargo fmt --all -- --check
 # ── Lane 3–5: build, tests, doc tests (ci.yml · build/tests) ─────────────────
 
 run "locked metadata"        locked_metadata
+run "owned dependency edges" cargo run --locked -p lgwks_std_gate --bin lgwks-gate -- check .
 run "build all targets"      cargo test --workspace --all-targets --locked --no-run
 run "workspace tests"        cargo test --workspace --all-targets --locked
 run "doc tests"              cargo test --workspace --doc --locked

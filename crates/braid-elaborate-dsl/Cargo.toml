@@ -15,13 +15,12 @@ braid-sdk = { workspace = true }
 braid-verify = { workspace = true }
 braid-vocab-cms = { workspace = true }
 lgwks_std = { workspace = true, features = ["json"] }
-serde = { workspace = true }
 
 [dev-dependencies]
 braid-flow-ir = { workspace = true }
 braid-flow-plan = { path = "../braid-flow-plan" }
 braid-run = { path = "../braid-run" }
-proptest = { workspace = true }
+braid-test-support = { workspace = true }
 
 [lints.rust]
 unsafe_code = "forbid"

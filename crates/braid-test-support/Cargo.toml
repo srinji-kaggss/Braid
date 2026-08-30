@@ -1,0 +1,15 @@
+[package]
+name = "braid-test-support"
+version = "0.1.0"
+edition = "2024"
+description = "Shared property-test boundary for Braid crates"
+repository = "https://github.com/srinji-kaggss/Braid"
+homepage = "https://github.com/srinji-kaggss/Braid"
+license = "MIT"
+publish = false
+
+[dependencies]
+proptest = { workspace = true }
+
+[lints.rust]
+unsafe_code = "forbid"

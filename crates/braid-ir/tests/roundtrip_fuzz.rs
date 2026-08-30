@@ -4,7 +4,7 @@
 //! the decoder's strictness.)
 
 use braid_ir::{Value, decode_strict, encode};
-use proptest::prelude::*;
+use braid_test_support::proptest::{self, prelude::*};
 use std::collections::BTreeMap;
 
 fn value_strategy() -> impl Strategy<Value = Value> {

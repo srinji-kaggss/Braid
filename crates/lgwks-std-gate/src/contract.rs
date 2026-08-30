@@ -57,10 +57,18 @@ pub struct Entry {
     pub krate: String,
     /// Which tier the approval sits in.
     pub tier: Tier,
-    /// Approved version. Matching is prefix-on-a-dot-boundary, so `1.0` admits
-    /// `1.0.219` and `1.0.219` admits only itself — the author picks the
-    /// strictness by how much of the version they write down.
+    /// Approved Cargo manifest requirement, exactly as metadata reports it.
     pub version: String,
+    /// Workspace crate responsible for this external capability.
+    pub owner: String,
+    /// Stable semantic capability supplied by the dependency.
+    pub capability: String,
+    /// Admitted Cargo source class: `registry`, `git`, or `path`.
+    pub source: String,
+    /// Workspace crates permitted to declare this edge directly.
+    pub allowed_consumers: Vec<String>,
+    /// Permitted edge kinds: `normal`, `build`, and/or `dev`.
+    pub allowed_kinds: Vec<String>,
     /// One sentence naming what the standard library cannot do.
     pub reason: String,
     /// The human who approved it.
@@ -80,6 +88,8 @@ pub struct Contract {
     /// build. Adoption-only: flipping it is a reviewable diff in the register
     /// itself, never an environment variable a process can set for itself.
     pub enforce: bool,
+    /// Canonical repository URL whose workspace members are local authority.
+    pub repository: Option<String>,
     /// Every approved dependency.
     pub entries: Vec<Entry>,
 }
@@ -139,7 +149,7 @@ pub enum ContractError {
         /// The entry's crate name.
         krate: String,
     },
-    /// The same crate was approved twice.
+    /// The same crate/capability owner pair was approved twice.
     DuplicateEntry {
         /// The repeated crate name.
         krate: String,
@@ -215,10 +225,15 @@ impl Error for ContractError {}
 
 // ── Parsing ─────────────────────────────────────────────────────────────────
 
-const REQUIRED: [&str; 7] = [
+const REQUIRED: [&str; 12] = [
     "crate",
     "tier",
     "version",
+    "owner",
+    "capability",
+    "source",
+    "allowed_consumers",
+    "allowed_kinds",
     "reason",
     "approved_by",
     "approved_on",
@@ -278,9 +293,13 @@ fn apply_policy_pair(
     value: &str,
     line_no: usize,
     enforce: &mut bool,
+    repository: &mut Option<String>,
 ) -> Result<(), ContractError> {
     if key == "enforce" {
         *enforce = value == "true";
+        Ok(())
+    } else if key == "repository" {
+        *repository = Some(unquote(value).to_string());
         Ok(())
     } else {
         Err(ContractError::UnknownKey {
@@ -314,6 +333,7 @@ fn process_pair(
     value: &str,
     line_no: usize,
     enforce: &mut bool,
+    repository: &mut Option<String>,
     drafts: &mut [Draft],
 ) -> Result<(), ContractError> {
     match section {
@@ -321,7 +341,7 @@ fn process_pair(
             line: line_no,
             key: key.to_string(),
         }),
-        Section::Policy => apply_policy_pair(key, value, line_no, enforce),
+        Section::Policy => apply_policy_pair(key, value, line_no, enforce, repository),
         Section::Approved => apply_approved_pair(key, value, line_no, drafts),
     }
 }
@@ -331,6 +351,7 @@ fn process_contract_line(
     index: usize,
     section: &mut Section,
     enforce: &mut bool,
+    repository: &mut Option<String>,
     drafts: &mut Vec<Draft>,
 ) -> Result<(), ContractError> {
     let line_no = index + 1;
@@ -345,7 +366,7 @@ fn process_contract_line(
         line: line_no,
         text: line.to_string(),
     })?;
-    process_pair(section, key, value, line_no, enforce, drafts)
+    process_pair(section, key, value, line_no, enforce, repository, drafts)
 }
 
 fn check_duplicate_entry(
@@ -353,9 +374,11 @@ fn check_duplicate_entry(
     entry: &Entry,
     line: usize,
 ) -> Result<(), ContractError> {
-    let duplicate = entries
-        .iter()
-        .any(|e| normalise(&e.krate) == normalise(&entry.krate));
+    let duplicate = entries.iter().any(|existing| {
+        normalise(&existing.krate) == normalise(&entry.krate)
+            && normalise(&existing.owner) == normalise(&entry.owner)
+            && existing.capability == entry.capability
+    });
     if duplicate {
         Err(ContractError::DuplicateEntry {
             krate: entry.krate.clone(),
@@ -371,11 +394,19 @@ impl Contract {
     /// line to skip.
     pub fn parse(text: &str) -> Result<Self, ContractError> {
         let mut enforce = true;
+        let mut repository = None;
         let mut drafts: Vec<Draft> = Vec::new();
         let mut section = Section::None;
 
         for (index, raw) in text.lines().enumerate() {
-            process_contract_line(raw, index, &mut section, &mut enforce, &mut drafts)?;
+            process_contract_line(
+                raw,
+                index,
+                &mut section,
+                &mut enforce,
+                &mut repository,
+                &mut drafts,
+            )?;
         }
 
         let mut entries: Vec<Entry> = Vec::new();
@@ -384,7 +415,11 @@ impl Contract {
             check_duplicate_entry(&entries, &entry, draft.line)?;
             entries.push(entry);
         }
-        Ok(Self { enforce, entries })
+        Ok(Self {
+            enforce,
+            repository,
+            entries,
+        })
     }
 
     /// Finds the approval for a resolved package, tolerating `-`/`_` spelling
@@ -392,6 +427,15 @@ impl Contract {
     pub fn approval_for(&self, krate: &str) -> Option<&Entry> {
         let wanted = normalise(krate);
         self.entries.iter().find(|e| normalise(&e.krate) == wanted)
+    }
+
+    /// Returns every semantic approval for an upstream package. A package may
+    /// legitimately back distinct capabilities with different owners.
+    pub fn approvals_for<'a>(&'a self, krate: &'a str) -> impl Iterator<Item = &'a Entry> {
+        let wanted = normalise(krate);
+        self.entries
+            .iter()
+            .filter(move |entry| normalise(&entry.krate) == wanted)
     }
 }
 
@@ -459,12 +503,26 @@ fn build(draft: &Draft) -> Result<Entry, ContractError> {
         krate,
         tier,
         version: draft.get("version").expect("checked above").to_string(),
+        owner: draft.get("owner").expect("checked above").to_string(),
+        capability: draft.get("capability").expect("checked above").to_string(),
+        source: draft.get("source").expect("checked above").to_string(),
+        allowed_consumers: split_csv(draft.get("allowed_consumers").expect("checked above")),
+        allowed_kinds: split_csv(draft.get("allowed_kinds").expect("checked above")),
         reason,
         approved_by: draft.get("approved_by").expect("checked above").to_string(),
         approved_on,
         review: draft.get("review").expect("checked above").to_string(),
         line: draft.line,
     })
+}
+
+fn split_csv(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(ToString::to_string)
+        .collect()
 }
 
 // ── Field rules ─────────────────────────────────────────────────────────────
@@ -550,6 +608,11 @@ mod tests {
                 "crate = \"serde\"\n",
                 "tier = \"boundary\"\n",
                 "version = \"1.0\"\n",
+                "owner = \"lgwks_std\"\n",
+                "capability = \"json.serialization\"\n",
+                "source = \"registry\"\n",
+                "allowed_consumers = \"lgwks_std\"\n",
+                "allowed_kinds = \"normal\"\n",
                 "reason = \"Derive-based serialization needs compiler introspection std does not expose.\"\n",
                 "approved_by = \"Director\"\n",
                 "approved_on = \"2026-08-19\"\n",
@@ -560,6 +623,24 @@ mod tests {
         )
     }
 
+    fn complete(input: &str) -> String {
+        let mut output = String::new();
+        for line in input.lines() {
+            output.push_str(line);
+            output.push('\n');
+            if line.trim_start().starts_with("version =") {
+                output.push_str(
+                    "owner = \"lgwks_std\"\n\
+                     capability = \"json.serialization\"\n\
+                     source = \"registry\"\n\
+                     allowed_consumers = \"lgwks_std\"\n\
+                     allowed_kinds = \"normal\"\n",
+                );
+            }
+        }
+        output
+    }
+
     #[test]
     fn a_complete_entry_parses() {
         let contract = Contract::parse(&entry("")).unwrap();
@@ -568,6 +649,9 @@ mod tests {
         assert_eq!(e.krate, "serde");
         assert_eq!(e.tier, Tier::Boundary);
         assert_eq!(e.version, "1.0");
+        assert_eq!(e.owner, "lgwks_std");
+        assert_eq!(e.capability, "json.serialization");
+        assert_eq!(e.allowed_consumers, ["lgwks_std"]);
         assert!(e.reason.ends_with('.'));
         assert_eq!(e.approved_by, "Director");
         assert_eq!(e.approved_on, "2026-08-19");
@@ -583,7 +667,7 @@ mod tests {
             "enforce = true\n",
             "\n",
         );
-        let contract = Contract::parse(input).unwrap();
+        let contract = Contract::parse(&complete(input)).unwrap();
         assert!(contract.enforce);
         assert!(contract.entries.is_empty());
     }
@@ -600,7 +684,7 @@ mod tests {
             "approved_on = \"2026-08-19\"\n",
             "review = \"https://example.com/pr#123\"\n",
         );
-        let contract = Contract::parse(input).unwrap();
+        let contract = Contract::parse(&complete(input)).unwrap();
         assert_eq!(contract.entries[0].review, "https://example.com/pr#123");
     }
 
@@ -610,7 +694,7 @@ mod tests {
         assert_eq!(
             Contract::parse(&input),
             Err(ContractError::UnknownKey {
-                line: 9,
+                line: 14,
                 key: "typo".into()
             })
         );
@@ -620,7 +704,7 @@ mod tests {
     fn a_key_before_any_section_is_refused() {
         let input = "orphan = \"value\"\n";
         assert_eq!(
-            Contract::parse(input),
+            Contract::parse(&complete(input)),
             Err(ContractError::OrphanKey {
                 line: 1,
                 key: "orphan".into()
@@ -640,7 +724,7 @@ mod tests {
             "review = \"docs/ADMISSION.md\"\n",
         );
         assert_eq!(
-            Contract::parse(input),
+            Contract::parse(&complete(input)),
             Err(ContractError::MissingField {
                 krate: "serde".into(),
                 field: "reason"
@@ -661,7 +745,7 @@ mod tests {
             "review = \"docs/ADMISSION.md\"\n",
         );
         assert_eq!(
-            Contract::parse(input),
+            Contract::parse(&complete(input)),
             Err(ContractError::BadTier {
                 line: 1,
                 value: "eliminate".into()
@@ -682,7 +766,7 @@ mod tests {
             "review = \"docs/ADMISSION.md\"\n",
         );
         assert_eq!(
-            Contract::parse(input),
+            Contract::parse(&complete(input)),
             Err(ContractError::BadDate {
                 krate: "serde".into(),
                 value: "19-08-2026".into()
@@ -703,7 +787,7 @@ mod tests {
             "review = \"docs/ADMISSION.md\"\n",
         );
         assert_eq!(
-            Contract::parse(input),
+            Contract::parse(&complete(input)),
             Err(ContractError::ThinReason {
                 krate: "serde".into()
             })
@@ -723,7 +807,7 @@ mod tests {
             "review = \"docs/ADMISSION.md\"\n",
         );
         assert_eq!(
-            Contract::parse(input),
+            Contract::parse(&complete(input)),
             Err(ContractError::ThinReason {
                 krate: "serde".into()
             })
@@ -737,7 +821,7 @@ mod tests {
             Contract::parse(&input),
             Err(ContractError::DuplicateEntry {
                 krate: "serde".into(),
-                line: 10
+                line: 15
             })
         );
     }

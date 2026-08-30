@@ -34,13 +34,11 @@ fn allowed_deps(krate: &str) -> &'static [&'static str] {
 
 /// Dev-dependency allowlist (tests only; never linked into the artifact).
 /// `braid-vocab-cms` is a vocabulary package used by the substrate's tests
-/// as a concrete registry to exercise the codec/registry. `serde_json` is
-/// test-only parsing of the pre-validated RFC 8949 / BLAKE3 calibration
-/// corpora (D-FLIGHT) — never linked into the artifact.
+/// as a concrete registry to exercise the codec/registry. JSON corpus parsing
+/// goes through `lgwks_std`; property tests go through `braid-test-support`.
 const ALLOWED_DEV: &[&str] = &[
     "lgwks_std",
-    "proptest",
-    "serde_json",
+    "braid-test-support",
     "braid-ir",
     "braid-render",
     "braid-verify",

@@ -1,5 +1,5 @@
 use braid_elaborate_dsl::{ErrorCode, MAX_SOURCE_BYTES, elaborate};
-use proptest::prelude::*;
+use braid_test_support::proptest::{self, prelude::*};
 
 const EDIT: &str = include_str!("fixtures/edit-home-hero.brd");
 const PUBLISH: &str = include_str!("fixtures/publish-services.brd");

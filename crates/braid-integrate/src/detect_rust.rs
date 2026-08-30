@@ -1,8 +1,8 @@
 //! Rust detectors — thin wrappers over `lgwks_std_gate` + Cargo manifest scans.
 //!
 //! These fire when `Cargo.toml` is present. They reuse the gate's
-//! filesystem audit for `Unregistered`/`VersionDrift` and add the
-//! replacement + scheduler hints that the polyglot pass does not.
+//! direct-edge ownership audit and add the replacement + scheduler hints that
+//! the polyglot pass does not.
 
 use std::path::Path;
 
@@ -43,23 +43,42 @@ fn gate_findings(root: &Path) -> Vec<Finding> {
             .into_iter()
             .map(|r| {
                 let (id, title) = match &r {
-                    lgwks_std_gate::Refusal::Unregistered { .. } => (
-                        "GATE-UNREGISTERED",
-                        format!("Unapproved dependency: {r}"),
+                    lgwks_std_gate::Refusal::ForeignWorkspaceMember { .. } => (
+                        "GATE-FOREIGN-WORKSPACE-COPY",
+                        format!("Copied foreign crate: {r}"),
                     ),
-                    lgwks_std_gate::Refusal::VersionDrift { .. } => (
-                        "GATE-VERSION-DRIFT",
-                        format!("Version drift: {r}"),
+                    lgwks_std_gate::Refusal::UnregisteredEdge { .. } => (
+                        "GATE-UNOWNED-EDGE",
+                        format!("Unowned dependency edge: {r}"),
+                    ),
+                    lgwks_std_gate::Refusal::ConsumerNotAllowed { .. } => (
+                        "GATE-CONSUMER-BYPASS",
+                        format!("Dependency owner bypass: {r}"),
+                    ),
+                    lgwks_std_gate::Refusal::RequirementDrift { .. } => (
+                        "GATE-REQUIREMENT-DRIFT",
+                        format!("Dependency requirement drift: {r}"),
+                    ),
+                    lgwks_std_gate::Refusal::SourceDrift { .. } => (
+                        "GATE-SOURCE-DRIFT",
+                        format!("Dependency source drift: {r}"),
+                    ),
+                    lgwks_std_gate::Refusal::KindNotAllowed { .. } => (
+                        "GATE-KIND-BYPASS",
+                        format!("Dependency kind bypass: {r}"),
+                    ),
+                    lgwks_std_gate::Refusal::UnusedApproval { .. } => (
+                        "GATE-UNUSED-APPROVAL",
+                        format!("Stale dependency authority: {r}"),
                     ),
                 };
                 Finding {
                     id,
                     title,
-                    rationale:
-                        "The gate (INV-DEP-REGISTERED) requires every non-std/lgwks_std crate to be in contract/APPROVED.toml at the resolved version."
-                            .to_string(),
+                    rationale: "The gate requires each authored external edge to name its semantic owner, capability, source, requirement, allowed consumer, and dependency kind."
+                        .to_string(),
                     evidence: vec![r.to_string()],
-                    maps_to: "lgwks_std_gate::audit — add [[approved]] to contract/APPROVED.toml"
+                    maps_to: "lgwks_std_gate::audit_direct — consolidate through the owner or amend contract/APPROVED.toml"
                         .to_string(),
                     severity: Severity::Warn,
                 }
