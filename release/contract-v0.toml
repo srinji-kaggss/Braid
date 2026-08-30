@@ -1,0 +1,44 @@
+schema_version = 1
+contract = "braid-contract-v0"
+tag = "braid-contract-v0.1.0"
+supported_rust = "1.98.0"
+source = "https://github.com/srinji-kaggss/Braid.git"
+
+[known_answers]
+registry_cid = "afaa7dcc9ab2f7d1530da72306c7d821c573f8aa9eda2b5c6e463f121f634acd"
+capsule_cid = "ccedc469e6b0513720969ce1a4f169f53365eeadbc853042c411b44c1f15b71f"
+
+[[crates]]
+name = "braid-capability"
+version = "0.1.0"
+role = "closed capability token vocabulary"
+
+[[crates]]
+name = "braid-ir"
+version = "0.1.0"
+role = "canonical IR, encoding, and CID authority"
+
+[[crates]]
+name = "braid-verify"
+version = "0.1.0"
+role = "independent fail-closed verifier"
+
+[[crates]]
+name = "braid-vocab-cms"
+version = "0.1.0"
+role = "CMS vocabulary and pinned registry"
+
+[[crates]]
+name = "braid-vocab-web"
+version = "0.1.0"
+role = "browser vocabulary"
+
+[deferred]
+crates = [
+  "braid-flow-ir",
+  "braid-flow-verify",
+  "braid-flow-plan",
+  "braid-run",
+  "braid-elaborate-dsl",
+]
+reason = "Issue 63 has not ratified the Read/Write material seam; these APIs are not part of the stable cross-repo contract."

@@ -18,8 +18,8 @@ lgwks_std = { workspace = true, features = ["json"] }
 
 [dev-dependencies]
 braid-flow-ir = { workspace = true }
-braid-flow-plan = { path = "../braid-flow-plan" }
-braid-run = { path = "../braid-run" }
+braid-flow-plan = { workspace = true }
+braid-run = { workspace = true }
 braid-test-support = { workspace = true }
 
 [lints.rust]

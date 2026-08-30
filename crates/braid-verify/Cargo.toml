@@ -2,6 +2,7 @@
 name = "braid-verify"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.98"
 description = "Braid deterministic admission verifier — independent decoder + fail-closed stage pipeline (ADR-088 D3/D9, U3-U5 #560)"
 repository = "https://github.com/srinji-kaggss/Braid"
 homepage = "https://github.com/srinji-kaggss/Braid"

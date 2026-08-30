@@ -6,9 +6,9 @@ description = "Deterministic DAG interpreter and runtime execution engine for Br
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-braid-capability = { path = "../braid-capability" }
-braid-flow-ir = { path = "../braid-flow-ir" }
-braid-flow-plan = { path = "../braid-flow-plan" }
-braid-ir = { path = "../braid-ir" }
-braid-verify = { path = "../braid-verify" }
+braid-capability = { workspace = true }
+braid-flow-ir = { workspace = true }
+braid-flow-plan = { workspace = true }
+braid-ir = { workspace = true }
+braid-verify = { workspace = true }
 lgwks_std = { workspace = true }
