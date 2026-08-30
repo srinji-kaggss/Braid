@@ -127,7 +127,7 @@ flowchart TB
     subgraph FlowIR["Flow IR — lw.braid.flow.v0 — 4 node kinds, 2 edge kinds"]
         direction TB
         N0["InvokeCapsule<br/>capsule: CID(edit-home-hero)<br/>needed_when: backlog>10<br/>satisfied_when: backlog≤10"]
-        N1["Choice<br/>predicate: latency>10ms vs ≤10ms<br/>disjoint Proven/Disproven"]
+        N1["Choice<br/>predicate: latency>10ms vs ≤10ms<br/>pairwise UNSAT proven"]
         N2["InvokeCapsule<br/>capsule: CID(compact_index)<br/>guarantees: frag' < frag"]
         N3["JoinAll<br/>needs: [N2a, N2b] done"]
         N4["Terminal"]
@@ -141,7 +141,7 @@ flowchart TB
 
     Snapshot["Immutable FlowSnapshot<br/>CID(lw.braid.flow.snapshot.v0)<br/>fact bindings + proof freshness"]
 
-    PlanStep["Plan step<br/>satiated=[...]<br/>next=Choice(N1)<br/>trace=[satiation checks]<br/>Plan CID = lw.braid.flow.plan.v0"]
+    PlanStep["Plan step<br/>satiated=[...]<br/>next=Choice(N1) → selected target<br/>trace=[satiation checks]<br/>Plan CID = lw.braid.flow.plan.v0"]
 
     FlowIR -->|"eval predicates<br/>three-valued: Proven/Disproven/Unknown"| Eval{"eval_predicate<br/>Unknown ⇒ fail-closed"}
     Snapshot --> Eval
@@ -157,6 +157,13 @@ flowchart TB
 - forge-harness owns: durable instance, lease/fencing, event history, workers, retries, crash recovery, evidence persistence, receipts. Braid emits *at most one sequential next step*; it does not schedule, persist, or retry.
 
 Closed v0 kinds: `InvokeCapsule`, `Choice`, `JoinAll`, `Terminal` — no `JoinAny`, no races, no unbounded `MapStatic` (expands before encoding). Edges are `Data` (typed capsule port) or `After`.
+
+Choice admission proves every arm pair unsatisfiable in the versioned bounded
+symbolic fragment. A proven overlap carries stable arm identities and a
+deterministic counterexample; unsupported relations or exhausted work return
+typed `Unknown` and block admission. At planning time, every arm is evaluated
+against the immutable snapshot. Any `Unknown` defers the whole Choice; otherwise
+the sole proven arm or mandatory `otherwise` target is bound into the Plan CID.
 
 ---
 

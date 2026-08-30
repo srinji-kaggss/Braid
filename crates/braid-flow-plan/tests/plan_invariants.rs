@@ -49,6 +49,47 @@ fn terminal(name: &str) -> FlowNode {
         urgency: UrgencyClass::Required,
     }
 }
+
+fn choice_flow() -> FlowSpec {
+    FlowSpec::new(
+        FlowName::new("choice-plan").unwrap(),
+        vec![],
+        vec![
+            FlowNode {
+                key: key("choose"),
+                kind: FlowNodeKind::Choice {
+                    arms: vec![
+                        braid_flow_ir::ChoiceArm {
+                            when: Predicate::Eq(
+                                ValueExpr::SnapshotFact(FactRef::new("choice.value").unwrap()),
+                                ValueExpr::Literal(Value::Int(1)),
+                            ),
+                            then: key("one"),
+                        },
+                        braid_flow_ir::ChoiceArm {
+                            when: Predicate::Eq(
+                                ValueExpr::SnapshotFact(FactRef::new("choice.value").unwrap()),
+                                ValueExpr::Literal(Value::Int(2)),
+                            ),
+                            then: key("two"),
+                        },
+                    ],
+                    otherwise: key("other"),
+                },
+                guard: Predicate::Const(true),
+                justification: None,
+                urgency: UrgencyClass::Required,
+            },
+            terminal("one"),
+            terminal("two"),
+            terminal("other"),
+        ],
+        vec![],
+        vec![key("one"), key("two"), key("other")],
+        FlowBounds::default(),
+    )
+    .unwrap()
+}
 fn after(from: &str, to: &str) -> FlowEdge {
     FlowEdge::After {
         from: key(from),
@@ -348,4 +389,87 @@ fn stale_snapshot_must_not_satiate_without_fresh_evidence() {
     assert_ne!(stale.plan_cid, fresh.plan_cid);
     // cannot reuse stale evidence under fresh snapshot — the CIDs already diverge
     assert_ne!(stale_snapshot.cid(), fresh_snapshot.cid());
+}
+
+#[test]
+fn choice_selects_one_snapshot_bound_target_or_otherwise() {
+    let flow = choice_flow();
+    let context = PlanningContext::default();
+    for (value, expected) in [(1, "one"), (2, "two"), (3, "other")] {
+        let snapshot = FlowSnapshot::new(
+            [("choice.value".into(), Value::Int(value))]
+                .into_iter()
+                .collect(),
+        );
+        let output = plan(&flow, &snapshot, &BTreeMap::new(), &context).unwrap();
+        let step = output.next_step.expect("choice is the ready root");
+        assert_eq!(step.kind, braid_flow_plan::PlanStepKind::Choice);
+        assert_eq!(step.choice_target.as_deref(), Some(expected));
+    }
+}
+
+#[test]
+fn unknown_choice_arm_defers_instead_of_falling_through() {
+    let flow = choice_flow();
+    let error = plan(
+        &flow,
+        &FlowSnapshot::new(BTreeMap::new()),
+        &BTreeMap::new(),
+        &PlanningContext::default(),
+    )
+    .unwrap_err();
+    assert!(matches!(error, PlanError::UnknownProof { .. }));
+    assert!(error.to_string().contains("Choice arm"));
+}
+
+#[test]
+fn mutation_removing_snapshot_binding_changes_choice_plan_cid() {
+    let flow = choice_flow();
+    let context = PlanningContext::default();
+    let first = FlowSnapshot::new(
+        [
+            ("choice.value".into(), Value::Int(1)),
+            ("irrelevant.audit".into(), Value::Bool(false)),
+        ]
+        .into_iter()
+        .collect(),
+    );
+    let second = FlowSnapshot::new(
+        [
+            ("choice.value".into(), Value::Int(1)),
+            ("irrelevant.audit".into(), Value::Bool(true)),
+        ]
+        .into_iter()
+        .collect(),
+    );
+    let first_plan = plan(&flow, &first, &BTreeMap::new(), &context).unwrap();
+    let second_plan = plan(&flow, &second, &BTreeMap::new(), &context).unwrap();
+    assert_eq!(
+        first_plan.next_step.as_ref().unwrap().choice_target,
+        second_plan.next_step.as_ref().unwrap().choice_target
+    );
+    assert_ne!(first.cid(), second.cid());
+    assert_ne!(first_plan.plan_cid, second_plan.plan_cid);
+}
+
+#[test]
+fn stale_planner_versions_are_rejected_instead_of_aliasing_plan_identity() {
+    let flow = simple_dag();
+    let snapshot = snap(vec![
+        ("need.scope", true),
+        ("done.scope", false),
+        ("need.build", true),
+        ("done.build", false),
+    ]);
+    let context = PlanningContext {
+        planner_version: 0,
+        ..PlanningContext::default()
+    };
+    assert!(matches!(
+        plan(&flow, &snapshot, &BTreeMap::new(), &context),
+        Err(PlanError::UnsupportedPlannerVersion {
+            found: 0,
+            expected: 1,
+        })
+    ));
 }

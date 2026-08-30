@@ -16,7 +16,7 @@ pub mod snapshot;
 
 pub use eval::{CompletionKind, CompletionMap, eval_predicate};
 pub use plan::{
-    FlowPlan, PlanError, PlanStep, PlanStepKind, PlanningContext, ReverseDeps, SatiatedTransition,
-    plan,
+    FlowPlan, PLANNER_VERSION, PlanError, PlanStep, PlanStepKind, PlanningContext, ReverseDeps,
+    SatiatedTransition, plan,
 };
 pub use snapshot::{FlowSnapshot, MissingEvidence, ProofState};

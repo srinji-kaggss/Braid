@@ -120,7 +120,9 @@ These are not papered over by this ADR:
 1. **Runtime authority bypass:** `braid-run` still accepts a raw `Capsule`; its API must consume a verifier/planner-owned runnable typestate and external authority context, not self-declared grants.
 2. **Runtime allocation amplification:** execution still performs string dispatch and clones every input/output/journal value. It has not yet migrated to `TokenProgram` plus a bounded value arena.
 3. **Justification proof:** the Flow planner must evaluate `needed_when` and `satisfied_when` against a CID-bound snapshot and return the third proof.
-4. **Choice disjointness:** v0 checks choice shape and duplicate targets; it does not prove predicate disjointness. The verifier must not describe that as solved.
+4. **Choice disjointness:** resolved by the bounded v0 symbolic fragment recorded
+   below. Relations outside that fragment remain a typed, admission-blocking
+   `Unknown`; no source-order fallback exists.
 5. **Cross-process proof transport:** a future runnable artifact needs identity-bound evidence/receipt references; the one-byte triad is insufficient.
 
 ## Subsequent resolution
@@ -134,6 +136,18 @@ These are not papered over by this ADR:
   are established before allocation. `cargo bench -p braid-verify --bench
   preflight_alloc --locked` reports allocation counts and peak live bytes for
   accepted and hostile-rejected boundaries.
+- **Choice disjointness (#71):** `braid-flow-verify` now preflights predicate
+  depth, nodes, normal-form clauses/atoms, arm pairs, and aggregate solver work
+  before normal-form allocation. The versioned v0 fragment proves constants,
+  reference/literal equality and order constraints, reflexive reference
+  relations, boolean connectives, and completion-class atoms. It returns
+  `Disjoint`, `Overlap` with deterministic bindings, or typed `Unknown`; both
+  overlap and unknown block admission. `braid-flow-plan` evaluates every arm
+  against the immutable snapshot, defers the entire Choice if any arm is
+  `Unknown`, binds the selected arm/otherwise target into the Plan CID, and
+  never treats three-valued uncertainty as false. This changes Plan identity,
+  so planner algorithm version 1 rejects stale version 0 contexts and requires
+  recomputation rather than in-place migration.
 
 ## Consequences
 

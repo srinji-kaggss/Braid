@@ -616,6 +616,30 @@ loud `Deferred { reason, required_by_version }` (never serialized as
 code MUST NOT silently reinterpret `Unknown` until the amendment lands.
 D-FLOW.6 therefore stands unchanged in this edit.
 
+### D-FLOW.12 — Choice disjointness is a bounded proof, never target uniqueness — **IMPLEMENTED**
+
+For every pair of `Choice` arms, independent admission proves
+`UNSAT(when_i AND when_j)` in the versioned v0 symbolic fragment before
+admitting the Flow. The fragment covers constants, canonical literal/exact
+reference equality and inequality, ordered reference/literal constraints,
+reflexive reference relations, `And`/`Or`/`Not`, and completion-class atoms.
+De Morgan and commutative operand normalization are deterministic. Predicate
+depth (32), nodes (16,384), normal-form clauses (4,096), normal-form atom slots
+(65,536), arm pairs, and aggregate work units (1,000,000) are preflighted before
+solver allocation. Proven overlap returns stable Choice/arm
+identities plus a deterministic minimal supported-clause counterexample;
+unsupported distinct-reference relations and resource exhaustion return typed
+`Unknown`. Both outcomes block admission. Distinct targets provide no proof.
+
+Snapshot evaluation remains owned by `braid-flow-plan`: every arm is evaluated
+against the exact immutable snapshot, any `Unknown` defers the entire Choice,
+and the selected arm or mandatory `otherwise` target is included in the Plan
+CID. This preserves D-FLOW.6 and INV-FLOW-007/008 without minting another proof
+or identity authority. Because the canonical Plan input now includes step kind,
+capsule CID, and Choice target rather than only the selected node key, the
+planner algorithm version advances from 0 to 1. Version 0 contexts are typed
+refusals; their plans must be recomputed and are never silently reinterpreted.
+
 ### D32 — Elaboration seam — 95% deterministic, 5% semantic gate — **INTERPRETED 2026-08-26** (veto on PR review; see `docs/adr-100-braid-elaboration-seam.md`)
 
 > Director, verbatim compressed: "A DSL which operates like a borrow checker

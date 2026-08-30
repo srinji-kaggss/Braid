@@ -1,7 +1,11 @@
 //! Fail-closed admission stages.
 
 use crate::decode::decode_flow_verify;
-use crate::error::{FlowVerifyError, VerifyResult};
+use crate::disjoint::{
+    DISJOINTNESS_MAX_WORK, Disjointness, DisjointnessUnknown, analyze_preflighted, preflight_pair,
+};
+use crate::error::{ChoiceOverlap, FlowVerifyError, VerifyResult};
+use alloc::boxed::Box;
 use alloc::string::ToString;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -278,6 +282,7 @@ fn check_reachability(flow: &FlowSpec, graph: &CompactGraph) -> VerifyResult<()>
 }
 
 fn check_choice(flow: &FlowSpec) -> VerifyResult<()> {
+    preflight_choice_solver(flow)?;
     for node in flow.nodes() {
         if let FlowNodeKind::Choice { arms, .. } = &node.kind {
             if arms.is_empty() {
@@ -286,22 +291,104 @@ fn check_choice(flow: &FlowSpec) -> VerifyResult<()> {
                 });
             }
 
-            // v0 can cheaply reject aliased targets without allocating a set.
-            // This is only a shape check; it does NOT prove predicate
-            // disjointness. That semantic proof remains a loud P2 blocker.
             for (index, arm) in arms.iter().enumerate() {
-                if arms[..index]
-                    .iter()
-                    .any(|prior| prior.then.as_str() == arm.then.as_str())
-                {
-                    return Err(FlowVerifyError::ChoiceNotDisjoint {
-                        invariant: "INV-FLOW-011",
-                    });
+                for (prior_index, prior) in arms[..index].iter().enumerate() {
+                    if prior.then == arm.then {
+                        return Err(FlowVerifyError::DuplicateChoiceTarget {
+                            choice: node.key.to_string(),
+                            left_arm: prior_index,
+                            right_arm: index,
+                            target: arm.then.to_string(),
+                            invariant: "INV-FLOW-011",
+                        });
+                    }
+                    match analyze_preflighted(&prior.when, &arm.when) {
+                        Disjointness::Disjoint => {}
+                        Disjointness::Overlap(counterexample) => {
+                            return Err(FlowVerifyError::ChoiceNotDisjoint {
+                                overlap: Box::new(ChoiceOverlap {
+                                    choice: node.key.to_string(),
+                                    left_arm: prior_index,
+                                    right_arm: index,
+                                    left_target: prior.then.to_string(),
+                                    right_target: arm.then.to_string(),
+                                    counterexample,
+                                }),
+                                invariant: "INV-FLOW-011",
+                            });
+                        }
+                        Disjointness::Unknown(reason) => {
+                            return Err(FlowVerifyError::ChoiceDisjointnessUnknown {
+                                choice: node.key.to_string(),
+                                left_arm: prior_index,
+                                right_arm: index,
+                                reason,
+                                invariant: "INV-FLOW-007",
+                            });
+                        }
+                    }
                 }
             }
         }
     }
     Ok(())
+}
+
+fn preflight_choice_solver(flow: &FlowSpec) -> VerifyResult<()> {
+    let mut work = 0usize;
+    for node in flow.nodes() {
+        if let FlowNodeKind::Choice { arms, .. } = &node.kind {
+            for (right_index, right) in arms.iter().enumerate() {
+                for (left_index, left) in arms[..right_index].iter().enumerate() {
+                    let pair_work = preflight_pair(&left.when, &right.when).map_err(|reason| {
+                        FlowVerifyError::ChoiceDisjointnessUnknown {
+                            choice: node.key.to_string(),
+                            left_arm: left_index,
+                            right_arm: right_index,
+                            reason,
+                            invariant: "INV-FLOW-007",
+                        }
+                    })?;
+                    work = work.checked_add(pair_work).ok_or_else(|| {
+                        choice_work_unknown(
+                            node.key.to_string(),
+                            left_index,
+                            right_index,
+                            usize::MAX,
+                        )
+                    })?;
+                    if work > DISJOINTNESS_MAX_WORK {
+                        return Err(choice_work_unknown(
+                            node.key.to_string(),
+                            left_index,
+                            right_index,
+                            work,
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn choice_work_unknown(
+    choice: alloc::string::String,
+    left_arm: usize,
+    right_arm: usize,
+    actual: usize,
+) -> FlowVerifyError {
+    FlowVerifyError::ChoiceDisjointnessUnknown {
+        choice,
+        left_arm,
+        right_arm,
+        reason: DisjointnessUnknown::LimitExceeded {
+            kind: crate::disjoint::SolverLimit::Work,
+            actual,
+            limit: DISJOINTNESS_MAX_WORK,
+        },
+        invariant: "INV-FLOW-007",
+    }
 }
 
 fn check_join(flow: &FlowSpec, graph: &CompactGraph) -> VerifyResult<()> {

@@ -210,8 +210,11 @@ the admitted planner contract, not on the authoring SDK.
 - The existing capsule JSON contract remains intact; Flow does not silently
   rewrite D19.
 - Parallel execution, fixed-point cycles, runtime expansion, proof solver
-  completeness, materialization of satiated outputs, and performance targets
-  remain explicit debts rather than guessed v0 behavior.
+  completeness beyond the bounded v0 disjointness fragment, materialization of
+  satiated outputs, and performance targets remain explicit debts rather than
+  guessed v0 behavior. The bounded fragment returns typed `Unknown` for
+  unsupported distinct-reference relations or resource exhaustion, and static
+  admission fails closed.
 - ADR-099 must be added to the constellation governance index in a
   logic-os-kernel-owned change; this Braid change does not mutate another
   repository's governance authority.
