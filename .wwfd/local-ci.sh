@@ -2,11 +2,11 @@
 #
 # local-ci.sh — Braid's local CI, at parity with .github/workflows/ci.yml.
 #
-# Mirrors every code-changed lane of the GitHub workflow step for step:
-# swallow budget, fmt, build, tests, doc tests, clippy, lgwks-std feature
+# Mirrors every GitHub workflow lane step for step: CI policy, swallow budget,
+# fmt, build, tests, doc tests, clippy, lgwks-std feature
 # matrix, MSRV checks, contract drift, package smoke, consumption contract,
 # deterministic registry export, and the locked tagged-Git consumer probe.
-# Stack-position and Scope are pull-request-runner concerns and are skipped;
+# Stack-position and run-owned target cleanup are pull-request-runner concerns;
 # a local receipt run is always full-scope.
 #
 # On a full pass it writes /Users/srinji/wwfd/state/local-ci-receipt.json,
@@ -54,17 +54,22 @@ if [[ -z "$BOOKMARKS" ]]; then
 fi
 echo "subject: $SUBJECT_SHA (bookmarks: $BOOKMARKS)"
 
-# ── Lane 1: swallow budget (ci.yml · swallow-budget) ─────────────────────────
+# ── Lane 1: orchestration policy (ci.yml · ci-policy) ────────────────────────
+
+run "CI policy and negative fixtures" \
+  ./scripts/ci-policy-check.sh --self-test .github/workflows/ci.yml
+
+# ── Lane 2: swallow budget (ci.yml · swallow-budget) ─────────────────────────
 
 count="$(grep -rc 'let _ = \|\.ok();' crates/ | awk -F: '{s+=$2} END{print s}')"
 echo "swallowed-results=$count ceiling=5"
 run "swallow budget ≤ 5" test "$count" -le 5
 
-# ── Lane 2: formatting (ci.yml · fmt) ────────────────────────────────────────
+# ── Lane 3: formatting (ci.yml · fmt) ────────────────────────────────────────
 
 run "cargo fmt --check" cargo fmt --all -- --check
 
-# ── Lane 3–5: build, tests, doc tests (ci.yml · build/tests) ─────────────────
+# ── Lane 4–6: build, tests, doc tests (ci.yml · build/tests) ─────────────────
 
 run "locked metadata"        locked_metadata
 run "owned dependency edges" cargo run --locked -p lgwks_std_gate --bin lgwks-gate -- check .
@@ -72,11 +77,11 @@ run "build all targets"      cargo test --workspace --all-targets --locked --no-
 run "workspace tests"        cargo test --workspace --all-targets --locked
 run "doc tests"              cargo test --workspace --doc --locked
 
-# ── Lane 6: clippy (ci.yml · clippy) ─────────────────────────────────────────
+# ── Lane 7: clippy (ci.yml · clippy) ─────────────────────────────────────────
 
 run "clippy -D warnings" cargo clippy --workspace --all-targets --locked -- -D warnings
 
-# ── Lane 7: lgwks-std feature matrix (ci.yml · lgwks-std-feature-matrix) ─────
+# ── Lane 8: lgwks-std feature matrix (ci.yml · lgwks-std-feature-matrix) ─────
 
 run "std no-default-features"  cargo test -p lgwks_std --no-default-features --all-targets
 run "std default features"     cargo test -p lgwks_std --all-targets
@@ -86,7 +91,7 @@ run "std json-only"            cargo test -p lgwks_std --features json --no-defa
 run "std wire-only"            cargo test -p lgwks_std --features wire --no-default-features --all-targets
 run "std all-features"         cargo test -p lgwks_std --all-features --all-targets
 
-# ── Lane 8: MSRV feature checks (ci.yml · lgwks-std-msrv) ────────────────────
+# ── Lane 9: MSRV feature checks (ci.yml · lgwks-std-msrv) ────────────────────
 
 STD_MANIFEST="crates/lgwks-std/Cargo.toml"
 run "msrv check no-default"    cargo check --manifest-path "$STD_MANIFEST" --all-targets --no-default-features
@@ -98,7 +103,7 @@ run "msrv check wire"          cargo check --manifest-path "$STD_MANIFEST" --all
 run "msrv check all"           cargo check --manifest-path "$STD_MANIFEST" --all-targets --all-features
 run "msrv check std-gate"      cargo check --manifest-path crates/lgwks-std-gate/Cargo.toml --all-targets
 
-# ── Lane 9: contract drift (ci.yml · lgwks-std-contract-drift) ───────────────
+# ── Lane 10: contract drift (ci.yml · lgwks-std-contract-drift) ──────────────
 
 run "contract drift" python3 - <<'PY'
 import re
@@ -134,11 +139,11 @@ if package["repository"] != "https://github.com/srinji-kaggss/Braid":
     raise SystemExit(f"Unexpected package repository URL: {package['repository']}")
 PY
 
-# ── Lane 10: package smoke (ci.yml · lgwks-std-package-smoke) ────────────────
+# ── Lane 11: package smoke (ci.yml · lgwks-std-package-smoke) ────────────────
 
 run "package smoke" ./scripts/lgwks-std-package-smoke.sh
 
-# ── Lane 11: consumption contract (ci.yml · lgwks-std-consumption-contract) ──
+# ── Lane 12: consumption contract (ci.yml · lgwks-std-consumption-contract) ──
 
 command -v rg >/dev/null 2>&1 || {
   echo "local-ci: rg required for the consumption-contract lane" >&2
@@ -156,7 +161,7 @@ run "version pin present" rg -q \
 run "local patch present" rg -q \
   '^lgwks_std\s*=\s*\{\s*path\s*=\s*"crates/lgwks-std"\s*\}' -g '*.toml' Cargo.toml
 
-# ── Lane 12: Braid contract release boundary ────────────────────────────────
+# ── Lane 13: Braid contract release boundary ────────────────────────────────
 
 release_probe_rejects_bad_revision() {
   if ./scripts/braid-release-probe.sh "file://$REPO_ROOT" not-a-commit; then

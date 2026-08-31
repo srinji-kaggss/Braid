@@ -17,8 +17,10 @@
   capabilities, `TypeTag::Opaque`, 2 vocabularies (CMS + JS proof-of-concept).
 - ✅ **Publishability** — `braid-v0.1` git tag cut; `braid-capability`
   crates.io-ready; the rest `cargo add --git`.
-- ✅ **Tier-2 safety-assurance CI** (U-SA, D32) — `braid.profile.json` binds
-  Keel's 20 atoms (gate `NotSlop`); `keel/` vendored; the gate runs in CI.
+- 🔴 **Tier-2 safety-assurance CI** (U-SA, D32, #78) — the historical
+  `braid.profile.json` mapping remains, but `keel/` and its Node entry point are
+  gone and no current Keel verdict runs in CI. Native Keel exposes a blocking
+  finding baseline; hermetic distribution and evidence remain open.
 - ✅ **Real language frontends** (U11, D31, D33) — the JS expression proof and
   bounded native `braid-elaborate-dsl` Capsule authoring surface
   compiles a JS expression subset (literals + `+`) into admitted capsules via
@@ -149,14 +151,13 @@ non-goal), no docs generator, no `braid test` harness for capsules yet, and the
 manifest is JS-expression-only (no intents/anchors).
 **Closes**: U13 (project build — done); PRD §5 P4+ (the rest).
 
-### D-SA — Tier-2 safety-assurance floor *(BUILT — U-SA landed)*
-✅ **Closed.** The "stop slop" semantic floor is no longer just a spec: `U-SA`
-landed (commit `6f74c82` + the Keel-vendoring `ae83171`). `braid.profile.json`
-binds Keel's 20 evidence atoms to Braid's Tier-1 tools (gate concept `NotSlop`),
-`keel/` is vendored (schema + engine), and `.github/workflows/ci.yml` runs the
-Keel gate in CI. The design rationale stays in `SAFETY_ASSURANCE_CI_SPEC.md`.
-**Remaining**: the Lean⇄verifier conformance check (tracked separately as
-D-SEMANTICS / U15), not the Keel wiring itself.
+### D-SA — Tier-2 safety-assurance floor *(REGRESSED — #78)*
+🔴 **Open.** U-SA originally landed a Node/profile integration, but its runtime
+and vendored source are no longer present. Current CI does not run Keel, and the
+native scanner is not yet a hermetic pinned tool in Braid. The atom mapping,
+seeded fixtures, mutation ledger, and structural Lean mapping remain useful
+evidence; they do not prove that the current gate executed. #78 owns the native
+tool pin, clean-run evidence bundle, finding remediation, and release ritual.
 
 ### D-SEMANTICS — The verifier's stage semantics are not machine-checked against the Lean predicates
 D22 says Lean is the unforked proof oracle; the Rust verifier implements

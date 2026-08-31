@@ -1,10 +1,11 @@
 # Braid Safety-Assurance CI — Specification (D32)
 
-> **Status**: **BUILT (U-SA landed).** This remains the design rationale; the
-> implementation is live — `braid.profile.json` binds Keel's atoms (gate
-> `NotSlop`), `keel/` is vendored, and `.github/workflows/ci.yml` runs the gate
-> (serialized for determinism via `scripts/keel-floor.sh`). The remaining
-> open item is the Lean⇄verifier conformance check (tracked as U15/D-SEMANTICS).
+> **Status (corrected 2026-08-30)**: this remains the historical U-SA/D32
+> design rationale, not a current green gate. `keel/` is absent, the Node entry
+> point was retired, and neither GitHub nor local CI runs a Keel verdict.
+> `scripts/keel-floor.sh` invokes only an explicitly installed native Keel
+> binary, which currently exposes blocking debt. Issue #78 owns hermetic tool
+> distribution, offline evidence, remediation, and release-gate migration.
 > **Authority**: Director session 2026-06-23 ("adopt a CI framework that meets
 > the strictest standards semantically similar to IEC61508 and ISO26262 and
 > DO-178… designed like an ISO standard with the end goal: stop slop").
@@ -161,27 +162,27 @@ surface. The qualification obligations:
 ## 6. The CI pipeline (the wiring)
 
 ```yaml
-# .github/workflows/ci.yml (extended)
+# Structural outline only. The executable source of truth is
+# .github/workflows/ci.yml; scripts/ci-policy-check.sh rejects mutable refs,
+# skipped required lanes, missing timeouts, and early cleanup.
 jobs:
-  tier1-operational:        # existing: fmt, clippy, test, cli-loop, demo-port
-  tier2-semantic:           # NEW
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22 }
-      - uses: dtolnay/rust-toolchain@stable
-        with: { components: clippy, rustfmt }
-      - run: cargo test --workspace          # produces Tier-1 evidence
-      - run: ./scripts/cli-loop.sh           # produces Tier-1 evidence
-      - name: Keel semantic floor
-        run: node keel/run.mjs --profile braid.profile.json
-      - uses: actions/upload-artifact@v4
-        with: { name: braid-ci-evidence, path: .ci-runs/ }
+  stack:                    # fail closed on pull-request topology
+  ci-policy:                # reject false-green workflow structure
+    needs: [stack]
+  build:                    # every change runs the full build
+    needs: [ci-policy]
+  test:                     # every change runs all tests and doc tests
+    needs: [build]
+  clippy:                   # every change runs all-target clippy
+    needs: [build]
+  cleanup:                  # waits for every preceding job under always()
+    if: always()
 ```
 
-The Tier-2 job runs Keel with the Braid profile, which reads the Tier-1 evidence
-(produced by the step before it) and emits the verdict. The verdict is
+Native Keel is intentionally not represented as a green CI job here. Issue #78
+owns its hermetic distribution and the remediation needed before its verdict can
+become release authority. Until then, `scripts/keel-floor.sh` is an explicit
+diagnostic adapter and fails if the native binary is unavailable.
 content-addressed (keel `docs/01`); the evidence bundle is uploaded for
 reconstruction (the calculator test).
 

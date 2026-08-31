@@ -1,7 +1,8 @@
 # Braid CI — adapted from keel's six-tier verification stack.
 #
-# Portable structure: concurrency control, stack-position gate, change-scope,
-# build-once-share, cargo test --locked, cargo clippy --locked -- -D warnings, rustfmt.
+# Portable structure: concurrency control, fail-closed stack position,
+# immutable action pins, build-once-share, cargo test --locked,
+# cargo clippy --locked -- -D warnings, and rustfmt.
 # Keel-specific tiers (Buck2, Kani, loom, MC/DC, mutation, semantic review)
 # are not ported — Braid has no gate binary. They arrive when keel-ci-plan
 # gains a Braid target.
@@ -50,12 +51,12 @@ jobs:
           BASE: ${{ github.event.pull_request.base.ref }}
           REPO: ${{ github.repository }}
         run: |
-          set -u
+          set -euo pipefail
           if [ "$EVENT" != "pull_request" ]; then
             echo "OK   $EVENT carries no stack position; the tiers run."
             exit 0
           fi
-          blocker="$(gh pr list --repo "$REPO" --state open --head "$BASE" --json number,title --jq '.[0] | select(.) | "#\(.number) \(.title)"' 2>/dev/null || true)"
+          blocker="$(gh pr list --repo "$REPO" --state open --head "$BASE" --json number,title --jq '.[0] | select(.) | "#\(.number) \(.title)"')"
           if [ -z "$blocker" ]; then
             echo "OK   base '$BASE' has no open pull request — bottom of stack."
             exit 0
@@ -65,44 +66,17 @@ jobs:
           echo "     Merge $blocker first; this PR then becomes the bottom and runs." >&2
           exit 1
 
-  # ── Scope ─────────────────────────────────────────────────────────────────
-  scope:
-    name: Scope
+  # ── Orchestration policy ──────────────────────────────────────────────────
+  ci-policy:
+    name: CI policy
+    needs: [stack-position]
     runs-on: self-hosted
-    timeout-minutes: 5
-    outputs:
-      code_changed: ${{ steps.scope.outputs.code_changed }}
+    timeout-minutes: 2
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Resolve scope base ref
-        id: base
-        run: |
-          set -eu
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch origin "${{ github.base_ref }}"
-            echo "ref=origin/${{ github.base_ref }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "ref=HEAD~1" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Decide code vs docs-only
-        id: scope
-        run: |
-          set -eu
-          base="${{ steps.base.outputs.ref }}"
-          changed="$(git diff --name-only "$base" -- \
-            '*.rs' '*.toml' '*.lock' '*.sh' \
-            '.github/workflows/*.yml' '.github/workflows/*.yaml' | head -1)"
-          if [ -n "$changed" ]; then
-            echo "code_changed=yes" >> "$GITHUB_OUTPUT"
-            echo "scope: code changed"
-          else
-            echo "code_changed=no" >> "$GITHUB_OUTPUT"
-            echo "scope: docs-only"
-          fi
+      - name: Refuse fail-open workflow structure
+        run: ./scripts/ci-policy-check.sh --self-test .github/workflows/ci.yml
 
   # ── Build ─────────────────────────────────────────────────────────────────
   #
@@ -114,11 +88,11 @@ jobs:
   # discipline into an enforced ceiling rather than a remembered fact.
   swallow-budget:
     name: Swallow budget
-    needs: [stack-position]
+    needs: [stack-position, ci-policy]
     runs-on: self-hosted
     timeout-minutes: 2
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Keep swallowed results at or below five
         run: |
@@ -129,14 +103,14 @@ jobs:
 
   build:
     name: Build
-    needs: [stack-position, scope, swallow-budget]
+    needs: [stack-position, ci-policy, swallow-budget]
     runs-on: self-hosted
     env:
       CARGO_TARGET_DIR: /Users/srinji/.braid-ci/targets/${{ github.run_id }}
       CARGO_BUILD_JOBS: "12"
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Clean shared target
         run: |
@@ -144,88 +118,69 @@ jobs:
           mkdir -p "$CARGO_TARGET_DIR"
 
       - name: Verify lockfile is up-to-date
-        if: needs.scope.outputs.code_changed == 'yes'
         run: |
           cargo metadata --locked >/dev/null || { echo 'Lockfile out of date: run cargo update --workspace and commit Cargo.lock' >&2; exit 1; }
 
       - name: Enforce dependency edge ownership
-        if: needs.scope.outputs.code_changed == 'yes'
         run: cargo run --locked -p lgwks_std_gate --bin lgwks-gate -- check .
 
       - name: Build all workspace targets
-        if: needs.scope.outputs.code_changed == 'yes'
         run: cargo test --workspace --all-targets --locked --no-run
-
-      - name: Build release bins (docs-only path)
-        if: needs.scope.outputs.code_changed == 'no'
-        run: cargo check --workspace --all-targets --locked
 
   # ── Format ────────────────────────────────────────────────────────────────
   fmt:
     name: Format
-    needs: [stack-position]
+    needs: [stack-position, ci-policy]
     runs-on: self-hosted
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Check formatting
         run: cargo fmt --all -- --check
 
   # ── Tests ─────────────────────────────────────────────────────────────────
   tests:
     name: Tier 0 test
-    needs: [build, scope]
+    needs: [build]
     runs-on: self-hosted
     env:
       CARGO_TARGET_DIR: /Users/srinji/.braid-ci/targets/${{ github.run_id }}
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Run all workspace tests
-        if: needs.scope.outputs.code_changed == 'yes'
         run: cargo test --workspace --all-targets --locked
 
       - name: Doc tests
-        if: needs.scope.outputs.code_changed == 'yes'
         run: cargo test --workspace --doc --locked
-
-      - name: Record docs-only N/A
-        if: needs.scope.outputs.code_changed != 'yes'
-        run: echo "scope docs-only — tests skipped (explicit N/A)"
 
   # ── Clippy ────────────────────────────────────────────────────────────────
   clippy:
     name: Tier 0 clippy
-    needs: [build, scope]
+    needs: [build]
     runs-on: self-hosted
     env:
       CARGO_TARGET_DIR: /Users/srinji/.braid-ci/targets/${{ github.run_id }}
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Clippy all workspace targets
-        if: needs.scope.outputs.code_changed == 'yes'
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
-
-      - name: Record docs-only N/A
-        if: needs.scope.outputs.code_changed != 'yes'
-        run: echo "scope docs-only — clippy skipped (explicit N/A)"
 
   lgwks-std-current-stable:
     name: lgwks-std current-stable Rust 1.98.0
-    needs: [scope, stack-position]
+    needs: [stack-position, ci-policy]
     runs-on: self-hosted
-    if: needs.scope.outputs.code_changed == 'yes'
     env:
       CARGO_TARGET_DIR: /Users/srinji/.braid-ci/targets/${{ github.run_id }}-std-stable
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Pin Rust 1.98.0
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
           toolchain: "1.98.0"
           components: clippy
@@ -238,9 +193,8 @@ jobs:
 
   lgwks-std-msrv:
     name: lgwks-std MSRV
-    needs: [scope, stack-position]
+    needs: [stack-position, ci-policy]
     runs-on: self-hosted
-    if: needs.scope.outputs.code_changed == 'yes'
     env:
       CARGO_TARGET_DIR: /Users/srinji/.braid-ci/targets/${{ github.run_id }}-msrv
     strategy:
@@ -249,10 +203,10 @@ jobs:
         msrv: ["1.98.0"]
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Pin MSRV
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
           toolchain: "${{ matrix.msrv }}"
           components: ""
@@ -274,14 +228,13 @@ jobs:
 
   lgwks-std-contract-drift:
     name: lgwks-std contract drift checks
-    needs: [scope, stack-position]
+    needs: [stack-position, ci-policy]
     runs-on: self-hosted
-    if: needs.scope.outputs.code_changed == 'yes'
     env:
       CARGO_TARGET_DIR: /Users/srinji/.braid-ci/targets/${{ github.run_id }}-std-contract
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Validate std+ contract alignment
         run: |
@@ -323,14 +276,13 @@ jobs:
 
   lgwks-std-package-smoke:
     name: lgwks-std package smoke-test
-    needs: [scope, stack-position]
+    needs: [stack-position, ci-policy]
     runs-on: self-hosted
-    if: needs.scope.outputs.code_changed == 'yes'
     env:
       CARGO_TARGET_DIR: /Users/srinji/.braid-ci/targets/${{ github.run_id }}-std-package
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Run package smoke test
         run: ./scripts/lgwks-std-package-smoke.sh
@@ -338,11 +290,11 @@ jobs:
   lgwks-std-consumption-contract:
     name: lgwks-std public consumption contract
     # Keep this job as an active regression gate for Braid consumption.
-    needs: [scope, stack-position]
+    needs: [stack-position, ci-policy]
     runs-on: self-hosted
-    if: needs.scope.outputs.code_changed == 'yes'
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Ensure no in-repo path fallback for lgwks_std consumers
         run: |
           set -eu
@@ -361,12 +313,11 @@ jobs:
 
   braid-contract-release:
     name: Braid contract release probe
-    needs: [scope, stack-position]
+    needs: [stack-position, ci-policy]
     runs-on: self-hosted
-    if: needs.scope.outputs.code_changed == 'yes'
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -387,14 +338,13 @@ jobs:
   # ── std+ feature matrix ────────────────────────────────────────────────
   lgwks-std-feature-matrix:
     name: lgwks-std feature matrix
-    needs: [scope, stack-position]
+    needs: [stack-position, ci-policy]
     runs-on: self-hosted
-    if: needs.scope.outputs.code_changed == 'yes'
     env:
       CARGO_TARGET_DIR: /Users/srinji/.braid-ci/targets/${{ github.run_id }}-std
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Check all requested feature combinations
         run: |
@@ -410,10 +360,20 @@ jobs:
   # ── Cleanup ───────────────────────────────────────────────────────────────
   cleanup:
     name: Cleanup
-    needs: [tests, clippy]
+    needs: [stack-position, ci-policy, swallow-budget, build, fmt, tests, clippy, lgwks-std-current-stable, lgwks-std-msrv, lgwks-std-contract-drift, lgwks-std-package-smoke, lgwks-std-consumption-contract, braid-contract-release, lgwks-std-feature-matrix]
     runs-on: self-hosted
     if: always()
     timeout-minutes: 5
     steps:
       - name: Remove shared target directory
-        run: rm -rf "/Users/srinji/.braid-ci/targets/${{ github.run_id }}"
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          case "$RUN_ID" in
+            ''|*[!0-9]*) echo "invalid run id: $RUN_ID" >&2; exit 1 ;;
+          esac
+          root="/Users/srinji/.braid-ci/targets"
+          for suffix in '' -std-stable -msrv -std-contract -std-package -std; do
+            rm -rf -- "$root/${RUN_ID:?}${suffix}"
+          done

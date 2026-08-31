@@ -80,9 +80,10 @@ surface; Braid adds zero authority.
 - **U9 adversarial pass landed** — 4 findings closed (T3, T4, T12, R3); verdict
   at `U9-VERDICT.md`. **D31 global-IR refactor landed** — substrate/vocabulary
   split, string-tagged capabilities, `TypeTag::Opaque`; vocabularies CMS + JS +
-  web. **U-SA Keel safety-assurance CI landed** — `braid.profile.json` binds
-  Keel's 20 atoms (gate `NotSlop`); the gate runs in CI and is deterministic
-  (serialized — `scripts/keel-floor.sh`). **v0 (U0–U10) is complete.**
+  web. **U-SA's historical Keel profile is not a current CI gate** — the Node
+  adapter was retired, native Keel reports blocking debt, and #78 owns the
+  hermetic migration. **v0 substrate behavior exists; assurance release
+  repeatability remains open.**
 - **Post-v0 frontier (this session, all merged to `main`):**
   - **U11** — `braid-elaborate-js`, the first real language frontend: JS *text*
     compiles into an admitted capsule via the one verifier ("renders JS useless"

@@ -77,10 +77,10 @@ Done and green: IR + canonical encoding + CID (U1); 8-stage verifier (U3–U5);
 manifest + widening gate (U2/U6); SDK + CLI (U10/U6); U9 adversarial pass (4 findings
 closed, mutation-verified); D31 substrate/vocab split with **three** vocabularies
 (cms, js, and `braid-vocab-web` — merged PR #13, the browser's `web.*` moved home);
-`no_std+alloc` core (PR #12); `braid-v0.1` tag; **U-SA is BUILT** — `tier2-semantic`
-CI job runs Keel's `NotSlop` floor via `braid.profile.json` + vendored `keel/`
-(`scripts/keel-floor.sh`). Note: `spec/braid/DEBT_REGISTER.md` §D-SA still says
-"specified but not built" — that line is stale; trust the CI file.
+`no_std+alloc` core (PR #12); `braid-v0.1` tag. **U-SA's historical Node/profile
+integration is not a current gate**: native Keel migration and its blocking
+finding baseline are tracked by #78. The source orchestration policy is a
+separate fail-closed guard, not a second semantic verdict engine.
 
 Open (the production gap, in dependency order):
 1. **D-RUN** — nothing executes. A JVM with no V. → PB-02
@@ -123,9 +123,9 @@ PB-03; PB-05 rides on 02/03; PB-06 is continuous.**
 **In-repo (canonical):** `spec/braid/README.md` (reading order) · `PRD.md` ·
 `DECISIONS.md` D1–D32 (lock legend!) · `threat-model.md` T1–T16/R1–R3 · `units.md`
 U0–U10 · `U9-VERDICT.md` (per-threat file:line pins) · `SAFETY_ASSURANCE_CI_SPEC.md`
-(D32) · `DEBT_REGISTER.md` (D-SA line stale) · `docs/adr-088-…md` (doctrine + both
+(D32 historical design) · `DEBT_REGISTER.md` · `docs/adr-088-…md` (doctrine + both
 addenda) · `docs/authoring-cli.md` · `calibration/FLIGHT_HOURS.md` ·
-`braid.profile.json` + `keel/` (vendored floor).
+`braid.profile.json` (historical atom mapping) · issue #78 (native gate migration).
 
 **Kernel repo (`~/logic-os-kernel`):**
 `LOGIC_OS_AI_FIRST_LANGUAGE_STATE_FABRIC_SECURITY_RESEARCH_BASELINE.md` (§8 "Axiom"
