@@ -6,6 +6,7 @@ members = [
     "crates/braid-flow-ir",
     "crates/braid-flow-verify",
     "crates/braid-flow-plan",
+    "crates/braid-flow-sdk",
     "crates/braid-vocab-cms",
     "crates/braid-vocab-js",
     "crates/braid-vocab-web",
