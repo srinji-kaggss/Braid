@@ -155,6 +155,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "braid-flow-sdk"
+version = "0.1.0"
+dependencies = [
+ "braid-flow-ir",
+ "braid-ir",
+ "braid-test-support",
+ "lgwks_std",
+]
+
+[[package]]
 name = "braid-flow-verify"
 version = "0.1.0"
 dependencies = [

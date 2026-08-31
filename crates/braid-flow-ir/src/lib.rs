@@ -25,6 +25,7 @@ mod decode;
 mod encode;
 mod error;
 mod flow;
+mod justification_gate;
 mod literal;
 mod predicate;
 mod preflight;
@@ -37,6 +38,7 @@ pub use crate::flow::{
     FlowNode, FlowNodeKind, FlowSpec, InputPort, JustificationDecl, OutputPort, TerminalOutcome,
     UrgencyClass, ValueSource,
 };
+pub use crate::justification_gate::JustificationGate;
 pub use crate::predicate::{Predicate, ValueExpr};
 pub use crate::symbol::{
     CostOrderRef, FactRef, FlowName, InputKey, InvariantRef, NodeKey, PortKey, RelationRef,

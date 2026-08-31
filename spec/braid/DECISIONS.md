@@ -723,3 +723,22 @@ This does not unlock schemas, state/statecharts, Flow orchestration, imports,
 macros, loops, recurrence, runtime literals, embedded code, raw URL
 expressions, arbitrary registries, or replacement-language claims. Those remain
 D6-gated and require substrate support plus separate decisions.
+
+### D-FLOW.13 — P0.1 amendment #63 closed — v0 `Read | Write` with loud `Deferred` gate — **LOCKED 2026-08-31**
+
+**Director decision recorded in `feat/next-workstream-gate-63` (issue #63, parent #74):** the durable interop boundary collapses to exactly two persistent effects
+
+```text
+Read | Write
+```
+
+pure compute/branching/joins/predicates remain inside the admitted Flow/Capsule. The three-axis admission contract for a material effect is `Safe × Authorized × Justified`; v0 enforces the first two and keeps the third as a **loud future gate**:
+
+```rust
+pub enum JustificationGate {
+    Enforced,
+    Deferred { reason: String, required_by_version: Option<u16> },
+}
+```
+
+Rules locked: (1) `Deferred` is visible in wire bytes, manifests, receipts, and diagnostics; (2) no code may serialize `Deferred` as `Enforced` or claim the three-axis contract fully enforced while `Deferred` exists — the `JustificationGate::from_canon` / `to_canon` disjoint closed variants enforce this at type and wire level (tests `deferred_never_serializes_as_enforced`); (3) a future protocol version can require `Enforced` for selected effect classes without changing the `Read | Write` seam; (4) D-FLOW.6 (`Unknown` fails closed) is **not** reinterpreted — `Deferred` is `Unknown`-carrying, not `Proven`; any former `Unknown`-is-fail-closed reasoning remains intact. This amends D-FLOW.11's `OPEN` status for the P0.1 clause to **CLOSED**; D-FLOW.6 stands, now with an explicit `Deferred` encoding tracked in `crates/braid-flow-ir/src/justification_gate.rs` (`INV-FLOW-019`). The full lowering to `AdmittedRead`/`AdmittedWrite` with `safe_proof_ref`/`authority_proof_ref`/`operation_id` remains a later phase and does not land in this change.

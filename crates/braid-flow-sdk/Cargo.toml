@@ -1,0 +1,17 @@
+[package]
+name = "braid-flow-sdk"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+description = "Braid Flow authoring SDK — RON-first, JSON interop only, YAML importer-only (P4 #58)"
+repository = "https://github.com/srinji-kaggss/Braid"
+homepage = "https://github.com/srinji-kaggss/Braid"
+license = "MIT"
+
+[dependencies]
+braid-flow-ir = { workspace = true }
+braid-ir = { workspace = true }
+lgwks_std = { workspace = true, features = ["json", "ron"] }
+
+[dev-dependencies]
+braid-test-support = { workspace = true }
