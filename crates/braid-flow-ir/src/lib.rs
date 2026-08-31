@@ -38,8 +38,8 @@ pub use crate::flow::{
     FlowNode, FlowNodeKind, FlowSpec, InputPort, JustificationDecl, OutputPort, TerminalOutcome,
     UrgencyClass, ValueSource,
 };
-pub use crate::predicate::{Predicate, ValueExpr};
 pub use crate::justification_gate::JustificationGate;
+pub use crate::predicate::{Predicate, ValueExpr};
 pub use crate::symbol::{
     CostOrderRef, FactRef, FlowName, InputKey, InvariantRef, NodeKey, PortKey, RelationRef,
 };
