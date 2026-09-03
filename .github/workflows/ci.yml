@@ -128,7 +128,7 @@ jobs:
           set -eu
           eval "$(ssh-agent -s)" >/dev/null
           ssh-add ~/.ssh/id_ed25519
-          cargo install --git https://github.com/srinji-kaggss/logicalworks-crates lgwks-deps --root "${RUNNER_TEMP}/lgwks-deps"
+          cargo install --git https://github.com/srinji-kaggss/logicalworks-crates lgwks_deps --root "${RUNNER_TEMP}/lgwks-deps"
           "${RUNNER_TEMP}/lgwks-deps/bin/lgwks-deps" check .
 
       - name: Build all workspace targets
