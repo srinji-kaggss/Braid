@@ -6,6 +6,10 @@
 //! closed registry shape, capsule artifact, compact admission algebra, and the
 //! registry-scoped token projection used after independent verification.
 //!
+//! `graph` is the migration kernel for converging the historical intra-capsule
+//! `Braid` DAG and inter-capsule `FlowSpec` graph onto one semantic node/edge
+//! model. It does not change legacy wire bytes or CIDs.
+//!
 //! //why no serde/ciborium: the canonical byte form is a *security surface*
 //! (admission hashes it). A third-party serializer's normalization choices
 //! would become unauditable parts of the trust base; the subset we need is
@@ -31,6 +35,7 @@ pub mod braid;
 pub mod canon;
 pub mod capsule;
 pub mod cid;
+pub mod graph;
 pub mod term;
 pub mod token;
 pub mod value;
@@ -42,6 +47,11 @@ pub use crate::braid::{Braid, Strand};
 pub use crate::canon::{CanonError, decode_strict, encode};
 pub use crate::capsule::{Capsule, ConfirmPolicy, IR_VERSION};
 pub use crate::cid::{CAPSULE_DOMAIN, Cid, REGISTRY_DOMAIN};
+pub use crate::graph::{
+    CompletionClass as GraphCompletionClass, ControlFlowGraph, DependencyDag, GraphEdge,
+    GraphError, GraphNode, GraphNodeKind, InputPort as GraphInputPort, NodeId,
+    OutputPort as GraphOutputPort, ProgramGraph,
+};
 pub use crate::term::{
     EffectClass, Exposure, TermRegistry, TermSpec, TypeTag, TypeTagError, type_tag_node_count,
     type_tag_to_text, validate_type_tag,

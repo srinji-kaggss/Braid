@@ -17,7 +17,7 @@ use core::str::FromStr;
 
 /// The closed type universe of strand wiring. No interpretable-code type
 /// exists (T1) and no float type exists (T8) — by construction, not by check.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TypeTag {
     Bool,
     /// Fixed-point integer (term-declared scaling).
