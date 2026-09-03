@@ -314,7 +314,8 @@ mod tests {
             to: b.id.clone(),
             on: vec![CompletionClass::Success],
         };
-        let left = ProgramGraph::new(vec![b.clone(), a.clone()], vec![edge.clone()], vec![]).unwrap();
+        let left =
+            ProgramGraph::new(vec![b.clone(), a.clone()], vec![edge.clone()], vec![]).unwrap();
         let right = ProgramGraph::new(vec![a, b], vec![edge], vec![]).unwrap();
         assert_eq!(left, right);
     }
@@ -343,12 +344,8 @@ mod tests {
             to: NodeId::new("b").unwrap(),
             on: vec![CompletionClass::Success],
         };
-        let err = ProgramGraph::new(
-            vec![node("a"), node("b")],
-            vec![edge.clone(), edge],
-            vec![],
-        )
-        .unwrap_err();
+        let err = ProgramGraph::new(vec![node("a"), node("b")], vec![edge.clone(), edge], vec![])
+            .unwrap_err();
         assert_eq!(err, GraphError::DuplicateEdge);
     }
 
@@ -364,8 +361,7 @@ mod tests {
             to: NodeId::new("a").unwrap(),
             on: vec![CompletionClass::Success],
         };
-        let err = ProgramGraph::new(vec![node("a"), node("b")], vec![e1, e2], vec![])
-            .unwrap_err();
+        let err = ProgramGraph::new(vec![node("a"), node("b")], vec![e1, e2], vec![]).unwrap_err();
         assert_eq!(err, GraphError::ControlCycle);
     }
 
@@ -393,8 +389,7 @@ mod tests {
             },
             value_type: TypeTag::Int,
         };
-        let err = ProgramGraph::new(vec![node("a"), node("b")], vec![e1, e2], vec![])
-            .unwrap_err();
+        let err = ProgramGraph::new(vec![node("a"), node("b")], vec![e1, e2], vec![]).unwrap_err();
         assert_eq!(err, GraphError::DataCycle);
     }
 
@@ -416,8 +411,8 @@ mod tests {
             },
             value_type: TypeTag::Int,
         };
-        let graph = ProgramGraph::new(vec![node("a"), node("b")], vec![control, data], vec![])
-            .unwrap();
+        let graph =
+            ProgramGraph::new(vec![node("a"), node("b")], vec![control, data], vec![]).unwrap();
         assert_eq!(graph.cfg().edges.len(), 1);
         assert_eq!(graph.dag().edges.len(), 1);
         assert!(matches!(graph.cfg().edges[0], GraphEdge::Control { .. }));
