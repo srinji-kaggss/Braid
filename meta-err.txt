@@ -1,0 +1,7 @@
+    Updating crates.io index
+    Updating git repository `https://github.com/srinji-kaggss/logicalworks-crates`
+     Locking 4 packages to latest compatible versions
+      Adding lgwks_bot v0.1.1
+      Adding lgwks_deps v0.1.0 (https://github.com/srinji-kaggss/logicalworks-crates#dab2537e)
+      Adding lgwks_std v0.5.1
+      Adding lgwks_std v0.5.1 (https://github.com/srinji-kaggss/logicalworks-crates#dab2537e)

@@ -250,7 +250,7 @@ fn next_steps_for(findings: &[Finding], proposals: &[Proposal]) -> Vec<String> {
     }
     if has_gate {
         steps.push(
-            "Run `lgwks-gate check` / fill contract/APPROVED.toml entries from proposals[*].contract_additions."
+            "Run `lgwks-deps check` / fill contract/APPROVED.toml entries from proposals[*].contract_additions."
                 .to_string(),
         );
     }

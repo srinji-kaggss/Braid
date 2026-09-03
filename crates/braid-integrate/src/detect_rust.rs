@@ -1,4 +1,4 @@
-//! Rust detectors — thin wrappers over `lgwks_std_gate` + Cargo manifest scans.
+//! Rust detectors — thin wrappers over `lgwks_deps` + Cargo manifest scans.
 //!
 //! These fire when `Cargo.toml` is present. They reuse the gate's
 //! direct-edge ownership audit and add the replacement + scheduler hints that
@@ -29,45 +29,45 @@ fn gate_findings(root: &Path) -> Vec<Finding> {
             id: "GATE-NO-CONTRACT",
             title: "No contract/APPROVED.toml — gate will refuse this repo".to_string(),
             rationale:
-                "The estate gate (lgwks_std_gate) is fail-closed when the register is missing. Run `lgwks-gate init` to write a starting register."
+                "The estate gate (lgwks_deps) is fail-closed when the register is missing. Run `lgwks-deps init` to write a starting register."
                     .to_string(),
             evidence: vec![format!("missing {}", contract_path.display())],
-            maps_to: "lgwks_std_gate — contract/APPROVED.toml (policy.enforce, [[approved]] entries)"
+            maps_to: "lgwks_deps — contract/APPROVED.toml (policy.enforce, [[approved]] entries)"
                 .to_string(),
             severity: Severity::Warn,
         }];
     }
-    match lgwks_std_gate::check_dependencies(root) {
+    match lgwks_deps::check_dependencies(root) {
         Ok((_, refusals)) if refusals.is_empty() => Vec::new(),
         Ok((_, refusals)) => refusals
             .into_iter()
             .map(|r| {
                 let (id, title) = match &r {
-                    lgwks_std_gate::Refusal::ForeignWorkspaceMember { .. } => (
+                    lgwks_deps::Refusal::ForeignWorkspaceMember { .. } => (
                         "GATE-FOREIGN-WORKSPACE-COPY",
                         format!("Copied foreign crate: {r}"),
                     ),
-                    lgwks_std_gate::Refusal::UnregisteredEdge { .. } => (
+                    lgwks_deps::Refusal::UnregisteredEdge { .. } => (
                         "GATE-UNOWNED-EDGE",
                         format!("Unowned dependency edge: {r}"),
                     ),
-                    lgwks_std_gate::Refusal::ConsumerNotAllowed { .. } => (
+                    lgwks_deps::Refusal::ConsumerNotAllowed { .. } => (
                         "GATE-CONSUMER-BYPASS",
                         format!("Dependency owner bypass: {r}"),
                     ),
-                    lgwks_std_gate::Refusal::RequirementDrift { .. } => (
+                    lgwks_deps::Refusal::RequirementDrift { .. } => (
                         "GATE-REQUIREMENT-DRIFT",
                         format!("Dependency requirement drift: {r}"),
                     ),
-                    lgwks_std_gate::Refusal::SourceDrift { .. } => (
+                    lgwks_deps::Refusal::SourceDrift { .. } => (
                         "GATE-SOURCE-DRIFT",
                         format!("Dependency source drift: {r}"),
                     ),
-                    lgwks_std_gate::Refusal::KindNotAllowed { .. } => (
+                    lgwks_deps::Refusal::KindNotAllowed { .. } => (
                         "GATE-KIND-BYPASS",
                         format!("Dependency kind bypass: {r}"),
                     ),
-                    lgwks_std_gate::Refusal::UnusedApproval { .. } => (
+                    lgwks_deps::Refusal::UnusedApproval { .. } => (
                         "GATE-UNUSED-APPROVAL",
                         format!("Stale dependency authority: {r}"),
                     ),
@@ -78,7 +78,7 @@ fn gate_findings(root: &Path) -> Vec<Finding> {
                     rationale: "The gate requires each authored external edge to name its semantic owner, capability, source, requirement, allowed consumer, and dependency kind."
                         .to_string(),
                     evidence: vec![r.to_string()],
-                    maps_to: "lgwks_std_gate::audit_direct — consolidate through the owner or amend contract/APPROVED.toml"
+                    maps_to: "lgwks_deps::audit_direct — consolidate through the owner or amend contract/APPROVED.toml"
                         .to_string(),
                     severity: Severity::Warn,
                 }
@@ -90,7 +90,7 @@ fn gate_findings(root: &Path) -> Vec<Finding> {
             rationale: "The gate could not reach a verdict — treated as a refusal (fail-closed)."
                 .to_string(),
             evidence: vec![e.to_string()],
-            maps_to: "lgwks_std_gate::check_dependencies".to_string(),
+            maps_to: "lgwks_deps::check_dependencies".to_string(),
             severity: Severity::Warn,
         }],
     }
@@ -184,10 +184,7 @@ fn cargo_replace_findings(scan: &Scan) -> Vec<Finding> {
 }
 
 fn is_toolkit_or_fixture_rel(rel: &str) -> bool {
-    rel.starts_with("crates/lgwks-std/")
-        || rel.starts_with("crates/lgwks-std-gate/")
-        || rel.starts_with("crates/lgwks-bot/")
-        || rel.contains("braid-integrate/fixtures/")
+    rel.contains("braid-integrate/fixtures/")
         || rel.starts_with("docs/")
         || rel.starts_with("calibration/")
 }

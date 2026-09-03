@@ -230,10 +230,7 @@ fn is_advisor_template_file(rel: &str) -> bool {
 }
 
 fn is_toolkit_or_fixture_file(rel: &str) -> bool {
-    rel.starts_with("crates/lgwks-std/")
-        || rel.starts_with("crates/lgwks-std-gate/")
-        || rel.starts_with("crates/lgwks-bot/")
-        || rel.contains("braid-integrate/fixtures/")
+    rel.contains("braid-integrate/fixtures/")
         || rel.starts_with("docs/")
         || rel.starts_with("calibration/")
 }

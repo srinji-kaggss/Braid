@@ -23,14 +23,6 @@ members = [
     "crates/braid-manifest",
     "crates/braid-run",
     "crates/braid-test-support",
-    # std+ and its gate. Not `braid-*`: these carry a different authority from
-    # the IR and the verifier — `lgwks_std` is the estate's one approved
-    # non-`std` surface, and `lgwks_std_gate` enforces INV-DEP-REGISTERED, that
-    # nothing outside `std` and `std+` compiles without a human's approval in
-    # `contract/APPROVED.toml`. See `crates/lgwks-std/README.md`.
-    "crates/lgwks-std",
-    "crates/lgwks-bot",
-    "crates/lgwks-std-gate",
 ]
 resolver = "2"
 
@@ -48,7 +40,13 @@ exclude = ["sandbox"]
 # ─────────────────────────────────────────────────────────────────────────────
 [workspace.dependencies]
 # Shared workspace crate pins.
-lgwks_std = { version = "0.5.1" }
+#
+# All three resolve from the logicalworks-crates repo: the local tree carried
+# unpublished improvements over crates.io (std's `json!` re-export, bot's
+# facade-routed serde derives), so registry versions do not compile this
+# workspace. Version numbers are unchanged — only the source moved.
+# Source of truth: https://github.com/srinji-kaggss/logicalworks-crates.
+lgwks_std = { version = "0.5.1", git = "https://github.com/srinji-kaggss/logicalworks-crates" }
 # Content-addressed hash chain (BLAKE3 CIDs under lw.braid.*).
 blake3 = { version = "1.8.5", default-features = false }
 
@@ -77,13 +75,8 @@ braid-elaborate-dsl = { version = "0.1.0", path = "crates/braid-elaborate-dsl" }
 braid-elaborate-js = { version = "0.1.0", path = "crates/braid-elaborate-js" }
 braid-run = { version = "0.1.0", path = "crates/braid-run" }
 braid-test-support = { version = "0.1.0", path = "crates/braid-test-support" }
-lgwks_bot = { version = "0.1.1", path = "crates/lgwks-bot" }
-lgwks_std_gate = { version = "0.1.0", path = "crates/lgwks-std-gate" }
-
-[patch.crates-io]
-# While developing against the in-repo implementation, keep the public contract
-# path (`lgwks_std = "0.3.0"`) while resolving to local source.
-lgwks_std = { path = "crates/lgwks-std" }
+lgwks_bot = { version = "0.1.1", git = "https://github.com/srinji-kaggss/logicalworks-crates" }
+lgwks_deps = { git = "https://github.com/srinji-kaggss/logicalworks-crates" }
 
 [profile.release]
 opt-level = 3

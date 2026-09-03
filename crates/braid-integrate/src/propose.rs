@@ -147,7 +147,7 @@ fn bot_proposal(f: &Finding) -> Proposal {
 }
 
 fn patch_new_contract() -> String {
-    r#"# contract/APPROVED.toml — new file (fill with lgwks-gate request)
+    r#"# contract/APPROVED.toml — new file (fill with lgwks-deps request)
 [policy]
 enforce = true
 
@@ -165,7 +165,7 @@ review = "docs/ADMISSION.md"
 
 fn patch_gate_fix(f: &Finding) -> String {
     format!(
-        "# contract/APPROVED.toml — add approval for gate refusal\n# run: lgwks-gate request <crate> <version> to fill the block\n# refusal: {}\n{}",
+        "# contract/APPROVED.toml — add approval for gate refusal\n# run: lgwks-deps request <crate> <version> to fill the block\n# refusal: {}\n{}",
         f.evidence.first().cloned().unwrap_or_default(),
         r#"[[approved]]
 crate = "<crate>"
@@ -181,7 +181,7 @@ review = "docs/ADMISSION.md"
 
 fn gate_contract_lines(f: &Finding) -> Vec<String> {
     vec![format!(
-        "# for: {} — fill with lgwks-gate request",
+        "# for: {} — fill with lgwks-deps request",
         f.evidence.first().cloned().unwrap_or_default()
     )]
 }
