@@ -11,7 +11,7 @@ change the tool surface.
 | Author/change a capsule feature | `braid-sdk` or hand-authored JSON-of-IR | `braid encode` → `braid verify` → `braid render` |
 | Audit a foreign repo for seams | `braid-integrate --json` | Follow `findings[*].maps_to` + `proposals[*].patch` |
 | Understand a diff between capsules | `braid diff old.braid new.braid` | Read the widening/narrowing report |
-| Check dep posture / migration | `lgwks_std_gate::check_dependencies` | `docs/LGWKS-STD-MIGRATION.md`, `contract/APPROVED.toml` |
+| Check dep posture / migration | `lgwks_deps::check_dependencies` | `docs/LGWKS-STD-MIGRATION.md`, `contract/APPROVED.toml` |
 | Multi-capsule project build | `braid-project` | `docs/authoring-cli.md` |
 
 Rule: `braid-integrate` is **read-only by default** — never mutates without
@@ -67,6 +67,6 @@ Produces a single JSON object for agents:
 | `braid-render` | `braid_render::{render, diff}` |
 | `lgwks_std` | `lgwks_std::{hex, encoding, id, hash, glob, pattern, json}` |
 | `lgwks_bot` | `lgwks_bot::{Bot, GrantSet}` — verbs Observe/Evaluate/Execute/Query; domains `flow`, `net`, … |
-| `lgwks-std-gate` | `lgwks_std_gate::check_dependencies(root)` |
+| `lgwks-deps` | `lgwks_deps::check_dependencies(root)` |
 
 Workspace index: `docs/CRATE-OWNERSHIP.md`. Build/test: `cargo check --workspace` / `cargo test --workspace`.

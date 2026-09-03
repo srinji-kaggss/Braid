@@ -26,7 +26,7 @@ field later.
 | 5 | **Vendor the audited source** — VENDOR tier. | `vendor/` + an entry |
 | 6 | **Approve it as a boundary** — BOUNDARY tier. | an entry |
 
-`lgwks-gate tiers` prints this at the terminal.
+`lgwks-deps tiers` prints this at the terminal.
 
 ### Which rung is which
 
@@ -62,12 +62,12 @@ error.
 
 ## ── Writing the approval ────────────────────────────────────────────
 
-There is **no command that approves anything.** `lgwks-gate request` prints a
+There is **no command that approves anything.** `lgwks-deps request` prints a
 block; a human fills it in and commits it. The commit is the signature, which is
 what makes the approval reviewable and attributable.
 
 ```
-lgwks-gate request tokio 1.40
+lgwks-deps request tokio 1.40
 ```
 
 ```toml
@@ -125,11 +125,11 @@ policies). Cargo.lock remains the exact resolved-byte provenance.
 
 Adoption is not "approve a thousand crates."
 
-1. `lgwks-gate init` — writes a fail-closed starting register.
+1. `lgwks-deps init` — writes a fail-closed starting register.
 2. Set `[policy] enforce = false`. Refusals now report as warnings. This is the
    only sanctioned use of that flag, it belongs in a diff a human signed, and it
    carries an expiry the repo's own issue tracker owns.
-3. Wire `lgwks-gate check` as the first local and remote CI build lane.
+3. Wire `lgwks-deps check` as the first local and remote CI build lane.
 4. Land the ELIMINATE-tier swaps. The count falls without anyone approving
    anything — that is the whole design.
 5. Approve what genuinely remains, rung by rung.

@@ -13,12 +13,13 @@ reliably; the human sees a rendered manifest they can audit. After independent
 admission, Braid may derive a registry-CID-scoped dense token plan for the hot
 path; that plan is a cache, never a second wire or an authority credential.
 
-## Published crates
+## Estate foundation (external)
 
 | Crate | Version | What |
 |-------|---------|------|
-| [`lgwks_std`](https://crates.io/crates/lgwks_std) | 0.5.0 | Zero-config primitives that replace a dozen crates — hex, base64, timestamps, UUIDs, hashing, glob, regex, JSON, async. Zero external deps by default. |
-| [`lgwks_bot`](https://crates.io/crates/lgwks_bot) | 0.1.0 | Capability-gated automation bots built on four verbs: Observe, Evaluate, Execute, Query. |
+| [`lgwks_std`](https://github.com/srinji-kaggss/logicalworks-crates) | 0.5.1 | Zero-config primitives that replace a dozen crates — hex, base64, timestamps, UUIDs, hashing, glob, regex, JSON, async. Zero external deps by default. |
+| [`lgwks_bot`](https://github.com/srinji-kaggss/logicalworks-crates) | 0.1.1 | Capability-gated automation bots built on four verbs: Observe, Evaluate, Execute, Query. |
+| [`lgwks_deps`](https://github.com/srinji-kaggss/logicalworks-crates) | 0.1.0 | Dependency admission, audit, and freshness (`lgwks-deps check`). |
 
 ## Workspace
 
@@ -46,9 +47,7 @@ path; that plan is a cache, never a second wire or an authority credential.
 | `crates/braid-vocab-js` | JavaScript vocabulary — JS capsules admitted via `braid-verify` with `js.*` capabilities. |
 | `crates/braid-vocab-rust` | Rust vocabulary. |
 | `crates/braid-vocab-web` | Web vocabulary. |
-| `crates/lgwks-std` | Published: `lgwks_std` on crates.io. |
-| `crates/lgwks-bot` | Published: `lgwks_bot` on crates.io. |
-| `crates/lgwks-std-gate` | Cargo-metadata proof that every direct external edge has one semantic owner and admitted consumers. |
+| `lgwks_std` / `lgwks_bot` / `lgwks_deps` | Estate foundation from logicalworks-crates (git pin, versions unchanged). |
 | `.claude/skills/braid-agent` | AI-agent skill — how an agent uses Braid's tools (see `docs/agent-guide.md`). |
 | `spec/braid/` | PRD, decision register, threat model, KAT vectors. |
 
