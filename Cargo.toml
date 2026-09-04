@@ -41,12 +41,9 @@ exclude = ["sandbox"]
 [workspace.dependencies]
 # Shared workspace crate pins.
 #
-# All three resolve from the logicalworks-crates repo: the local tree carried
-# unpublished improvements over crates.io (std's `json!` re-export, bot's
-# facade-routed serde derives), so registry versions do not compile this
-# workspace. Version numbers are unchanged — only the source moved.
-# Source of truth: https://github.com/srinji-kaggss/logicalworks-crates.
-lgwks_std = { version = "0.5.1", git = "https://github.com/srinji-kaggss/logicalworks-crates" }
+# All three resolve from crates.io; source of truth is
+# https://github.com/srinji-kaggss/logicalworks-crates.
+lgwks_std = { version = "0.5.2" }
 # Content-addressed hash chain (BLAKE3 CIDs under lw.braid.*).
 blake3 = { version = "1.8.5", default-features = false }
 
@@ -75,8 +72,8 @@ braid-elaborate-dsl = { version = "0.1.0", path = "crates/braid-elaborate-dsl" }
 braid-elaborate-js = { version = "0.1.0", path = "crates/braid-elaborate-js" }
 braid-run = { version = "0.1.0", path = "crates/braid-run" }
 braid-test-support = { version = "0.1.0", path = "crates/braid-test-support" }
-lgwks_bot = { version = "0.1.1", git = "https://github.com/srinji-kaggss/logicalworks-crates" }
-lgwks_deps = { git = "https://github.com/srinji-kaggss/logicalworks-crates" }
+lgwks_bot = { version = "0.1.2" }
+lgwks_deps = { version = "0.1.0" }
 
 [profile.release]
 opt-level = 3

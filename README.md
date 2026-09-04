@@ -17,8 +17,8 @@ path; that plan is a cache, never a second wire or an authority credential.
 
 | Crate | Version | What |
 |-------|---------|------|
-| [`lgwks_std`](https://github.com/srinji-kaggss/logicalworks-crates) | 0.5.1 | Zero-config primitives that replace a dozen crates — hex, base64, timestamps, UUIDs, hashing, glob, regex, JSON, async. Zero external deps by default. |
-| [`lgwks_bot`](https://github.com/srinji-kaggss/logicalworks-crates) | 0.1.1 | Capability-gated automation bots built on four verbs: Observe, Evaluate, Execute, Query. |
+| [`lgwks_std`](https://github.com/srinji-kaggss/logicalworks-crates) | 0.5.2 | Zero-config primitives that replace a dozen crates — hex, base64, timestamps, UUIDs, hashing, glob, regex, JSON, async. Zero external deps by default. |
+| [`lgwks_bot`](https://github.com/srinji-kaggss/logicalworks-crates) | 0.1.2 | Capability-gated automation bots built on four verbs: Observe, Evaluate, Execute, Query. |
 | [`lgwks_deps`](https://github.com/srinji-kaggss/logicalworks-crates) | 0.1.0 | Dependency admission, audit, and freshness (`lgwks-deps check`). |
 
 ## Workspace
