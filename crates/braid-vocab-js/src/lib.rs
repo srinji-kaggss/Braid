@@ -60,40 +60,46 @@ pub const JS_EVAL_NAME: &str = "js.eval";
 pub const JS_FETCH_NAME: &str = "js.fetch";
 
 /// `cap!` backing — public so the macro resolves from any crate.
+#[must_use]
 pub fn wrap_cap(name: &'static str) -> Capability {
     Capability::new(name)
 }
 
 /// `TypeTag::Opaque("js.string", [])` — the JS primitive string. Vocabulary-
 /// owned domain type (D31); foreign to `cms.entity`/`cms.directive`.
+#[must_use]
 pub fn js_string() -> TypeTag {
     TypeTag::Opaque("js.string".into(), Vec::new())
 }
 
 /// `TypeTag::Opaque("js.number", [])` — the JS primitive number. Fixed-point
 /// in the IR (D8: no floats); a JS elaborator scales at the term boundary.
+#[must_use]
 pub fn js_number() -> TypeTag {
     TypeTag::Opaque("js.number".into(), Vec::new())
 }
 
 /// `TypeTag::Opaque("js.boolean", [])`.
+#[must_use]
 pub fn js_boolean() -> TypeTag {
     TypeTag::Opaque("js.boolean".into(), Vec::new())
 }
 
 /// `TypeTag::Opaque("js.object", [fields])` — a JS object as a record of
 /// typed fields. The type args are the field types in declaration order.
+#[must_use]
 pub fn js_object(fields: Vec<TypeTag>) -> TypeTag {
     TypeTag::Opaque("js.object".into(), fields)
 }
 
 /// `TypeTag::Opaque("js.function", [args..., ret])` — a JS function type:
 /// the last type arg is the return type, the rest are parameter types.
+#[must_use]
 pub fn js_function(args_ret: Vec<TypeTag>) -> TypeTag {
     TypeTag::Opaque("js.function".into(), args_ret)
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 fn t(
     id: &str,
     inputs: Vec<TypeTag>,
@@ -118,6 +124,7 @@ fn t(
 
 /// Build the v0 JS registry. Infallible by construction — validated by
 /// `TermRegistry::insert` and pinned by the unit test.
+#[must_use]
 pub fn registry_v0() -> TermRegistry {
     use EffectClass::*;
     use Exposure::*;
@@ -312,6 +319,7 @@ pub fn registry_v0() -> TermRegistry {
 /// result against a closed list: an expansion that smuggles a capability onto
 /// a "math" term, or adds a new effectful term, changes this set and trips the
 /// test (anti-dredging — composition/aggregation exfil, T1/T5).
+#[must_use]
 pub fn dangerous_terms(reg: &TermRegistry) -> Vec<String> {
     let mut out: Vec<String> = reg
         .terms()
@@ -380,9 +388,9 @@ mod tests {
             dangerous_terms(&r),
             // the ONLY terms allowed to carry authority — sorted
             vec![
-                "js.dom.querySelector".to_string(),
-                "js.eval".to_string(),
-                "js.fetch".to_string(),
+                "js.dom.querySelector".to_owned(),
+                "js.eval".to_owned(),
+                "js.fetch".to_owned(),
             ],
             "an expansion changed the authority surface — that must be a \
              conscious, reviewed event, not a silent escape hatch"

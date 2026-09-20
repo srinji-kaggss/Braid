@@ -240,7 +240,7 @@ fn cmd_decode(args: &[String]) -> CliResult {
     let out = JsonCapsuleOut {
         intent: capsule.intent.clone(),
         budget: capsule.budget,
-        confirm: confirm_str(capsule.confirm).to_string(),
+        confirm: confirm_str(capsule.confirm).to_owned(),
         evidence: capsule.evidence.clone(),
         strands: capsule
             .braid
@@ -302,7 +302,7 @@ fn cmd_verify(args: &[String]) -> CliResult {
         }
         Verdict::Reject { stage, reason } => {
             println!("REJECT [{stage:?}] {reason}");
-            Err(POLICY_NEGATIVE.to_string())
+            Err(POLICY_NEGATIVE.to_owned())
         }
     }
 }
@@ -348,7 +348,7 @@ fn cmd_diff(args: &[String]) -> CliResult {
     }
     // The CI gate's one-bit answer (T12): any widening fails the run.
     if has_widening(&deltas) {
-        Err(POLICY_NEGATIVE.to_string())
+        Err(POLICY_NEGATIVE.to_owned())
     } else {
         Ok(())
     }

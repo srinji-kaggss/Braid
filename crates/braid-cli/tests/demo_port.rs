@@ -52,7 +52,7 @@ fn encode(fixture_name: &str, out_name: &str) -> (PathBuf, String) {
     );
     let cid = String::from_utf8_lossy(&o.stderr)
         .lines()
-        .find_map(|l| l.strip_prefix("cid ").map(|s| s.trim().to_string()))
+        .find_map(|l| l.strip_prefix("cid ").map(|s| s.trim().to_owned()))
         .expect("encode prints `cid <hex>`");
     (out, cid)
 }

@@ -165,7 +165,7 @@ fn lex(src: &str) -> Result<Vec<Token>, ElabError> {
                     i += 2;
                 } else {
                     return Err(ElabError::Lex(
-                        "`=` is not an operator here; did you mean `==`?".to_string(),
+                        "`=` is not an operator here; did you mean `==`?".to_owned(),
                     ));
                 }
             }
@@ -175,7 +175,7 @@ fn lex(src: &str) -> Result<Vec<Token>, ElabError> {
                     i += 2;
                 } else {
                     return Err(ElabError::Lex(
-                        "single `&` is not supported; use `&&`".to_string(),
+                        "single `&` is not supported; use `&&`".to_owned(),
                     ));
                 }
             }
@@ -185,7 +185,7 @@ fn lex(src: &str) -> Result<Vec<Token>, ElabError> {
                     i += 2;
                 } else {
                     return Err(ElabError::Lex(
-                        "single `|` is not supported; use `||`".to_string(),
+                        "single `|` is not supported; use `||`".to_owned(),
                     ));
                 }
             }
@@ -195,7 +195,7 @@ fn lex(src: &str) -> Result<Vec<Token>, ElabError> {
                 let mut s = String::new();
                 loop {
                     let Some(&ch) = chars.get(i) else {
-                        return Err(ElabError::Lex("unterminated string literal".to_string()));
+                        return Err(ElabError::Lex("unterminated string literal".to_owned()));
                     };
                     if ch == quote {
                         i += 1;
@@ -204,7 +204,7 @@ fn lex(src: &str) -> Result<Vec<Token>, ElabError> {
                     if ch == '\\' {
                         i += 1;
                         let Some(&e) = chars.get(i) else {
-                            return Err(ElabError::Lex("trailing backslash in string".to_string()));
+                            return Err(ElabError::Lex("trailing backslash in string".to_owned()));
                         };
                         s.push(match e {
                             'n' => '\n',
@@ -289,6 +289,7 @@ pub enum BinOp {
 
 impl BinOp {
     /// The source symbol — used in type-error messages.
+    #[must_use]
     pub fn symbol(self) -> &'static str {
         match self {
             BinOp::Add => "+",
@@ -437,7 +438,7 @@ fn resolve_binary(
         (Or, Bool, Bool) => ("js.or", Bool),
         _ => {
             return Err(ElabError::TypeError {
-                op: op.symbol().to_string(),
+                op: op.symbol().to_owned(),
                 operands: vec![lt, rt],
             })
         }
@@ -463,7 +464,7 @@ fn emit(b: &mut Builder, e: &Expr) -> Result<(Strand, ValType), ElabError> {
             let (xh, xt) = emit(b, x)?;
             if xt != ValType::Bool {
                 return Err(ElabError::TypeError {
-                    op: "!".to_string(),
+                    op: "!".to_owned(),
                     operands: vec![xt],
                 });
             }

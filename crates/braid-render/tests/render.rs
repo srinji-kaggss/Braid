@@ -29,7 +29,7 @@ fn manifest_surfaces_the_dangerous_facts() {
     )
     .unwrap();
     assert_eq!(m.irreversible_strands, 1);
-    assert!(m.effects.contains(&"irreversible".to_string()));
+    assert!(m.effects.contains(&"irreversible".to_owned()));
     let text = render_text(&m);
     assert!(text.contains("irreversible_strands: 1"));
     assert!(text.contains("confirm: human-confirm"));

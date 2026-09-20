@@ -12,11 +12,11 @@ fn run() -> Result<BuildReport, String> {
         Some((cmd, rest)) if cmd == "build" => {
             let path = rest
                 .first()
-                .ok_or_else(|| "usage: braid-project build <manifest.json>".to_string())?;
+                .ok_or_else(|| "usage: braid-project build <manifest.json>".to_owned())?;
             let json = std::fs::read_to_string(path).map_err(|e| format!("reading {path}: {e}"))?;
             build_from_json(&json).map_err(|e| e.to_string())
         }
-        _ => Err("usage: braid-project build <manifest.json>".to_string()),
+        _ => Err("usage: braid-project build <manifest.json>".to_owned()),
     }
 }
 

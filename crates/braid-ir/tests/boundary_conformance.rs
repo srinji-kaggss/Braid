@@ -64,7 +64,7 @@ fn toml_section_keys(toml: &str, section: &str) -> Vec<String> {
         }
         if in_section && !l.is_empty() && !l.starts_with('#') {
             if let Some((k, _)) = l.split_once('=') {
-                keys.push(k.trim().to_string());
+                keys.push(k.trim().to_owned());
             }
         }
     }

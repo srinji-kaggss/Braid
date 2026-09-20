@@ -39,8 +39,7 @@ fn encode(fixture: &str, out_name: &str) -> (PathBuf, String) {
         .lines()
         .find_map(|l| l.strip_prefix("cid "))
         .expect("encode prints `cid <hex>`")
-        .trim()
-        .to_string();
+        .trim().to_owned();
     (out, cid)
 }
 
@@ -99,7 +98,7 @@ fn decode_round_trips_to_identical_bytes() {
     assert!(re.status.success(), "re-encode of decoded JSON failed");
     let cid2 = String::from_utf8_lossy(&re.stderr)
         .lines()
-        .find_map(|l| l.strip_prefix("cid ").map(|s| s.trim().to_string()))
+        .find_map(|l| l.strip_prefix("cid ").map(|s| s.trim().to_owned()))
         .unwrap();
     assert_eq!(
         cid, cid2,
@@ -353,8 +352,7 @@ fn render_escapes_newlines_so_manifest_cannot_be_spoofed() {
         .lines()
         .find_map(|l| l.strip_prefix("cid "))
         .unwrap()
-        .trim()
-        .to_string();
+        .trim().to_owned();
 
     // It admits (intent content is not a v0 gate — D30: intent-coherence is
     // advisory, not blocking). The point is the RENDER path.

@@ -38,11 +38,13 @@ pub const VOCAB_VERSION: u32 = 1;
 // ── domain types (D31, vocabulary-owned `Opaque`) ──
 
 /// A reference to a page element, identified by its content-addressed CID.
+#[must_use]
 pub fn element() -> TypeTag {
     TypeTag::Opaque("web.element".into(), Vec::new())
 }
 
 /// A sealed observation fact derived from page state.
+#[must_use]
 pub fn observation() -> TypeTag {
     TypeTag::Opaque("web.observation".into(), Vec::new())
 }
@@ -65,7 +67,7 @@ fn cap(name: &'static str) -> Capability {
 }
 
 // One positional row per term keeps the registry readable as a table.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 fn t(
     id: &str,
     inputs: Vec<TypeTag>,
@@ -95,6 +97,7 @@ pub const PINNED_REGISTRY_CID_V1: &str =
 
 /// The closed set of authority-bearing terms. A new capability-bearing term
 /// that is not in this list is an escape hatch (T1/T5).
+#[must_use]
 pub fn dangerous_terms(r: &TermRegistry) -> Vec<String> {
     let mut v: Vec<String> = r
         .terms()
@@ -109,6 +112,7 @@ pub fn dangerous_terms(r: &TermRegistry) -> Vec<String> {
 /// satisfy `TermRegistry::insert`'s invariants (pinned by a unit test).
 ///
 /// The id set is exactly AX-Browser's closed `web.*` action vocabulary (A5).
+#[must_use]
 pub fn registry_v0() -> TermRegistry {
     use EffectClass::*;
     use Exposure::*;

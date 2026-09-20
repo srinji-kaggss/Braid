@@ -260,10 +260,12 @@ impl GovernanceSession {
         })
     }
 
+    #[must_use]
     pub fn envelope(&self) -> &ChangeEnvelope {
         &self.signed.envelope
     }
 
+    #[must_use]
     pub fn usage(&self) -> &SessionUsage {
         &self.usage
     }
@@ -282,7 +284,7 @@ impl GovernanceSession {
                         "path not admitted: {path}"
                     )));
                 }
-                self.usage.distinct_written_paths.insert(path.to_string());
+                self.usage.distinct_written_paths.insert(path.to_owned());
                 if self.usage.distinct_written_paths.len() as u32
                     > envelope.budget.max_files_changed
                 {
@@ -316,7 +318,7 @@ impl GovernanceSession {
                         "new dependencies forbidden: {name}"
                     )));
                 }
-                self.usage.added_dependencies.insert(name.to_string());
+                self.usage.added_dependencies.insert(name.to_owned());
                 if self.usage.added_dependencies.len() as u32 > envelope.budget.max_new_dependencies
                 {
                     return Err(GovernanceError::BudgetExceeded("max_new_dependencies"));
@@ -395,7 +397,7 @@ mod tests {
     use ed25519_dalek::{Signer, SigningKey};
 
     fn set(values: &[&str]) -> BTreeSet<String> {
-        values.iter().map(|value| (*value).to_string()).collect()
+        values.iter().map(|value| (*value).to_owned()).collect()
     }
 
     fn signed_envelope() -> SignedChangeEnvelope {

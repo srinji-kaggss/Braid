@@ -44,6 +44,7 @@ fn reject(stage: Stage, reason: impl Into<String>) -> Verdict {
 /// Verify capsule BYTES against a registry and the ambient grant set the
 /// principal actually holds. Bytes in, verdict out — the admission decision
 /// is reproducible from the artifact alone (D9).
+#[must_use]
 pub fn verify(bytes: &[u8], registry: &TermRegistry, ambient: &[Capability]) -> Verdict {
     // Stage 1 — canonical form (own decoder + bijection guard).
     let value = match decode::decode_canonical(bytes) {

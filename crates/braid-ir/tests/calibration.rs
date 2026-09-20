@@ -120,9 +120,9 @@ fn map_ordering_matches_rfc8949_length_first_deterministic() {
     // Map with keys of different lengths: BTreeMap would order "a","aa","z"
     // (bytewise) but RFC 8949 deterministic orders "a","z","aa" (length-first).
     let mut btm = BTreeMap::new();
-    btm.insert("z".to_string(), Value::Int(1));
-    btm.insert("aa".to_string(), Value::Int(2));
-    btm.insert("a".to_string(), Value::Int(3));
+    btm.insert("z".to_owned(), Value::Int(1));
+    btm.insert("aa".to_owned(), Value::Int(2));
+    btm.insert("a".to_owned(), Value::Int(3));
     let v = Value::Map(btm);
 
     // Expected RFC 8949 deterministic bytes: keys sorted length-first.
@@ -166,12 +166,12 @@ fn nested_map_ordering_matches_rfc8949_length_first() {
     // Outer map has two keys of different lengths; the longer one holds a
     // sub-map whose keys also differ in length.
     let mut inner = BTreeMap::new();
-    inner.insert("ccc".to_string(), Value::Int(9));
-    inner.insert("a".to_string(), Value::Int(7));
+    inner.insert("ccc".to_owned(), Value::Int(9));
+    inner.insert("a".to_owned(), Value::Int(7));
 
     let mut outer = BTreeMap::new();
-    outer.insert("data".to_string(), Value::Map(inner));
-    outer.insert("x".to_string(), Value::Bool(true));
+    outer.insert("data".to_owned(), Value::Map(inner));
+    outer.insert("x".to_owned(), Value::Bool(true));
 
     let v = Value::Map(outer);
     let produced = encode(&v);

@@ -34,6 +34,7 @@ pub struct Strand {
 }
 
 impl Strand {
+    #[must_use]
     pub fn index(&self) -> u32 {
         self.index
     }
@@ -123,10 +124,10 @@ impl<'r> Builder<'r> {
         let spec = self
             .registry
             .get(term_id)
-            .ok_or_else(|| BuildError::UnknownTerm(term_id.to_string()))?;
+            .ok_or_else(|| BuildError::UnknownTerm(term_id.to_owned()))?;
         if spec.inputs.len() != inputs.len() {
             return Err(BuildError::Arity {
-                term: term_id.to_string(),
+                term: term_id.to_owned(),
                 expected: spec.inputs.len(),
                 got: inputs.len(),
             });
@@ -135,7 +136,7 @@ impl<'r> Builder<'r> {
             let got = &self.type_interner[h.ty.0];
             if got != expected {
                 return Err(BuildError::TypeMismatch {
-                    term: term_id.to_string(),
+                    term: term_id.to_owned(),
                     slot,
                     expected: Box::new(expected.clone()),
                     got: Box::new(got.clone()),
@@ -155,7 +156,7 @@ impl<'r> Builder<'r> {
         let index = self.strands.len() as u32;
         let ty = self.intern(&spec.output);
         self.strands.push(IrStrand {
-            term: term_id.to_string(),
+            term: term_id.to_owned(),
             inputs: inputs.iter().map(|h| h.index).collect(),
         });
         self.out_types.push(self.type_interner[ty.0].clone());

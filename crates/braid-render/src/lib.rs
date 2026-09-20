@@ -61,7 +61,7 @@ pub fn manifest(capsule: &Capsule, registry: &TermRegistry) -> Result<Manifest, 
         let spec = registry
             .get(&s.term)
             .ok_or_else(|| RenderError::UnknownTerm(s.term.clone()))?;
-        effects.insert(effect_name(spec.effect).to_string());
+        effects.insert(effect_name(spec.effect).to_owned());
         match spec.effect {
             EffectClass::Irreversible => irreversible += 1,
             EffectClass::Egress => egress += 1,
@@ -112,6 +112,7 @@ fn escape_field(s: &str) -> String {
 }
 
 /// Deterministic text rendering — what a reviewer (or a PR diff) reads.
+#[must_use]
 pub fn render_text(m: &Manifest) -> String {
     let mut out = String::new();
     let mut line = |k: &str, v: String| {
@@ -190,6 +191,7 @@ pub struct Delta {
 
 /// Mechanical widening classification (T12): authority and effect growth are
 /// facts the gate computes, never impressions a tired reviewer forms.
+#[must_use]
 pub fn manifest_diff(old: &Manifest, new: &Manifest) -> Vec<Delta> {
     let mut deltas = Vec::new();
     let set = |v: &[String]| -> BTreeSet<String> { v.iter().cloned().collect() };
@@ -323,6 +325,7 @@ pub fn manifest_diff(old: &Manifest, new: &Manifest) -> Vec<Delta> {
 }
 
 /// True iff the diff contains any widening (the CI gate's one-bit answer).
+#[must_use]
 pub fn has_widening(deltas: &[Delta]) -> bool {
     deltas.iter().any(|d| d.kind == DeltaKind::Widening)
 }

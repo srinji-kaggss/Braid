@@ -19,6 +19,7 @@ use braid_ir::term::{EffectClass, Exposure, TermRegistry, TermSpec, TypeTag};
 
 /// `TypeTag::Opaque("cms.entity", [])` — a reference to a governed work
 /// object (page / section / …). Vocabulary-owned domain type (D31).
+#[must_use]
 pub fn entity() -> TypeTag {
     TypeTag::Opaque("cms.entity".into(), Vec::new())
 }
@@ -26,6 +27,7 @@ pub fn entity() -> TypeTag {
 /// `TypeTag::Opaque("cms.directive", [])` — a typed render directive
 /// (ViewDirective/MotionDirective family — D16: render output is ALWAYS
 /// this, never DOM/HTML strings). Vocabulary-owned domain type (D31).
+#[must_use]
 pub fn directive() -> TypeTag {
     TypeTag::Opaque("cms.directive".into(), Vec::new())
 }
@@ -54,6 +56,7 @@ macro_rules! cap {
 }
 
 /// `cap!` backing — public so the macro resolves from any crate.
+#[must_use]
 pub fn wrap_cap(name: &'static str) -> Capability {
     Capability::new(name)
 }
@@ -74,7 +77,7 @@ pub const REMOTE_COMPUTE_NAME: &str = "compute.remote";
 
 // A table-row constructor: one positional row per term keeps the registry
 // readable as a table; a builder would bury the columns.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 fn t(
     id: &str,
     inputs: Vec<TypeTag>,
@@ -99,6 +102,7 @@ fn t(
 
 /// Build the v0 CMS registry. Infallible by construction — the specs are
 /// validated by `TermRegistry::insert` and a unit test pins the build.
+#[must_use]
 pub fn registry_v0() -> TermRegistry {
     use EffectClass::*;
     use Exposure::*;
@@ -221,6 +225,7 @@ fn strand(term: &str, inputs: Vec<u32>) -> Strand {
 
 /// Scenario #1's subject: edit a landing section (reversible, local) and
 /// render it — no egress, no irreversible effect, no confirmation needed.
+#[must_use]
 pub fn edit_section_capsule() -> Capsule {
     Capsule {
         ir_version: IR_VERSION,
@@ -245,6 +250,7 @@ pub fn edit_section_capsule() -> Capsule {
 
 /// Scenario #2/#3's subject: publish (irreversible) — only admissible with
 /// `HumanConfirm`.
+#[must_use]
 pub fn publish_capsule(confirm: ConfirmPolicy) -> Capsule {
     Capsule {
         ir_version: IR_VERSION,
@@ -271,6 +277,7 @@ pub fn publish_capsule(confirm: ConfirmPolicy) -> Capsule {
 
 /// Scenario #5's subject: the laundering attempt — vault data through two
 /// pure hops into the egress door. MUST be rejected at the taint stage.
+#[must_use]
 pub fn laundering_capsule() -> Capsule {
     Capsule {
         ir_version: IR_VERSION,
@@ -301,6 +308,7 @@ pub const PINNED_REGISTRY_CID_V1: &str =
 
 /// The closed set of authority-bearing terms. A new capability-bearing term
 /// that is not in this list is an escape hatch (T1/T5).
+#[must_use]
 pub fn dangerous_terms(r: &TermRegistry) -> Vec<String> {
     let mut v: Vec<String> = r
         .terms()
@@ -463,11 +471,11 @@ mod tests {
         assert_eq!(
             dangerous_terms(&r),
             vec![
-                "cms.edit_section".to_string(),
-                "cms.publish".to_string(),
-                "net.egress".to_string(),
-                "proj.listing".to_string(),
-                "vault.read".to_string(),
+                "cms.edit_section".to_owned(),
+                "cms.publish".to_owned(),
+                "net.egress".to_owned(),
+                "proj.listing".to_owned(),
+                "vault.read".to_owned(),
             ],
             "a term change altered the authority surface — that must be a \
              conscious, reviewed event, not a silent escape hatch"

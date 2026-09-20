@@ -23,7 +23,7 @@ fn read_vectors() -> BTreeMap<String, String> {
         .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
         .map(|l| {
             let (k, v) = l.split_once('=').expect("kat line is key=value");
-            (k.trim().to_string(), v.trim().to_string())
+            (k.trim().to_owned(), v.trim().to_owned())
         })
         .collect()
 }
