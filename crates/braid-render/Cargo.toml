@@ -13,3 +13,6 @@ braid-capability = { workspace = true }
 
 [dev-dependencies]
 braid-vocab-cms = { workspace = true }
+
+[lints]
+workspace = true

@@ -14,3 +14,6 @@ path = "src/lib.rs"
 [dependencies]
 braid-capability = { workspace = true }
 braid-ir = { workspace = true }
+
+[lints]
+workspace = true

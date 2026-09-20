@@ -28,3 +28,6 @@ braid-vocab-js = { workspace = true }
 
 [dev-dependencies]
 braid-vocab-js = { workspace = true }
+
+[lints]
+workspace = true

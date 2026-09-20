@@ -18,3 +18,6 @@ braid-ir = { workspace = true }
 [dev-dependencies]
 braid-verify = { workspace = true }
 braid-sdk = { path = "../braid-sdk" }
+
+[lints]
+workspace = true

@@ -15,3 +15,6 @@ braid-capability = { workspace = true }
 braid-verify = { workspace = true }
 braid-render = { workspace = true }
 braid-vocab-cms = { workspace = true }
+
+[lints]
+workspace = true
