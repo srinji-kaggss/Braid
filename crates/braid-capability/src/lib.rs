@@ -32,6 +32,7 @@ use serde::{Deserialize, Serialize};
 /// vocabulary's declared capability space. Capabilities are compared by name;
 /// the verifier checks `grant ⊆ ambient` by name equality.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[non_exhaustive]
 pub struct Capability(pub String);
 
 impl Capability {

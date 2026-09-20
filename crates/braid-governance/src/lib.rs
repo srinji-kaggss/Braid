@@ -16,6 +16,7 @@ const DIGEST_DOMAIN: &[u8] = b"keel.change-envelope.v1\0";
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
 pub enum FoundationTier {
     T0Cosmetic,
     T1Application,
@@ -25,6 +26,7 @@ pub enum FoundationTier {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ResourceBudget {
     pub max_files_changed: u32,
     pub max_new_dependencies: u32,
@@ -33,6 +35,7 @@ pub struct ResourceBudget {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ChangeEnvelope {
     pub version: u32,
     pub change_id: String,
@@ -57,6 +60,7 @@ pub struct ChangeEnvelope {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct SignedChangeEnvelope {
     pub envelope: ChangeEnvelope,
     pub signer_key_id: String,
@@ -66,6 +70,7 @@ pub struct SignedChangeEnvelope {
 
 /// Structured explain-before-author commitment for high-risk work.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct DesignCommitment {
     pub change_id: String,
     pub requirement_refs: BTreeSet<String>,
@@ -79,6 +84,7 @@ pub struct DesignCommitment {
 
 /// An operation requested by an AI authoring harness.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum GenerationAction<'a> {
     WritePath(&'a str),
     TouchSymbol(&'a str),
@@ -91,6 +97,7 @@ pub enum GenerationAction<'a> {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct SessionUsage {
     pub distinct_written_paths: BTreeSet<String>,
     pub added_dependencies: BTreeSet<String>,
@@ -99,6 +106,7 @@ pub struct SessionUsage {
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum GovernanceError {
     #[error("unsupported change-envelope version {0}")]
     UnsupportedVersion(u32),
