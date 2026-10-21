@@ -13,13 +13,25 @@ reliably; the human sees a rendered manifest they can audit. After independent
 admission, Braid may derive a registry-CID-scoped dense token plan for the hot
 path; that plan is a cache, never a second wire or an authority credential.
 
-## Estate foundation (external)
+## Estate foundation (external, independent)
 
-| Crate | Version | What |
-|-------|---------|------|
-| [`lgwks_std`](https://github.com/srinji-kaggss/logicalworks-crates) | 0.5.2 | Zero-config primitives that replace a dozen crates — hex, base64, timestamps, UUIDs, hashing, glob, regex, JSON, async. Zero external deps by default. |
-| [`lgwks_bot`](https://github.com/srinji-kaggss/logicalworks-crates) | 0.1.2 | Capability-gated automation bots built on four verbs: Observe, Evaluate, Execute, Query. |
-| [`lgwks_deps`](https://github.com/srinji-kaggss/logicalworks-crates) | 0.1.0 | Dependency admission, audit, and freshness (`lgwks-deps check`). |
+Braid is one consumer of [logicalworks-crates](https://github.com/srinji-kaggss/logicalworks-crates),
+a separately versioned Rust estate with its own release train, tags and
+documentation. The crates below are **not Braid components and Braid is not their
+purpose**: nothing in them depends on Braid, and they are published and usable
+without it. Braid pins old versions by git commit, which is why the pinned column
+and the published column differ; the estate publishes independently of this
+repository.
+
+| Crate | Pinned here | Published | What |
+|-------|-------------|-----------|------|
+| [`lgwks_std`](https://docs.rs/lgwks_std) | 0.5.2 | 3.0.3 | Zero-config primitives that replace a dozen crates — hex, base64, timestamps, UUIDs, hashing, glob, regex, JSON, HTTP, structured logging. |
+| [`lgwks_bot`](https://docs.rs/lgwks_bot) | 0.1.2 | 3.1.2 | Capability-gated automation bots built on four verbs: Observe, Evaluate, Execute, Query. |
+| [`lgwks_deps`](https://docs.rs/lgwks_deps) | 0.1.0 | 4.2.1 | Dependency admission, audit, and freshness (`lgwks-deps check`). |
+
+The pinned versions are a git pin, not a claim about the estate's latest release.
+Its current README, and the decision page that says when each crate is the wrong
+choice, are at [logicalworks-crates](https://github.com/srinji-kaggss/logicalworks-crates).
 
 ## Workspace
 
@@ -47,7 +59,7 @@ path; that plan is a cache, never a second wire or an authority credential.
 | `crates/braid-vocab-js` | JavaScript vocabulary — JS capsules admitted via `braid-verify` with `js.*` capabilities. |
 | `crates/braid-vocab-rust` | Rust vocabulary. |
 | `crates/braid-vocab-web` | Web vocabulary. |
-| `lgwks_std` / `lgwks_bot` / `lgwks_deps` | Estate foundation from logicalworks-crates (git pin, versions unchanged). |
+| `lgwks_std` / `lgwks_bot` / `lgwks_deps` | Imported from logicalworks-crates by git pin; external crates, described in the section above. |
 | `.claude/skills/braid-agent` | AI-agent skill — how an agent uses Braid's tools (see `docs/agent-guide.md`). |
 | `spec/braid/` | PRD, decision register, threat model, KAT vectors. |
 
